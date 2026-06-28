@@ -7,7 +7,7 @@
 function inicializarSIVEL() {
   // ⚠️ Cambia esta URL por la de TU Google Sheet
   // Abre tu Sheet → copia el ID de la URL (entre /d/ y /edit)
-  const SHEET_ID = "REEMPLAZAR_CON_TU_SHEET_ID";
+  const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 
   const ss = SpreadsheetApp.openById(SHEET_ID);
 
