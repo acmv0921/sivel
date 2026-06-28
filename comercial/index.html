@@ -163,6 +163,32 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
   .screen{max-width:520px;margin:0 auto;}
   .nav-bottom{max-width:520px;left:50%;transform:translateX(-50%);}
 }
+
+/* ===== FOTO + GPS ===== */
+.foto-capture-box{border:2px dashed var(--borde);border-radius:12px;padding:1rem;text-align:center;cursor:pointer;transition:border-color 0.2s;background:var(--gris);}
+.foto-capture-box:hover{border-color:var(--azul2);}
+.foto-capture-box .icon{font-size:2rem;margin-bottom:4px;}
+.foto-capture-box p{font-size:0.78rem;color:#888;}
+.foto-preview-box{position:relative;display:none;border-radius:10px;overflow:hidden;margin-top:8px;}
+.foto-preview-box img{width:100%;max-height:220px;object-fit:cover;display:block;}
+.foto-gps-badge{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.7);color:#fff;border-radius:20px;padding:4px 10px;font-size:0.68rem;display:flex;align-items:center;gap:5px;}
+.foto-retomar{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:20px;padding:4px 10px;font-size:0.72rem;cursor:pointer;}
+/* ===== VISITA CARD ===== */
+.visita-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:0.75rem;box-shadow:var(--sombra);border-left:4px solid var(--verde);}
+.visita-time{font-size:0.68rem;color:#888;font-weight:700;}
+.visita-cliente{font-size:0.9rem;font-weight:700;margin:2px 0;}
+.visita-fotos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.visita-fotos img{width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;}
+/* ===== WA PANEL ===== */
+.wa-panel{background:#e8f5e9;border-radius:10px;padding:1rem;margin-top:0.75rem;}
+.wa-panel-title{font-size:0.72rem;font-weight:700;color:var(--verde);margin-bottom:0.5rem;}
+.wa-dest-list{display:flex;flex-direction:column;gap:6px;margin-bottom:0.75rem;}
+.wa-dest-item{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:8px;padding:7px 10px;}
+.wa-dest-name{font-size:0.82rem;font-weight:600;}
+.wa-dest-cargo{font-size:0.7rem;color:#888;}
+.btn-wa{background:#25d366;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.btn-wa:disabled{opacity:0.4;cursor:not-allowed;}
+
 </style>
 </head>
 <body>
@@ -352,12 +378,62 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
       </div>
       <button class="btn btn-outline btn-sm" onclick="mostrarFormCliente()">➕ Nuevo cliente</button>
     </div>
+    <button class="btn btn-success btn-sm" onclick="irA('screenVisitas')" style="margin-bottom:0.5rem;">📋 Ver mis visitas de hoy</button>
+    </div>
+    </div>
+    <!-- VISITAS -->
+    <div id="screenVisitas" class="screen">
+      <div class="card">
+        <div class="card-title">Mis Visitas Registradas</div>
+        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem;">Fotos geolocalizadas de cada visita. Toca el cliente para nueva visita.</p>
+      </div>
+      <div id="listaVisitas">
+        <div style="text-align:center;color:#888;font-size:0.82rem;padding:2rem;">Sin visitas aún</div>
+      </div>
+    </div>
+    <!-- PLACEHOLDER para cierre correcto -->
     <div id="listaClientes">
       <div class="loading"><div class="spinner"></div> Cargando...</div>
     </div>
   </div>
 
 </div><!-- /appMain -->
+
+
+<!-- MODAL: REGISTRO DE VISITA CON FOTO -->
+<div id="modalVisita" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalVisita')">✕</button>
+    <div class="modal-title">📷 Registrar Visita</div>
+    <div id="visitaCliente" style="font-weight:700;font-size:1rem;margin-bottom:0.75rem;color:var(--azul);"></div>
+    
+    <!-- GPS -->
+    <div style="background:var(--gris);border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:0.75rem;">
+      <span id="visitaGPS">📍 Obteniendo GPS...</span>
+      <a id="visitaGPSLink" href="#" target="_blank" style="display:none;margin-left:8px;color:var(--azul2);font-size:0.72rem;">Ver en mapa →</a>
+    </div>
+    
+    <!-- FOTOS -->
+    <div class="form-group">
+      <label class="form-label">📷 Fotos de la visita (fachada, reunión, evidencia)</label>
+      <label class="foto-capture-box" for="inputFotoVisita">
+        <div class="icon">📷</div>
+        <p>Toca para tomar foto o seleccionar</p>
+        <p style="font-size:0.65rem;margin-top:2px;">Puedes agregar múltiples fotos</p>
+      </label>
+      <input id="inputFotoVisita" type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="agregarFotoVisita(this)">
+      <div id="visitaFotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+    </div>
+    
+    <!-- NOTAS -->
+    <div class="form-group">
+      <label class="form-label">📝 Notas de la visita</label>
+      <textarea id="visitaNotas" class="form-control" rows="3" placeholder="Ej: Cliente interesado en 20 postes. Solicita cotización con flete Zona A. Próxima visita: 5 julio..."></textarea>
+    </div>
+    
+    <button class="btn btn-success" onclick="guardarVisita()">✅ Guardar Visita y Enviar</button>
+  </div>
+</div>
 
 <!-- ===== MODAL: AGREGAR PRODUCTO ===== -->
 <div id="modalProducto" class="modal-overlay">
@@ -453,6 +529,9 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
   </button>
   <button class="nav-btn" onclick="irA('screenClientes')" id="navClientes">
     <span class="icon">👤</span>Clientes
+  </button>
+  <button class="nav-btn" onclick="irA('screenVisitas');renderVisitas();" id="navVisitas">
+    <span class="icon">📷</span>Visitas
   </button>
 </nav>
 
@@ -806,7 +885,10 @@ function renderClientes(filtro="") {
       <div class="cr-nit">NIT ${c.cliente_nit}</div>
       <div class="cr-name">${c.razon_social}</div>
       ${c.coordenadas_home ? `<div class="cr-vend">📍 ${c.coordenadas_home}</div>` : ''}
-      <div style="margin-top:6px;"><span style="font-size:0.72rem;color:var(--azul2);font-weight:600;">Toca para crear AP →</span></div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation();abrirRegistroVisita('${c.cliente_nit}')">📷 Registrar Visita</button>
+        <button class="btn btn-outline btn-sm" onclick="nuevoPedidoDesdeCliente('${c.cliente_nit}')">➕ Nueva AP</button>
+      </div>
     </div>
   `).join('');
 }
@@ -1145,7 +1227,7 @@ function irA(screenId) {
   const map = {
     screenHome: 'navHome', screenInventario: 'navInventario',
     screenPedido: 'navNuevoAP', screenPedidos: 'navPedidos',
-    screenClientes: 'navClientes'
+    screenClientes: 'navClientes', screenVisitas: 'navVisitas'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
 
@@ -1206,6 +1288,232 @@ function toast(msg, dur=2500) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
+}
+
+
+// =============================================================================
+// MÓDULO FOTO + GPS + WHATSAPP
+// =============================================================================
+const FUNCIONARIOS_KEY = 'sivel_funcionarios_com';
+
+function getFuncionarios() {
+  const def = [
+    { id:1, nombre:"Nohra Constanza Jiménez", cargo:"Gerente General", wa:"", recibe:"si", activo:true },
+    { id:2, nombre:"Valentina Torres Ruiz",   cargo:"Despachadora",    wa:"", recibe:"si", activo:true }
+  ];
+  return JSON.parse(localStorage.getItem(FUNCIONARIOS_KEY) || JSON.stringify(def));
+}
+
+// Captura foto comprimida → base64
+async function capturarFoto(inputId) {
+  return new Promise(resolve => {
+    const input = document.getElementById(inputId);
+    if (!input?.files[0]) { resolve(null); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h*MAX/w); w = MAX; }
+        if (h > MAX) { w = Math.round(w*MAX/h); h = MAX; }
+        const c = document.createElement('canvas');
+        c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg', 0.55));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+  });
+}
+
+// GPS con timeout 10s
+function obtenerGPS() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => resolve({ lat: p.coords.latitude.toFixed(6), lon: p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) }),
+      () => resolve(null),
+      { timeout:10000, enableHighAccuracy:true }
+    );
+  });
+}
+
+function linkMaps(lat, lon) {
+  return `https://maps.google.com/?q=${lat},${lon}`;
+}
+
+// Estado de visita en curso
+let VISITA = { cliente:null, fotos:[], gps:null, notas:'', hora:null };
+let VISITAS_GUARDADAS = JSON.parse(localStorage.getItem('sivel_visitas') || '[]');
+
+// ---- REGISTRO DE VISITA ----
+function abrirRegistroVisita(nit) {
+  const c = STATE.clientes.find(x => String(x.cliente_nit) === String(nit));
+  if (!c) return;
+  VISITA = { cliente:c, fotos:[], gps:null, notas:'', hora:new Date() };
+  document.getElementById('visitaCliente').textContent = c.razon_social;
+  document.getElementById('visitaFotos').innerHTML    = '';
+  document.getElementById('visitaNotas').value        = '';
+  document.getElementById('visitaGPS').textContent    = '📍 Sin GPS';
+  document.getElementById('visitaGPSLink').style.display = 'none';
+  // Capturar GPS automáticamente al abrir
+  obtenerGPS().then(gps => {
+    if (gps) {
+      VISITA.gps = gps;
+      document.getElementById('visitaGPS').textContent = `📍 ${gps.lat}, ${gps.lon} (±${gps.acc}m)`;
+      document.getElementById('visitaGPSLink').style.display = 'inline';
+      document.getElementById('visitaGPSLink').href = linkMaps(gps.lat, gps.lon);
+    }
+  });
+  document.getElementById('modalVisita').classList.add('show');
+}
+
+function agregarFotoVisita(input) {
+  const files = input.files;
+  if (!files.length) return;
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX=800; let w=img.width, h=img.height;
+        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        const b64 = c.toDataURL('image/jpeg',0.55);
+        VISITA.fotos.push({ b64, gps: VISITA.gps, hora: new Date().toLocaleTimeString('es-CO') });
+        renderFotosVisita();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function renderFotosVisita() {
+  const cont = document.getElementById('visitaFotos');
+  cont.innerHTML = VISITA.fotos.map((f,i) => `
+    <div style="position:relative;display:inline-block;">
+      <img src="${f.b64}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="verFotoGrande('${f.b64}')">
+      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);border-radius:0 0 8px 8px;padding:2px 4px;font-size:0.55rem;color:#fff;text-align:center;">${f.hora}</div>
+      <button onclick="eliminarFotoVisita(${i})" style="position:absolute;top:-5px;right:-5px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`).join('');
+}
+
+function eliminarFotoVisita(i) { VISITA.fotos.splice(i,1); renderFotosVisita(); }
+
+function verFotoGrande(src) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  overlay.innerHTML = `<img src="${src}" style="max-width:95vw;max-height:90vh;border-radius:8px;">`;
+  overlay.onclick = () => document.body.removeChild(overlay);
+  document.body.appendChild(overlay);
+}
+
+async function guardarVisita() {
+  if (!VISITA.cliente)        { toast("Sin cliente seleccionado"); return; }
+  if (!VISITA.fotos.length)   { toast("Agrega al menos una foto de la visita"); return; }
+  VISITA.notas = document.getElementById('visitaNotas').value.trim();
+
+  const registro = {
+    id:        Date.now(),
+    cliente:   VISITA.cliente,
+    gps:       VISITA.gps,
+    fotos:     VISITA.fotos,
+    notas:     VISITA.notas,
+    hora:      VISITA.hora.toLocaleString('es-CO'),
+    vendedor:  STATE.vendedor?.nombre_vendedor || ''
+  };
+
+  VISITAS_GUARDADAS.unshift(registro);
+  // Guardar últimas 50 visitas localmente
+  if (VISITAS_GUARDADAS.length > 50) VISITAS_GUARDADAS = VISITAS_GUARDADAS.slice(0,50);
+  localStorage.setItem('sivel_visitas', JSON.stringify(VISITAS_GUARDADAS));
+
+  // Actualizar coordenadas del cliente en Sheet
+  if (VISITA.gps) {
+    await escribirGAS({
+      accion:'actualizarCliente',
+      cliente_nit: VISITA.cliente.cliente_nit,
+      coordenadas_home: `${VISITA.gps.lat},${VISITA.gps.lon}`
+    });
+  }
+
+  cerrarModal('modalVisita');
+  toast('✅ Visita registrada con ' + VISITA.fotos.length + ' foto(s)');
+  renderVisitas();
+  // Ofrecer WhatsApp
+  setTimeout(() => abrirWAVisita(registro), 600);
+}
+
+function abrirWAVisita(registro) {
+  const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
+  const gpsLink = registro.gps ? linkMaps(registro.gps.lat, registro.gps.lon) : 'Sin GPS';
+  const msg = `🏭 *POSTEC DE OCCIDENTE S.A.S.*
+━━━━━━━━━━━━━━━━━━
+📋 *REPORTE DE VISITA COMERCIAL*
+━━━━━━━━━━━━━━━━━━
+👤 Vendedor: ${registro.vendedor}
+🏢 Cliente: ${registro.cliente.razon_social}
+📄 NIT: ${registro.cliente.cliente_nit}
+🕐 Hora: ${registro.hora}
+📍 Ubicación: ${gpsLink}
+${registro.notas ? '📝 Notas: ' + registro.notas : ''}
+📷 Fotos: ${registro.fotos.length} foto(s) registrada(s)
+━━━━━━━━━━━━━━━━━━
+_SIVEL · POSTECSA v1.0_`;
+
+  // Modal WA
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'modalWAVisita';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('modalWAVisita').remove()">✕</button>
+      <div class="modal-title">📲 Enviar Reporte de Visita</div>
+      <div class="wa-panel">
+        <div class="wa-panel-title">MENSAJE A ENVIAR</div>
+        <div style="font-size:0.75rem;white-space:pre-wrap;color:#333;line-height:1.6;max-height:150px;overflow-y:auto;">${msg}</div>
+      </div>
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
+        ${funcs.map(f => `
+          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''} 
+                  onclick="waEnviar('${f.wa}','${encodeURIComponent(msg)}')">
+            📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
+          </button>`).join('')}
+      </div>
+      ${!funcs.length ? '<p style="color:#888;font-size:0.78rem;text-align:center;">No hay funcionarios activos configurados.<br>Agrégalos en la sección Clientes → Funcionarios.</p>' : ''}
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+function waEnviar(numero, msgEnc) {
+  if (!numero) { toast("Sin número WhatsApp"); return; }
+  window.open(`https://wa.me/${numero}?text=${msgEnc}`, '_blank');
+}
+
+function renderVisitas() {
+  const cont = document.getElementById('listaVisitas');
+  if (!cont) return;
+  if (!VISITAS_GUARDADAS.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;font-size:0.82rem;padding:1rem;">Sin visitas registradas hoy</div>';
+    return;
+  }
+  cont.innerHTML = VISITAS_GUARDADAS.slice(0,10).map(v => `
+    <div class="visita-card">
+      <div class="visita-time">${v.hora}</div>
+      <div class="visita-cliente">${v.cliente.razon_social}</div>
+      ${v.gps ? `<a href="${linkMaps(v.gps.lat,v.gps.lon)}" target="_blank" style="font-size:0.72rem;color:var(--azul2);">📍 Ver en mapa</a>` : ''}
+      ${v.notas ? `<div style="font-size:0.75rem;color:#555;margin-top:4px;">📝 ${v.notas}</div>` : ''}
+      <div class="visita-fotos">${v.fotos.map(f => `<img src="${f.b64}" onclick="verFotoGrande('${f.b64}')">`).join('')}</div>
+      <button class="btn-wa" style="margin-top:8px;" onclick="abrirWAVisita(${JSON.stringify(v).replace(/'/g,"&#39;")})">📲 Reenviar WhatsApp</button>
+    </div>`).join('');
 }
 
 // Enter en login
