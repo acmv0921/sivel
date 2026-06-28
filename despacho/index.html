@@ -156,6 +156,18 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
   .screen{max-width:560px;margin:0 auto;}
   .nav-bottom{max-width:560px;left:50%;transform:translateX(-50%);}
 }
+
+/* FOTO DESPACHO */
+.foto-capture-box{border:2px dashed var(--borde);border-radius:12px;padding:1rem;text-align:center;cursor:pointer;background:var(--gris);transition:border-color 0.2s;}
+.foto-capture-box:hover{border-color:var(--naranja);}
+.foto-capture-box .icon{font-size:2rem;}
+.foto-capture-box p{font-size:0.78rem;color:#888;}
+.foto-thumb-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.foto-thumb-row img{width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;}
+.gps-info-box{background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;font-size:0.72rem;color:#333;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.btn-wa-full{background:#25d366;color:#fff;border:none;border-radius:9px;padding:11px;font-size:0.85rem;font-weight:700;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;}
+.btn-wa-full:disabled{opacity:0.4;cursor:not-allowed;}
+
 </style>
 </head>
 <body>
@@ -648,6 +660,7 @@ function abrirDespacho(ap_id) {
   if (!ap) return;
   const lineas  = S.detalles.filter(d => String(d.ap_id) === String(ap_id));
   S.despachoActual = { ap, lineas, cargas: {} };
+  FOTOS_DESPACHO = []; GPS_DESPACHO = null;
 
   document.getElementById('modalDespTitle').textContent = `Despacho — AP #${ap_id}`;
 
@@ -687,10 +700,15 @@ function abrirDespacho(ap_id) {
 
   html += `
     <div class="form-group" style="margin-top:1rem;">
-      <label class="form-label">📷 Foto de la carga</label>
-      <label class="foto-btn" for="fotoCarga">📷 Tomar foto de la plataforma</label>
-      <input id="fotoCarga" type="file" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto('fotoCarga','previewCarga')">
-      <img id="previewCarga" class="foto-preview">
+      <label class="form-label">📷 Fotos del vehículo y carga (con GPS automático)</label>
+      <div id="despGPSInfo" class="gps-info-box" style="display:none;"></div>
+      <label class="foto-capture-box" for="fotoCarga">
+        <div class="icon">📷</div>
+        <p>Tomar foto del vehículo y plataforma</p>
+        <p style="font-size:0.65rem;margin-top:2px;">GPS se captura automáticamente · Múltiples fotos</p>
+      </label>
+      <input id="fotoCarga" type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="agregarFotoDespacho(this)">
+      <div id="fotosDespachoPreview" class="foto-thumb-row"></div>
     </div>
     <div class="btn-row" style="flex-direction:column;margin-top:0.5rem;">
       <button class="btn btn-success" onclick="confirmarDespacho()">✅ Confirmar Despacho</button>
@@ -743,13 +761,9 @@ async function confirmarDespacho() {
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
 
-  // Recargar y ofrecer WhatsApp
+  // Recargar y abrir WhatsApp
   await cargarTodo();
-  setTimeout(() => {
-    if (confirm("¿Enviar reporte de despacho por WhatsApp?")) {
-      abrirReporteWA(ap.ap_id, placa, document.getElementById('despConductor')?.value || '');
-    }
-  }, 500);
+  setTimeout(() => abrirModalWADespacho(ap.ap_id, placa, document.getElementById('despConductor')?.value||''), 600);
 }
 
 // =============================================================================
@@ -941,6 +955,165 @@ function eliminarFuncionario(id) {
   guardarFuncionariosLocal();
   renderFuncionarios();
   toast("Funcionario eliminado");
+}
+
+
+// =============================================================================
+// MÓDULO FOTO + GPS + WHATSAPP — DESPACHO
+// =============================================================================
+let FOTOS_DESPACHO = []; // fotos del vehículo/carga
+let GPS_DESPACHO   = null;
+
+// Captura foto comprimida
+async function comprimirFoto(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX=800; let w=img.width,h=img.height;
+        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+        const c=document.createElement('canvas'); c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',0.55));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// GPS
+function obtenerGPSDesp() {
+  return new Promise(resolve => {
+    if(!navigator.geolocation){resolve(null);return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({lat:p.coords.latitude.toFixed(6),lon:p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy)}),
+      ()=>resolve(null),
+      {timeout:10000,enableHighAccuracy:true}
+    );
+  });
+}
+
+function linkMaps(lat,lon){ return `https://maps.google.com/?q=${lat},${lon}`; }
+
+function verFotoGrande(src){
+  const o=document.createElement('div');
+  o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  o.innerHTML=`<img src="${src}" style="max-width:95vw;max-height:90vh;border-radius:8px;">`;
+  o.onclick=()=>document.body.removeChild(o);
+  document.body.appendChild(o);
+}
+
+async function agregarFotoDespacho(input) {
+  const files = Array.from(input.files);
+  if(!files.length) return;
+  // Capturar GPS en el momento de la foto
+  toast("📍 Obteniendo ubicación...");
+  const gps = await obtenerGPSDesp();
+  GPS_DESPACHO = gps;
+
+  for(const file of files){
+    const b64 = await comprimirFoto(file);
+    FOTOS_DESPACHO.push({
+      b64,
+      gps,
+      hora: new Date().toLocaleTimeString('es-CO'),
+      tipo: 'despacho'
+    });
+  }
+  input.value='';
+  renderFotosDespacho();
+  toast(gps ? `✅ ${files.length} foto(s) + GPS: ${gps.lat},${gps.lon}` : `✅ ${files.length} foto(s) (sin GPS)`);
+}
+
+function renderFotosDespacho() {
+  const cont = document.getElementById('fotosDespachoPreview');
+  if(!cont) return;
+  cont.innerHTML = FOTOS_DESPACHO.map((f,i) => `
+    <div style="position:relative;display:inline-block;">
+      <img src="${f.b64}" onclick="verFotoGrande('${f.b64}')"
+           style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;">
+      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.65);border-radius:0 0 8px 8px;padding:2px;font-size:0.5rem;color:#fff;text-align:center;">${f.hora}${f.gps?'📍':''}</div>
+      <button onclick="FOTOS_DESPACHO.splice(${i},1);renderFotosDespacho();"
+              style="position:absolute;top:-5px;right:-5px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:0.6rem;cursor:pointer;">✕</button>
+    </div>`).join('');
+  // Mostrar GPS si disponible
+  const gpsBox = document.getElementById('despGPSInfo');
+  if(gpsBox && GPS_DESPACHO) {
+    gpsBox.style.display='flex';
+    gpsBox.innerHTML = `📍 ${GPS_DESPACHO.lat}, ${GPS_DESPACHO.lon} (±${GPS_DESPACHO.acc}m) <a href="${linkMaps(GPS_DESPACHO.lat,GPS_DESPACHO.lon)}" target="_blank" style="color:var(--azul);margin-left:6px;font-size:0.68rem;">Ver mapa →</a>`;
+  }
+}
+
+// ---- WhatsApp mejorado para despacho ----
+function generarMsgDespacho(ap_id, placa, conductor, lineas) {
+  const ap      = S.aps.find(a=>String(a.ap_id)===String(ap_id));
+  const cliente = nombreCliente(ap?.cliente_nit);
+  const fecha   = new Date().toLocaleString('es-CO');
+  const gpsLink = GPS_DESPACHO ? linkMaps(GPS_DESPACHO.lat,GPS_DESPACHO.lon) : 'N/A';
+
+  let prods = '';
+  lineas.forEach(l => {
+    const sol=parseFloat(l.cantidad_solicitada)||0;
+    const desp=parseFloat(l.cantidad_despachada)||0;
+    const pend=Math.max(0,sol-desp);
+    const carga=parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value)||pend;
+    const saldo=pend-carga;
+    prods += `  • ${nombreProducto(l.tmcode)}: ${carga} ${undProducto(l.tmcode)}${saldo>0?' (saldo: '+saldo+')':' ✅'}
+`;
+  });
+
+  return `🏭 *POSTEC DE OCCIDENTE S.A.S.*
+━━━━━━━━━━━━━━━━━━
+🚛 *REPORTE DE DESPACHO*
+━━━━━━━━━━━━━━━━━━
+📋 AP #${ap_id}
+👤 Cliente: ${cliente}
+📅 ${fecha}
+🚛 Vehículo: ${placa}
+👷 Conductor: ${conductor||'N/A'}
+🏭 Tipo: ${ap?.tipo_entrega||''}
+📍 Ubicación salida: ${gpsLink}
+📷 Fotos de carga: ${FOTOS_DESPACHO.length} foto(s)
+
+📦 *PRODUCTOS:*
+${prods}
+━━━━━━━━━━━━━━━━━━
+_SIVEL · POSTECSA v1.0_`;
+}
+
+function abrirModalWADespacho(ap_id, placa, conductor) {
+  const ap    = S.aps.find(a=>String(a.ap_id)===String(ap_id));
+  const lineas = S.detalles.filter(d=>String(d.ap_id)===String(ap_id));
+  const msg   = generarMsgDespacho(ap_id, placa, conductor, lineas);
+  const funcs = S.funcionarios.filter(f=>f.activo);
+
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay show';
+  overlay.innerHTML=`
+    <div class="modal-box">
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      <div class="modal-title">📲 Reporte de Despacho</div>
+      ${FOTOS_DESPACHO.length ? `
+      <div style="margin-bottom:1rem;">
+        <div style="font-size:0.72rem;font-weight:700;color:#888;margin-bottom:6px;">FOTOS DEL DESPACHO</div>
+        <div class="foto-thumb-row">${FOTOS_DESPACHO.map(f=>`<img src="${f.b64}" onclick="verFotoGrande('${f.b64}')">`).join('')}</div>
+      </div>` : '<p style="font-size:0.78rem;color:var(--amarillo);margin-bottom:1rem;">⚠️ Sin fotos del despacho</p>'}
+      <div style="background:#f0fdf4;border-radius:10px;padding:10px;margin-bottom:1rem;">
+        <div style="font-size:0.7rem;font-weight:700;color:var(--verde);margin-bottom:4px;">MENSAJE</div>
+        <div style="font-size:0.72rem;white-space:pre-wrap;color:#333;line-height:1.6;max-height:120px;overflow-y:auto;">${msg}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${funcs.length ? funcs.map(f=>`
+          <button class="btn-wa-full" ${!f.wa?'disabled':''} onclick="window.open('https://wa.me/${f.wa}?text='+encodeURIComponent('${msg.replace(/'/g,"\'")}'),'_blank')">
+            📲 ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
+          </button>`).join('') : '<p style="text-align:center;color:#888;font-size:0.8rem;">Sin funcionarios activos. Agrégalos en Personal.</p>'}
+      </div>
+    </div>`;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.body.appendChild(overlay);
 }
 
 // =============================================================================
