@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIVEL · POSTEC DE OCCIDENTE S.A.S.</title>
+<style>
+  :root {
+    --azul:    #1a3a5c;
+    --azul2:   #2563a8;
+    --naranja: #e05c1a;
+    --gris:    #f4f6f9;
+    --texto:   #1e2b3a;
+    --verde:   #1a7a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--gris);
+    color: var(--texto);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--azul);
+    color: #fff;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
+  .logo-area { display: flex; align-items: center; gap: 14px; }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: var(--naranja);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; font-weight: 900; color: #fff;
+  }
+  .logo-text { line-height: 1.2; }
+  .logo-text .sivel  { font-size: 1.3rem; font-weight: 800; letter-spacing: 2px; }
+  .logo-text .empresa{ font-size: 0.7rem; opacity: 0.75; letter-spacing: 1px; }
+  .version { font-size: 0.7rem; background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 20px; }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(135deg, var(--azul) 0%, var(--azul2) 100%);
+    color: #fff;
+    padding: 4rem 2rem 3rem;
+    text-align: center;
+  }
+  .hero h1 { font-size: clamp(1.6rem, 4vw, 2.8rem); font-weight: 800; margin-bottom: 0.75rem; }
+  .hero p  { font-size: 1.05rem; opacity: 0.85; max-width: 600px; margin: 0 auto 2rem; }
+  .badge-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .badge {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .badge.verde  { background: var(--verde); border-color: var(--verde); }
+  .badge.naranja{ background: var(--naranja); border-color: var(--naranja); }
+
+  /* APPS GRID */
+  main { max-width: 1100px; margin: 0 auto; padding: 3rem 1.5rem; }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--azul2);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--azul2);
+  }
+  .apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+  .app-card {
+    background: #fff;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(26,58,92,0.10);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex; flex-direction: column;
+  }
+  .app-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 32px rgba(26,58,92,0.18);
+  }
+  .card-header {
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .card-icon {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+  .card-header h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 2px; }
+  .card-header p  { font-size: 0.78rem; color: #666; line-height: 1.4; }
+  .card-body { padding: 0 1.5rem 1.5rem; flex: 1; }
+  .feature-list { list-style: none; }
+  .feature-list li {
+    font-size: 0.82rem;
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #444;
+  }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .card-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .status-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-en-construccion { background: #fff3cd; color: #856404; }
+  .status-activo          { background: #d1f5e0; color: var(--verde); }
+  .status-pendiente       { background: #e9ecef; color: #6c757d; }
+
+  .btn-app {
+    display: inline-block;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+  .btn-app:hover { opacity: 0.85; }
+  .btn-comercial  { background: #2563a8; color: #fff; }
+  .btn-despacho   { background: #e05c1a; color: #fff; }
+  .btn-gerencia   { background: #1a7a4a; color: #fff; }
+  .btn-disabled   { background: #e9ecef; color: #999; pointer-events: none; }
+
+  /* ARQUITECTURA */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+  .arch-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 10px rgba(26,58,92,0.08);
+    border-left: 4px solid var(--azul2);
+  }
+  .arch-card h3 { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--azul); }
+  .arch-card p  { font-size: 0.78rem; color: #555; line-height: 1.5; }
+  .arch-card .tag {
+    display: inline-block;
+    background: var(--gris);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--azul2);
+    margin-top: 0.5rem;
+  }
+
+  /* FORMULA */
+  .formula-box {
+    background: var(--azul);
+    color: #fff;
+    border-radius: 14px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+    text-align: center;
+  }
+  .formula-box h3 { font-size: 0.8rem; letter-spacing: 2px; opacity: 0.7; margin-bottom: 1rem; }
+  .formula {
+    font-family: 'Courier New', monospace;
+    font-size: clamp(0.8rem, 2vw, 1rem);
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    line-height: 1.8;
+    word-break: break-word;
+  }
+  .formula .op  { color: #f4c430; font-weight: bold; }
+  .formula .var { color: #7dd3fc; }
+  .formula .res { color: #86efac; font-weight: bold; font-size: 1.1em; }
+
+  /* FOOTER */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: 0.78rem;
+    color: #888;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  /* COLORES por app */
+  .color-comercial { background: #dbeafe; }
+  .color-despacho  { background: #fff0e8; }
+  .color-gerencia  { background: #dcfce7; }
+  .dot-comercial   { background: #2563a8; }
+  .dot-despacho    { background: #e05c1a; }
+  .dot-gerencia    { background: #1a7a4a; }
+
+  @media (max-width: 600px) {
+    header { padding: 0 1rem; }
+    .hero  { padding: 2rem 1rem 2rem; }
+    main   { padding: 2rem 1rem; }
+    .formula { font-size: 0.72rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-area">
+    <div class="logo-icon">S</div>
+    <div class="logo-text">
+      <div class="sivel">SIVEL</div>
+      <div class="empresa">POSTEC DE OCCIDENTE S.A.S.</div>
+    </div>
+  </div>
+  <span class="version">v1.0 · 2026</span>
+</header>
+
+<div class="hero">
+  <h1>Sistema Integrado de Ventas,<br>Inventario y Logística</h1>
+  <p>Ecosistema de 3 aplicaciones interconectadas en tiempo real. Inventario dinámico, despacho inteligente y control gerencial desde cualquier dispositivo.</p>
+  <div class="badge-row">
+    <span class="badge verde">✅ Backend GAS Activo</span>
+    <span class="badge naranja">⚙️ Apps en Construcción</span>
+    <span class="badge">☁️ Google Drive</span>
+    <span class="badge">📱 PWA</span>
+    <span class="badge">🔗 Tiempo Real</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- MOTOR DE INVENTARIO -->
+  <div class="formula-box">
+    <h3>⚙️ MOTOR DE INVENTARIO DINÁMICO</h3>
+    <div class="formula">
+      <span class="res">Disponible</span>
+      <span class="op"> = </span>
+      <span class="var">tmcant</span>
+      <span class="op"> − </span>
+      <span class="var">cant_en_curado</span>
+      <span class="op"> − </span>
+      <span class="var">cant_mermas_averias</span>
+      <span class="op"> − </span>
+      <span class="var">Σ(solicitado_pendiente)</span>
+    </div>
+  </div>
+
+  <!-- LAS 3 APPS -->
+  <div class="section-title">Las 3 Aplicaciones del Ecosistema</div>
+  <div class="apps-grid">
+
+    <!-- APP COMERCIAL -->
+    <div class="app-card">
+      <div class="card-header color-comercial">
+        <div class="card-icon" style="background:#2563a8;color:#fff;">🏪</div>
+        <div>
+          <h2>App Comercial</h2>
+          <p>Para asesores en campo · Jose Eduardo, Felipe Andrés</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li><span class="dot dot-comercial"></span>Consulta inventario dinámico en campo</li>
+          <li><span class="dot dot-comercial"></span>Creación de clientes con GPS y foto fachada</li>
+          <li><span class="dot dot-comercial"></span>Pedidos (AP) con semáforo de stock</li>
+          <li><span class="dot dot-comercial"></span>Control de descuentos con tope gerencial</li>
+          <li><span class="dot dot-comercial"></span>Modificaciones sin cambiar consecutivo</li>
+          <li><span class="dot dot-comercial"></span>Flete Zona A / Zona B automático</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <span class="status-badge status-en-construccion">⚙️ En construcción</span>
+        <a href="comercial/index.html" class="btn-app btn-disabled">Próximamente</a>
+      </div>
+    </div>
+
+    <!-- APP DESPACHO -->
+    <div class="app-card">
+      <div class="card-header color-despacho">
+        <div class="card-icon" style="background:#e05c1a;color:#fff;">🚛</div>
+        <div>
+          <h2>App Despacho y Patio</h2>
+          <p>Para Valentina y el equipo de patio</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li><span class="dot dot-despacho"></span>Recibe AP aprobadas para despacho</li>
+          <li><span class="dot dot-despacho"></span>Carga real vs. solicitada → genera saldo</li>
+          <li><span class="dot dot-despacho"></span>Registro de averías in situ (resta inmediata)</li>
+          <li><span class="dot dot-despacho"></span>Control de curado con fecha de liberación</li>
+          <li><span class="dot dot-despacho"></span>Foto de plataforma + datos del camión</li>
+          <li><span class="dot dot-despacho"></span>Reporte WhatsApp personalizado por cliente</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <span class="status-badge status-en-construccion">⚙️ En construcción</span>
+        <a href="despacho/index.html" class="btn-app btn-disabled">Próximamente</a>
+      </div>
+    </div>
+
+    <!-- APP GERENCIA -->
+    <div class="app-card">
+      <div class="card-header color-gerencia">
+        <div class="card-icon" style="background:#1a7a4a;color:#fff;">📊</div>
+        <div>
+          <h2>App Gerencia</h2>
+          <p>Dashboard · Ing. Nohra Constanza Jiménez H.</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li><span class="dot dot-gerencia"></span>KPIs en tiempo real: rutas y volúmenes</li>
+          <li><span class="dot dot-gerencia"></span>Alertas de fabricación por stock negativo</li>
+          <li><span class="dot dot-gerencia"></span>Aprobación remota de descuentos elevados</li>
+          <li><span class="dot dot-gerencia"></span>Control maestro de vendedores</li>
+          <li><span class="dot dot-gerencia"></span>Gestión de tarifas y vigencias de precios</li>
+          <li><span class="dot dot-gerencia"></span>Historial completo de pedidos y despachos</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <span class="status-badge status-pendiente">🕐 Fase 4</span>
+        <a href="gerencia/index.html" class="btn-app btn-disabled">Próximamente</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ARQUITECTURA -->
+  <div class="section-title">Arquitectura Técnica</div>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <h3>☁️ Base de Datos</h3>
+      <p>7 tablas relacionales en Google Sheets. Lectura pública vía gviz/tq. Sin servidor propio.</p>
+      <span class="tag">Google Sheets</span>
+    </div>
+    <div class="arch-card">
+      <h3>⚡ API Backend</h3>
+      <p>Google Apps Script desplegado como Web App. GET para lecturas, POST no-cors para escrituras.</p>
+      <span class="tag">GAS Web App</span>
+    </div>
+    <div class="arch-card">
+      <h3>📱 Frontend</h3>
+      <p>3 PWAs independientes de un solo archivo HTML. Instalables en móvil. Sin frameworks externos.</p>
+      <span class="tag">PWA · HTML único</span>
+    </div>
+    <div class="arch-card">
+      <h3>🔐 Autenticación</h3>
+      <p>Validación por correo corporativo contra tabla VENDEDORES. Sin OAuth complejo.</p>
+      <span class="tag">Email + PIN</span>
+    </div>
+    <div class="arch-card">
+      <h3>🚦 Semáforo de Stock</h3>
+      <p>Verde: disponible &gt; 10 · Amarillo: &gt; 0 (en curado) · Rojo: agotado o comprometido.</p>
+      <span class="tag">Inventario Dinámico</span>
+    </div>
+    <div class="arch-card">
+      <h3>🔗 Hosting</h3>
+      <p>GitHub Pages en acmv0921.github.io/sivel/ — deploy automático en cada commit.</p>
+      <span class="tag">GitHub Pages</span>
+    </div>
+  </div>
+
+  <!-- TABLAS -->
+  <div class="section-title">Modelo de Datos — 7 Tablas</div>
+  <div class="arch-grid">
+    <div class="arch-card" style="border-left-color:#2563a8">
+      <h3>📦 PRODUCTOS_MAESTRO</h3>
+      <p>tmcode · tmdescrip · tmund · tmcant. Actualizada desde ERP Datas cada 1–3 días.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#2563a8">
+      <h3>👤 VENDEDORES</h3>
+      <p>id_vendedor · nombre · correo · estado (Activo/Inactivo). Control de acceso.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#2563a8">
+      <h3>🏢 CLIENTES</h3>
+      <p>NIT único · razón social · vendedor asignado · GPS · foto fachada URL.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#e05c1a">
+      <h3>📋 PREVENTAS_AP</h3>
+      <p>Cabecera del pedido. ap_id consecutivo · tipo entrega · estado del flujo.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#e05c1a">
+      <h3>📄 DETALLE_AP</h3>
+      <p>Líneas del pedido. Descuentos validados · cantidad solicitada vs. despachada.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#e05c1a">
+      <h3>🏗️ CONTROL_PATIO</h3>
+      <p>Curado · averías · placa vehículo · foto carga · saldos y remanentes.</p>
+    </div>
+    <div class="arch-card" style="border-left-color:#1a7a4a">
+      <h3>💰 PRECIOS_GERENCIA</h3>
+      <p>Precio base · descuento máximo · fletes por zona · vigencias de campaña.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  SIVEL v1.0 · POSTEC DE OCCIDENTE S.A.S. · Área de Gestión de Mantenimiento y Confiabilidad<br>
+  Desarrollado por Abdiel Cicar Moreno Velásquez · 2026
+</footer>
+
+</body>
+</html>
