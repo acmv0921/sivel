@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1a7a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SIVEL Gerencia">
+<title>SIVEL · Gerencia</title>
+<style>
+:root{
+  --verde:  #1a7a4a; --verde2: #15603b;
+  --azul:   #1a3a5c; --azul2:  #2563a8;
+  --naranja:#e05c1a; --rojo:   #b91c1c;
+  --amarillo:#856404; --morado:#6d28d9;
+  --gris:   #f4f6f9; --borde:  #e2e8f0;
+  --texto:  #1e2b3a; --sombra: 0 2px 12px rgba(26,122,74,0.10);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--texto);min-height:100vh;padding-bottom:85px;}
+
+/* HEADER */
+.header{background:var(--verde2);color:#fff;padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.25);}
+.header-left{display:flex;align-items:center;gap:10px;}
+.header-title{font-size:.95rem;font-weight:700;}
+.header-sub{font-size:.65rem;opacity:.75;}
+.user-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:.72rem;cursor:pointer;}
+
+/* NAV */
+.nav-bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--borde);display:flex;z-index:200;box-shadow:0 -2px 12px rgba(0,0,0,.08);}
+.nav-btn{flex:1;padding:8px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;cursor:pointer;font-size:.58rem;color:#888;font-weight:600;}
+.nav-btn.active{color:var(--verde);}
+.nav-btn .icon{font-size:1.2rem;}
+
+/* SCREENS */
+.screen{display:none;padding:1rem;}
+.screen.active{display:block;}
+
+/* CARDS */
+.card{background:#fff;border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sombra);}
+.card-title{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--verde);margin-bottom:1rem;}
+
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem;}
+.kpi-box{background:#fff;border-radius:12px;padding:1rem;box-shadow:var(--sombra);text-align:center;border-top:3px solid var(--verde);}
+.kpi-val{font-size:1.9rem;font-weight:800;color:var(--verde);}
+.kpi-sub{font-size:.67rem;color:#888;font-weight:600;margin-top:2px;}
+.kpi-box.naranja{border-top-color:var(--naranja);}.kpi-box.naranja .kpi-val{color:var(--naranja);}
+.kpi-box.rojo   {border-top-color:var(--rojo);   }.kpi-box.rojo    .kpi-val{color:var(--rojo);}
+.kpi-box.azul   {border-top-color:var(--azul2);  }.kpi-box.azul    .kpi-val{color:var(--azul2);}
+.kpi-box.morado {border-top-color:var(--morado); }.kpi-box.morado  .kpi-val{color:var(--morado);}
+
+/* FORM */
+.form-group{margin-bottom:.9rem;}
+.form-label{display:block;font-size:.75rem;font-weight:600;color:#555;margin-bottom:.3rem;}
+.form-control{width:100%;padding:10px 12px;border:1.5px solid var(--borde);border-radius:8px;font-size:.9rem;color:var(--texto);background:#fff;outline:none;transition:border-color .2s;}
+.form-control:focus{border-color:var(--verde);}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:9px;font-size:.85rem;font-weight:700;border:none;cursor:pointer;transition:opacity .2s;width:100%;}
+.btn:active{opacity:.8;}
+.btn-primary{background:var(--verde);color:#fff;}
+.btn-danger {background:var(--rojo);color:#fff;}
+.btn-naranja{background:var(--naranja);color:#fff;}
+.btn-azul   {background:var(--azul2);color:#fff;}
+.btn-outline{background:#fff;color:var(--verde);border:2px solid var(--verde);}
+.btn-sm{padding:6px 12px;font-size:.76rem;width:auto;}
+.btn-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;}
+
+/* ALERTA PRODUCCION */
+.alerta-prod{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.6rem;box-shadow:var(--sombra);border-left:4px solid var(--rojo);}
+.alerta-prod.alta{border-left-color:var(--amarillo);}
+.alerta-prod-title{font-size:.88rem;font-weight:700;margin-bottom:4px;}
+.alerta-num{font-size:1.4rem;font-weight:800;}
+
+/* APROBACIÓN */
+.aprobacion-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.75rem;box-shadow:var(--sombra);border-left:4px solid var(--morado);}
+.aprobacion-card.aprobada{border-left-color:var(--verde);opacity:.7;}
+.aprobacion-card.rechazada{border-left-color:var(--rojo);opacity:.7;}
+
+/* TABLA */
+.tabla{width:100%;border-collapse:collapse;font-size:.78rem;}
+.tabla th{background:var(--verde2);color:#fff;padding:8px 10px;text-align:left;font-size:.68rem;letter-spacing:.5px;}
+.tabla td{padding:8px 10px;border-bottom:1px solid var(--borde);}
+.tabla tr:hover td{background:#f8fffe;}
+.tabla-wrap{overflow-x:auto;border-radius:10px;box-shadow:var(--sombra);}
+
+/* VENDEDOR ROW */
+.vend-row{display:flex;align-items:center;gap:10px;padding:10px;background:#fff;border-radius:10px;margin-bottom:.5rem;box-shadow:var(--sombra);}
+.vend-avatar{width:38px;height:38px;border-radius:50%;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.95rem;flex-shrink:0;}
+.vend-info{flex:1;min-width:0;}
+.vend-nombre{font-size:.88rem;font-weight:700;}
+.vend-meta{font-size:.72rem;color:#666;}
+.badge{font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:10px;}
+.badge-activo  {background:#d1f5e0;color:var(--verde);}
+.badge-inactivo{background:#e9ecef;color:#666;}
+
+/* CHART BAR */
+.bar-chart{margin-top:.5rem;}
+.bar-item{margin-bottom:.75rem;}
+.bar-label{display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:3px;}
+.bar-track{background:#e9ecef;border-radius:10px;height:10px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:10px;background:var(--verde);transition:width .6s;}
+
+/* PRECIO ROW */
+.precio-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borde);}
+.precio-row:last-child{border-bottom:none;}
+.precio-code{font-size:.68rem;color:#888;font-weight:700;width:40px;flex-shrink:0;}
+.precio-nombre{flex:1;font-size:.8rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.precio-val{font-size:.82rem;font-weight:700;color:var(--azul2);width:80px;text-align:right;}
+
+/* SEMAFORO */
+.sem{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:.68rem;font-weight:700;}
+.sem-verde   {background:#d1f5e0;color:var(--verde);}
+.sem-amarillo{background:#fff3cd;color:var(--amarillo);}
+.sem-rojo    {background:#ffe4e4;color:var(--rojo);}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;align-items:flex-end;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:20px 20px 0 0;padding:1.5rem;width:100%;max-height:92vh;overflow-y:auto;}
+.modal-title{font-size:1rem;font-weight:800;margin-bottom:1rem;color:var(--verde2);}
+.modal-close{float:right;background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;}
+
+/* LOGIN */
+.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;background:linear-gradient(160deg,var(--verde2) 0%,var(--verde) 100%);}
+.login-title{color:#fff;font-size:1.4rem;font-weight:800;text-align:center;margin-bottom:.3rem;margin-top:1rem;}
+.login-sub{color:rgba(255,255,255,.75);font-size:.82rem;text-align:center;margin-bottom:1.75rem;}
+.login-card{background:#fff;border-radius:16px;padding:1.75rem;width:100%;max-width:360px;}
+.login-err{color:var(--rojo);font-size:.78rem;text-align:center;margin-top:.5rem;min-height:20px;}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:2rem;color:#888;font-size:.85rem;}
+.spinner{width:20px;height:20px;border:2px solid #ddd;border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* TOAST */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1e2b3a;color:#fff;padding:10px 20px;border-radius:25px;font-size:.82rem;font-weight:600;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+/* TABS */
+.tabs{display:flex;gap:3px;background:#fff;border-radius:10px;padding:3px;box-shadow:var(--sombra);margin-bottom:1rem;}
+.tab{flex:1;padding:6px 4px;border:none;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;background:none;color:#888;transition:all .2s;}
+.tab.active{background:var(--verde);color:#fff;}
+
+/* APROBACION PENDIENTE badge */
+.badge-pendiente{background:#ede9fe;color:var(--morado);}
+.notif-dot{width:8px;height:8px;background:var(--rojo);border-radius:50%;display:inline-block;margin-left:3px;vertical-align:middle;}
+
+@media(min-width:600px){.screen{max-width:600px;margin:0 auto;}.nav-bottom{max-width:600px;left:50%;transform:translateX(-50%);}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen">
+  <img src="../assets/logo_postecsa.jpg" alt="POSTECSA" style="height:75px;object-fit:contain;border-radius:10px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3));">
+  <div class="login-title">SIVEL Gerencia</div>
+  <div class="login-sub">Dashboard · Control Comercial</div>
+  <div class="login-card">
+    <div class="form-group">
+      <label class="form-label">Correo</label>
+      <input id="loginCorreo" class="form-control" type="email" placeholder="gerencia@postecsa.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">PIN</label>
+      <input id="loginPin" class="form-control" type="password" placeholder="••••••••" maxlength="20">
+    </div>
+    <button class="btn btn-primary" onclick="hacerLogin()">🔐 Ingresar</button>
+    <div id="loginErr" class="login-err"></div>
+  </div>
+  <div style="color:rgba(255,255,255,.4);font-size:.62rem;text-align:center;margin-top:1.5rem;line-height:1.8;">
+    Desarrollado por <strong style="color:rgba(255,255,255,.65);">Abdiel Cicar Moreno Velásquez</strong><br>
+    Área de Gestión de Mantenimiento y Confiabilidad<br>
+    POSTEC DE OCCIDENTE S.A.S. · v1.0 · 2026
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appMain" style="display:none;">
+  <div class="header">
+    <div class="header-left">
+      <img src="../assets/logo_postecsa.jpg" alt="P" style="height:36px;border-radius:6px;object-fit:contain;">
+      <div>
+        <div class="header-title">SIVEL Gerencia</div>
+        <div class="header-sub" id="headerSub">Dashboard</div>
+      </div>
+    </div>
+    <div class="user-chip" onclick="cerrarSesion()">
+      <span id="userNombre">—</span> · Salir
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="screenDashboard" class="screen active">
+    <div class="kpi-grid">
+      <div class="kpi-box"><div class="kpi-val" id="kpiTotalAPs">—</div><div class="kpi-sub">TOTAL APs</div></div>
+      <div class="kpi-box naranja"><div class="kpi-val" id="kpiPendientes">—</div><div class="kpi-sub">PENDIENTES</div></div>
+      <div class="kpi-box rojo"><div class="kpi-val" id="kpiAlertas">—</div><div class="kpi-sub">ALERTAS PRODUCCIÓN</div></div>
+      <div class="kpi-box morado"><div class="kpi-val" id="kpiAprobaciones">—</div><div class="kpi-sub">APROBACIONES PEND.</div></div>
+    </div>
+
+    <!-- VENTAS POR VENDEDOR -->
+    <div class="card">
+      <div class="card-title">📊 Ventas por Vendedor</div>
+      <div id="chartVendedores"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- APs POR ESTADO -->
+    <div class="card">
+      <div class="card-title">📋 Estado de APs</div>
+      <div id="chartEstados"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- INVENTARIO RESUMEN -->
+    <div class="card">
+      <div class="card-title">📦 Inventario Dinámico</div>
+      <div id="resumenInventario"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ALERTAS PRODUCCIÓN -->
+  <div id="screenAlertas" class="screen">
+    <div class="card">
+      <div class="card-title">🚨 Alertas de Fabricación</div>
+      <p style="font-size:.78rem;color:#666;margin-bottom:1rem;">Productos con stock disponible negativo o crítico. Indica qué y cuánto producir.</p>
+      <button class="btn btn-outline btn-sm" onclick="cargarDatos()">🔄 Actualizar</button>
+    </div>
+    <div id="listaAlertas"><div class="loading"><div class="spinner"></div></div></div>
+
+    <div class="card" style="margin-top:1rem;">
+      <div class="card-title">📦 Inventario Completo</div>
+      <div id="inventarioCompleto"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- APROBACIONES -->
+  <div id="screenAprobaciones" class="screen">
+    <div class="card">
+      <div class="card-title">✅ Aprobación de Descuentos</div>
+      <p style="font-size:.78rem;color:#666;margin-bottom:1rem;">Descuentos que superan el tope autorizado y requieren aprobación de gerencia.</p>
+    </div>
+    <div id="listaPendientesAprobacion">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="card" style="margin-top:1rem;">
+      <div class="card-title">📋 Historial de Aprobaciones</div>
+      <div id="historialAprobaciones">
+        <div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin historial aún</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRECIOS -->
+  <div id="screenPrecios" class="screen">
+    <div class="card">
+      <div class="card-title">💰 Tabla de Precios Gerencia</div>
+      <button class="btn btn-primary btn-sm" onclick="abrirModalPrecio()">➕ Nuevo precio</button>
+    </div>
+    <div id="listaPrecios"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- USUARIOS -->
+  <div id="screenUsuarios" class="screen">
+    <div class="card">
+      <div class="card-title">👥 Control de Vendedores</div>
+      <button class="btn btn-primary btn-sm" onclick="abrirModalVendedor()">➕ Nuevo vendedor</button>
+    </div>
+    <div id="listaVendedores"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+</div><!-- /appMain -->
+
+<!-- MODAL: DETALLE AP + APROBACIÓN -->
+<div id="modalAprobacion" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalAprobacion')">✕</button>
+    <div class="modal-title">Aprobación de Descuento</div>
+    <div id="modalAprobacionContent"></div>
+  </div>
+</div>
+
+<!-- MODAL: PRECIO -->
+<div id="modalPrecio" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalPrecio')">✕</button>
+    <div class="modal-title" id="modalPrecioTitle">Política de Precio</div>
+    <div class="form-group">
+      <label class="form-label">Producto (código)</label>
+      <select id="precioProducto" class="form-control"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Precio base en planta ($)</label>
+      <input id="precioBase" class="form-control" type="number" placeholder="285000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descuento máximo vendedor (%)</label>
+      <input id="precioDescMax" class="form-control" type="number" min="0" max="50" step="0.5" placeholder="8">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Flete por unidad Zona A - Cali ($)</label>
+      <input id="precioFleteA" class="form-control" type="number" placeholder="12000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Flete por unidad Zona B - Yumbo/CENCAR ($)</label>
+      <input id="precioFleteB" class="form-control" type="number" placeholder="18000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Vigencia desde</label>
+      <input id="precioDesde" class="form-control" type="date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Vigencia hasta</label>
+      <input id="precioHasta" class="form-control" type="date">
+    </div>
+    <button class="btn btn-primary" onclick="guardarPrecio()">💾 Guardar Política</button>
+    <div id="precioErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
+  </div>
+</div>
+
+<!-- MODAL: VENDEDOR -->
+<div id="modalVendedor" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalVendedor')">✕</button>
+    <div class="modal-title" id="modalVendTitle">Nuevo Vendedor</div>
+    <div class="form-group">
+      <label class="form-label">Cédula (ID) *</label>
+      <input id="vendId" class="form-control" type="number" placeholder="1093945001">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre completo *</label>
+      <input id="vendNombre" class="form-control" placeholder="Jose Eduardo Ramírez">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo corporativo *</label>
+      <input id="vendCorreo" class="form-control" type="email" placeholder="joseduardo@postecsa.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Estado</label>
+      <select id="vendEstado" class="form-control">
+        <option value="Activo">Activo</option>
+        <option value="Inactivo">Inactivo</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="guardarVendedor()">💾 Guardar</button>
+    <div id="vendErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR PRECIO -->
+<div id="modalEditPrecio" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalEditPrecio')">✕</button>
+    <div class="modal-title">Editar Política de Precio</div>
+    <input type="hidden" id="editPrecioId">
+    <div class="form-group">
+      <label class="form-label">Precio base en planta ($)</label>
+      <input id="editPrecioBase" class="form-control" type="number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descuento máximo vendedor (%)</label>
+      <input id="editDescMax" class="form-control" type="number" min="0" max="50" step="0.5">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Flete Zona A ($)</label>
+      <input id="editFleteA" class="form-control" type="number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Flete Zona B ($)</label>
+      <input id="editFleteB" class="form-control" type="number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Vigencia hasta</label>
+      <input id="editHasta" class="form-control" type="date">
+    </div>
+    <button class="btn btn-primary" onclick="actualizarPrecio()">💾 Actualizar</button>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav-bottom" id="navBottom" style="display:none;">
+  <button class="nav-btn active" onclick="irA('screenDashboard')"   id="navDash">   <span class="icon">📊</span>Dashboard</button>
+  <button class="nav-btn"        onclick="irA('screenAlertas')"     id="navAlertas"> <span class="icon">🚨</span>Producción</button>
+  <button class="nav-btn"        onclick="irA('screenAprobaciones')" id="navAprobac"> <span class="icon">✅</span>Aprobac.</button>
+  <button class="nav-btn"        onclick="irA('screenPrecios')"     id="navPrecios"> <span class="icon">💰</span>Precios</button>
+  <button class="nav-btn"        onclick="irA('screenUsuarios')"    id="navUsuarios"><span class="icon">👥</span>Usuarios</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// =============================================================================
+// SIVEL APP GERENCIA v1.0
+// =============================================================================
+const GAS_URL  = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
+const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+const GVIZ     = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
+const PIN_GERENCIA = "GER2025";
+
+let G = {
+  usuario:null, vendedor:null,
+  aps:[], detalles:[], productos:[], patio:[], vendedores:[], precios:[],
+  aprobaciones: JSON.parse(localStorage.getItem('sivel_aprobaciones')||'[]')
+};
+
+// =============================================================================
+// LOGIN
+// =============================================================================
+async function hacerLogin() {
+  const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
+  const pin    = document.getElementById('loginPin').value.trim();
+  const err    = document.getElementById('loginErr');
+  if (!correo || !pin) { err.textContent="Completa los campos"; return; }
+  err.textContent="Verificando...";
+  try {
+    const vends = await leerGVIZ("VENDEDORES");
+    const v = vends.find(x => x.correo_usuario?.toLowerCase().trim()===correo && x.estado==="Activo");
+    if (!v) { err.textContent="❌ Correo no registrado o inactivo"; return; }
+    if (pin !== PIN_GERENCIA && pin !== "POST2025") { err.textContent="❌ PIN incorrecto"; return; }
+    G.usuario=correo; G.vendedor=v;
+    iniciarApp();
+  } catch(e) { err.textContent="Error: "+e.message; }
+}
+
+function iniciarApp() {
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appMain').style.display='block';
+  document.getElementById('navBottom').style.display='flex';
+  const n=G.vendedor.nombre_vendedor||"";
+  document.getElementById('headerSub').textContent=n;
+  document.getElementById('userNombre').textContent=n.split(' ')[0];
+  cargarDatos();
+}
+
+function cerrarSesion() {
+  if (!confirm("¿Cerrar sesión?")) return;
+  G.usuario=null; G.vendedor=null;
+  document.getElementById('appMain').style.display='none';
+  document.getElementById('navBottom').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginPin').value='';
+  document.getElementById('loginErr').textContent='';
+}
+
+// =============================================================================
+// DATOS
+// =============================================================================
+async function leerGVIZ(hoja) {
+  const url=GVIZ+encodeURIComponent(hoja);
+  const resp=await fetch(url);
+  const txt=await resp.text();
+  const json=JSON.parse(txt.replace(/^[^(]+\(/,'').replace(/\);?\s*$/,''));
+  const cols=json.table.cols.map(c=>c.label||c.id);
+  return (json.table.rows||[]).map(row=>{
+    const obj={};
+    cols.forEach((col,i)=>{const cell=row.c[i];obj[col]=cell?(cell.v!==null&&cell.v!==undefined?cell.v:""):"";});
+    return obj;
+  });
+}
+
+async function escribirGAS(body) {
+  await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+  await new Promise(r=>setTimeout(r,900));
+}
+
+async function cargarDatos() {
+  try {
+    [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios] = await Promise.all([
+      leerGVIZ("PREVENTAS_AP"),
+      leerGVIZ("DETALLE_AP"),
+      leerGVIZ("PRODUCTOS_MAESTRO"),
+      leerGVIZ("CONTROL_PATIO_Y_LOGISTICA"),
+      leerGVIZ("VENDEDORES"),
+      leerGVIZ("PRECIOS_GERENCIA")
+    ]);
+    calcularInventarioDinamico();
+    renderDashboard();
+    renderAlertas();
+    renderAprobaciones();
+    renderPrecios();
+    renderVendedores();
+    poblarSelectProductos();
+  } catch(e) { toast("Error cargando datos: "+e.message); }
+}
+
+// =============================================================================
+// MOTOR INVENTARIO DINÁMICO
+// =============================================================================
+let _inventario = [];
+
+function calcularInventarioDinamico() {
+  const apsPendIds = new Set(
+    G.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap)).map(a=>String(a.ap_id))
+  );
+  _inventario = G.productos.map(p => {
+    const code    = String(p.tmcode);
+    const bruto   = parseFloat(p.tmcant)||0;
+    const curado  = G.patio.filter(x=>String(x.tmcode)===code).reduce((s,x)=>s+(parseFloat(x.cant_en_curado)||0),0);
+    const averias = G.patio.filter(x=>String(x.tmcode)===code).reduce((s,x)=>s+(parseFloat(x.cant_mermas_averias)||0),0);
+    const comprom = G.detalles
+      .filter(d=>String(d.tmcode)===code && apsPendIds.has(String(d.ap_id)))
+      .reduce((s,d)=>s+Math.max(0,(parseFloat(d.cantidad_solicitada)||0)-(parseFloat(d.cantidad_despachada)||0)),0);
+    const disp = bruto-curado-averias-comprom;
+    return { ...p, disponible:disp, curado, averias, comprometido:comprom,
+      semaforo: disp>10?'VERDE':disp>0?'AMARILLO':'ROJO' };
+  });
+}
+
+// =============================================================================
+// DASHBOARD
+// =============================================================================
+function renderDashboard() {
+  const pend    = G.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap));
+  const alertas = _inventario.filter(p=>p.disponible<=0);
+  const aprobPend = G.aprobaciones.filter(a=>a.estado==='pendiente');
+
+  document.getElementById('kpiTotalAPs').textContent    = G.aps.length;
+  document.getElementById('kpiPendientes').textContent  = pend.length;
+  document.getElementById('kpiAlertas').textContent     = alertas.length;
+  document.getElementById('kpiAprobaciones').textContent= aprobPend.length;
+
+  // Actualizar dot de notificación
+  const navAprobac = document.getElementById('navAprobac');
+  if (aprobPend.length > 0 && !navAprobac.querySelector('.notif-dot')) {
+    navAprobac.insertAdjacentHTML('beforeend','<span class="notif-dot"></span>');
+  }
+
+  // Chart vendedores
+  const vByVend = {};
+  G.aps.forEach(ap=>{
+    const id=String(ap.vendedor_id);
+    if(!vByVend[id]) vByVend[id]={count:0,id};
+    vByVend[id].count++;
+  });
+  const maxV=Math.max(1,...Object.values(vByVend).map(v=>v.count));
+  const chartVend=document.getElementById('chartVendedores');
+  if(Object.keys(vByVend).length===0){chartVend.innerHTML='<p style="color:#888;font-size:.82rem;">Sin datos</p>';return;}
+  chartVend.innerHTML=Object.values(vByVend).sort((a,b)=>b.count-a.count).map(v=>{
+    const vend=G.vendedores.find(x=>String(x.id_vendedor)===v.id);
+    const nombre=vend?vend.nombre_vendedor:'Vendedor '+v.id;
+    const pct=Math.round((v.count/maxV)*100);
+    return `<div class="bar-item">
+      <div class="bar-label"><span>${nombre.split(' ').slice(0,2).join(' ')}</span><span style="font-weight:700;">${v.count} APs</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  // Chart estados
+  const porEstado={};
+  G.aps.forEach(a=>{porEstado[a.estado_ap]=(porEstado[a.estado_ap]||0)+1;});
+  const total=G.aps.length||1;
+  const colores={'Pendiente':'#856404','Despachado Parcial':'#e05c1a','Despachado Total':'#1a7a4a','Modificado':'#6d28d9','Cancelado':'#b91c1c'};
+  document.getElementById('chartEstados').innerHTML=Object.entries(porEstado).map(([est,cnt])=>`
+    <div class="bar-item">
+      <div class="bar-label"><span>${est}</span><span style="font-weight:700;">${cnt}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round((cnt/total)*100)}%;background:${colores[est]||'#888'}"></div></div>
+    </div>`).join('');
+
+  // Inventario resumen
+  const semCounts={VERDE:0,AMARILLO:0,ROJO:0};
+  _inventario.forEach(p=>semCounts[p.semaforo]++);
+  document.getElementById('resumenInventario').innerHTML=`
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem;">
+      <div style="flex:1;text-align:center;background:#d1f5e0;border-radius:10px;padding:10px;">
+        <div style="font-size:1.4rem;font-weight:800;color:var(--verde);">${semCounts.VERDE}</div>
+        <div style="font-size:.68rem;color:var(--verde);font-weight:700;">🟢 DISPONIBLE</div>
+      </div>
+      <div style="flex:1;text-align:center;background:#fff3cd;border-radius:10px;padding:10px;">
+        <div style="font-size:1.4rem;font-weight:800;color:var(--amarillo);">${semCounts.AMARILLO}</div>
+        <div style="font-size:.68rem;color:var(--amarillo);font-weight:700;">🟡 STOCK BAJO</div>
+      </div>
+      <div style="flex:1;text-align:center;background:#ffe4e4;border-radius:10px;padding:10px;">
+        <div style="font-size:1.4rem;font-weight:800;color:var(--rojo);">${semCounts.ROJO}</div>
+        <div style="font-size:.68rem;color:var(--rojo);font-weight:700;">🔴 AGOTADO</div>
+      </div>
+    </div>
+    <div style="font-size:.75rem;color:#666;text-align:center;">${_inventario.length} productos en catálogo · Toca <strong>Producción</strong> para ver el detalle</div>`;
+}
+
+// =============================================================================
+// ALERTAS DE PRODUCCIÓN
+// =============================================================================
+function renderAlertas() {
+  const cont   = document.getElementById('listaAlertas');
+  const criticas= _inventario.filter(p=>p.disponible<=-10).sort((a,b)=>a.disponible-b.disponible);
+  const altas   = _inventario.filter(p=>p.disponible>-10&&p.disponible<=0);
+
+  if(!criticas.length&&!altas.length){
+    cont.innerHTML='<div class="card" style="text-align:center;color:var(--verde);font-weight:700;padding:2rem;">✅ Sin alertas de producción</div>';
+  } else {
+    cont.innerHTML=[...criticas,...altas].map(p=>`
+      <div class="alerta-prod ${p.disponible<-10?'':'alta'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
+            <div class="alerta-prod-title">${p.tmdescrip}</div>
+            <div style="font-size:.75rem;color:#666;margin-top:2px;">${p.tmund} · Stock bruto: ${p.tmcant}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="alerta-num" style="color:${p.disponible<=-10?'var(--rojo)':'var(--amarillo)'};">${p.disponible}</div>
+            <div style="font-size:.65rem;color:#888;">disponible</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:var(--gris);border-radius:8px;padding:8px 10px;">
+          <div style="font-size:.72rem;font-weight:700;color:${p.disponible<=-10?'var(--rojo)':'var(--amarillo)'};">
+            ${p.disponible<=-10?'🚨 URGENTE':'⚠️ ALTA'} — Producir mínimo
+            <span style="font-size:1rem;font-weight:800;"> ${Math.abs(p.disponible)+5} ${p.tmund}</span>
+          </div>
+          <div style="font-size:.68rem;color:#666;margin-top:2px;">
+            Comprometido: ${p.comprometido} · En curado: ${p.curado} · Averías: ${p.averias}
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Inventario completo
+  document.getElementById('inventarioCompleto').innerHTML=`
+    <div class="tabla-wrap">
+      <table class="tabla">
+        <thead><tr><th>Código</th><th>Producto</th><th>UND</th><th>Bruto</th><th>Disponible</th><th>Estado</th></tr></thead>
+        <tbody>${_inventario.map(p=>`
+          <tr>
+            <td>${p.tmcode}</td>
+            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.tmdescrip}</td>
+            <td>${p.tmund}</td>
+            <td>${p.tmcant}</td>
+            <td style="font-weight:700;">${p.disponible}</td>
+            <td><span class="sem sem-${p.semaforo.toLowerCase()}">${p.semaforo==='VERDE'?'🟢':'p.semaforo'==='AMARILLO'?'🟡':'🔴'} ${p.semaforo}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// =============================================================================
+// APROBACIONES DE DESCUENTOS
+// =============================================================================
+function renderAprobaciones() {
+  const cont  = document.getElementById('listaPendientesAprobacion');
+  const pend  = G.aprobaciones.filter(a=>a.estado==='pendiente');
+  const hist  = G.aprobaciones.filter(a=>a.estado!=='pendiente').slice(0,10);
+
+  if(!pend.length){
+    cont.innerHTML='<div class="card" style="text-align:center;color:var(--verde);font-weight:700;padding:1.5rem;">✅ Sin aprobaciones pendientes</div>';
+  } else {
+    cont.innerHTML=pend.map(a=>`
+      <div class="aprobacion-card" id="aprobCard_${a.id}">
+        <div style="font-size:.68rem;color:var(--morado);font-weight:700;">DESCUENTO REQUIERE APROBACIÓN</div>
+        <div style="font-weight:700;font-size:.9rem;margin:4px 0;">${a.producto}</div>
+        <div style="font-size:.78rem;color:#555;">
+          Vendedor: <strong>${a.vendedor}</strong><br>
+          Cliente: ${a.cliente}<br>
+          Descuento solicitado: <strong style="color:var(--rojo);">${(a.descuento*100).toFixed(1)}%</strong>
+          · Máximo permitido: ${(a.desc_max*100).toFixed(1)}%<br>
+          AP #${a.ap_id} · ${a.fecha}
+        </div>
+        <div class="btn-row" style="margin-top:.75rem;">
+          <button class="btn btn-primary btn-sm" onclick="resolverAprobacion(${a.id},'aprobada')">✅ Aprobar</button>
+          <button class="btn btn-danger btn-sm"  onclick="resolverAprobacion(${a.id},'rechazada')">❌ Rechazar</button>
+        </div>
+      </div>`).join('');
+  }
+
+  // Historial
+  document.getElementById('historialAprobaciones').innerHTML=hist.length?hist.map(a=>`
+    <div class="aprobacion-card ${a.estado}" style="margin-bottom:.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:.8rem;font-weight:700;">${a.producto}</div>
+          <div style="font-size:.72rem;color:#666;">${a.vendedor} · AP #${a.ap_id} · ${(a.descuento*100).toFixed(1)}%</div>
+        </div>
+        <span class="badge ${a.estado==='aprobada'?'badge-activo':'badge-inactivo'}">${a.estado==='aprobada'?'✅ Aprobada':'❌ Rechazada'}</span>
+      </div>
+    </div>`).join('')
+    :'<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin historial</div>';
+}
+
+async function resolverAprobacion(id, decision) {
+  const ap = G.aprobaciones.find(a=>a.id===id);
+  if (!ap) return;
+  ap.estado      = decision;
+  ap.resueltoPor = G.vendedor?.nombre_vendedor||'Gerencia';
+  ap.fechaRes    = new Date().toLocaleString('es-CO');
+  localStorage.setItem('sivel_aprobaciones', JSON.stringify(G.aprobaciones));
+
+  if (decision==='aprobada') {
+    await escribirGAS({
+      accion:'modificarDetalleAP', ap_id:ap.ap_id,
+      detalle_id:ap.detalle_id, descuento_aplicado:ap.descuento
+    });
+    toast(`✅ Descuento aprobado para AP #${ap.ap_id}`);
+  } else {
+    toast(`❌ Descuento rechazado — AP #${ap.ap_id}`);
+  }
+  renderAprobaciones();
+  renderDashboard();
+}
+
+// Registrar nueva solicitud de aprobación (llamado desde App Comercial)
+function registrarSolicitudAprobacion(data) {
+  G.aprobaciones.unshift({
+    id: Date.now(), estado:'pendiente',
+    ...data, fecha: new Date().toLocaleString('es-CO')
+  });
+  localStorage.setItem('sivel_aprobaciones', JSON.stringify(G.aprobaciones));
+}
+
+// =============================================================================
+// PRECIOS
+// =============================================================================
+function poblarSelectProductos() {
+  const sel = document.getElementById('precioProducto');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Seleccionar producto...</option>' +
+    G.productos.map(p=>`<option value="${p.tmcode}">${p.tmcode} — ${p.tmdescrip}</option>`).join('');
+}
+
+function renderPrecios() {
+  const cont = document.getElementById('listaPrecios');
+  if (!G.precios.length) {
+    cont.innerHTML='<div class="card" style="text-align:center;color:#888;">Sin políticas de precio</div>';
+    return;
+  }
+  const hoy = new Date();
+  cont.innerHTML = G.precios.map(p => {
+    const prod   = G.productos.find(x=>String(x.tmcode)===String(p.tmcode));
+    const nombre = prod?prod.tmdescrip:`Código ${p.tmcode}`;
+    const fHasta = p.fecha_vigencia_fin ? new Date(p.fecha_vigencia_fin) : null;
+    const vigente= !fHasta || fHasta>=hoy;
+    return `
+    <div class="card" style="margin-bottom:.5rem;padding:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
+          <div style="font-weight:700;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nombre}</div>
+          <div style="font-size:.72rem;color:#666;margin-top:3px;">
+            Base: <strong>${fmt(p.precio_base_planta)}</strong> ·
+            Desc. max: <strong>${(parseFloat(p.descuento_max_vendedor)||0)*100}%</strong>
+          </div>
+          <div style="font-size:.7rem;color:#888;">
+            Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}
+          </div>
+          <div style="font-size:.68rem;color:#888;margin-top:2px;">
+            Vigente hasta: ${p.fecha_vigencia_fin||'Sin límite'}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+          <span class="sem ${vigente?'sem-verde':'sem-rojo'}">${vigente?'✅ Vigente':'⛔ Vencida'}</span>
+          <button class="btn btn-outline btn-sm" onclick="abrirEditPrecio(${JSON.stringify(p).replace(/"/g,"'")})">✏️ Editar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalPrecio() {
+  document.getElementById('precioProducto').value='';
+  document.getElementById('precioBase').value='';
+  document.getElementById('precioDescMax').value='';
+  document.getElementById('precioFleteA').value='';
+  document.getElementById('precioFleteB').value='';
+  document.getElementById('precioDesde').value=new Date().toISOString().split('T')[0];
+  document.getElementById('precioHasta').value='2026-12-31';
+  document.getElementById('precioErr').textContent='';
+  document.getElementById('modalPrecio').classList.add('show');
+}
+
+async function guardarPrecio() {
+  const tmcode = document.getElementById('precioProducto').value;
+  const base   = parseFloat(document.getElementById('precioBase').value)||0;
+  const descMax= (parseFloat(document.getElementById('precioDescMax').value)||0)/100;
+  const fleteA = parseFloat(document.getElementById('precioFleteA').value)||0;
+  const fleteB = parseFloat(document.getElementById('precioFleteB').value)||0;
+  const desde  = document.getElementById('precioDesde').value;
+  const hasta  = document.getElementById('precioHasta').value;
+  const err    = document.getElementById('precioErr');
+  if (!tmcode||!base) { err.textContent="Producto y precio base requeridos"; return; }
+  err.textContent="Guardando...";
+  await escribirGAS({accion:'crearPrecio',tmcode,precio_base_planta:base,descuento_max_vendedor:descMax,
+    costo_flete_unidad_zonaA:fleteA,costo_flete_unidad_zonaB:fleteB,
+    fecha_vigencia_inicio:desde,fecha_vigencia_fin:hasta});
+  cerrarModal('modalPrecio');
+  toast("✅ Política de precio guardada");
+  await cargarDatos();
+}
+
+function abrirEditPrecio(p) {
+  // p viene como string del onclick
+  const precio = typeof p==='string' ? JSON.parse(p.replace(/'/g,'"')) : p;
+  document.getElementById('editPrecioId').value    = precio.id_precio;
+  document.getElementById('editPrecioBase').value  = precio.precio_base_planta;
+  document.getElementById('editDescMax').value     = (parseFloat(precio.descuento_max_vendedor)||0)*100;
+  document.getElementById('editFleteA').value      = precio.costo_flete_unidad_zonaA;
+  document.getElementById('editFleteB').value      = precio.costo_flete_unidad_zonaB;
+  document.getElementById('editHasta').value       = precio.fecha_vigencia_fin||'';
+  document.getElementById('modalEditPrecio').classList.add('show');
+}
+
+async function actualizarPrecio() {
+  const id      = document.getElementById('editPrecioId').value;
+  const base    = parseFloat(document.getElementById('editPrecioBase').value)||0;
+  const descMax = (parseFloat(document.getElementById('editDescMax').value)||0)/100;
+  const fleteA  = parseFloat(document.getElementById('editFleteA').value)||0;
+  const fleteB  = parseFloat(document.getElementById('editFleteB').value)||0;
+  const hasta   = document.getElementById('editHasta').value;
+  await escribirGAS({accion:'actualizarPrecio',id_precio:id,
+    precio_base_planta:base,descuento_max_vendedor:descMax,
+    costo_flete_unidad_zonaA:fleteA,costo_flete_unidad_zonaB:fleteB,
+    fecha_vigencia_fin:hasta});
+  cerrarModal('modalEditPrecio');
+  toast("✅ Precio actualizado");
+  await cargarDatos();
+}
+
+// =============================================================================
+// VENDEDORES
+// =============================================================================
+function renderVendedores() {
+  const cont = document.getElementById('listaVendedores');
+  cont.innerHTML = G.vendedores.map(v => {
+    const aps = G.aps.filter(a=>String(a.vendedor_id)===String(v.id_vendedor));
+    return `
+    <div class="vend-row">
+      <div class="vend-avatar">${(v.nombre_vendedor||'?').charAt(0)}</div>
+      <div class="vend-info">
+        <div class="vend-nombre">${v.nombre_vendedor}</div>
+        <div class="vend-meta">${v.correo_usuario}</div>
+        <div class="vend-meta" style="margin-top:2px;">CC: ${v.id_vendedor} · ${aps.length} APs totales</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <span class="badge ${v.estado==='Activo'?'badge-activo':'badge-inactivo'}">${v.estado}</span>
+        <button class="btn btn-outline btn-sm" onclick="editarVendedor(${JSON.stringify(v).replace(/"/g,"'")})">✏️</button>
+        <button class="btn btn-sm" style="background:${v.estado==='Activo'?'#ffe4e4':'#d1f5e0'};color:${v.estado==='Activo'?'var(--rojo)':'var(--verde)'};"
+                onclick="toggleVendedor('${v.id_vendedor}','${v.estado==='Activo'?'Inactivo':'Activo'}')">
+          ${v.estado==='Activo'?'Desactivar':'Activar'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalVendedor(vend=null) {
+  document.getElementById('vendId').value     = vend?.id_vendedor||'';
+  document.getElementById('vendNombre').value = vend?.nombre_vendedor||'';
+  document.getElementById('vendCorreo').value = vend?.correo_usuario||'';
+  document.getElementById('vendEstado').value = vend?.estado||'Activo';
+  document.getElementById('vendErr').textContent='';
+  document.getElementById('modalVendTitle').textContent = vend ? 'Editar Vendedor' : 'Nuevo Vendedor';
+  document.getElementById('modalVendedor').dataset.editId = vend?.id_vendedor||'';
+  document.getElementById('modalVendedor').classList.add('show');
+}
+
+function editarVendedor(v) {
+  const vend = typeof v==='string' ? JSON.parse(v.replace(/'/g,'"')) : v;
+  abrirModalVendedor(vend);
+}
+
+async function guardarVendedor() {
+  const id     = document.getElementById('vendId').value.trim();
+  const nombre = document.getElementById('vendNombre').value.trim();
+  const correo = document.getElementById('vendCorreo').value.trim().toLowerCase();
+  const estado = document.getElementById('vendEstado').value;
+  const err    = document.getElementById('vendErr');
+  if (!id||!nombre||!correo) { err.textContent="Todos los campos son obligatorios"; return; }
+  const editId = document.getElementById('modalVendedor').dataset.editId;
+  err.textContent="Guardando...";
+  if (editId) {
+    await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
+    toast("✅ Vendedor actualizado");
+  } else {
+    await escribirGAS({accion:'crearVendedor',id_vendedor:id,nombre_vendedor:nombre,correo_usuario:correo,estado});
+    toast("✅ Vendedor creado");
+  }
+  cerrarModal('modalVendedor');
+  await cargarDatos();
+}
+
+async function toggleVendedor(id, nuevoEstado) {
+  const v = G.vendedores.find(x=>String(x.id_vendedor)===String(id));
+  if (!v||!confirm(`¿${nuevoEstado==='Inactivo'?'Desactivar':'Activar'} a ${v.nombre_vendedor}?`)) return;
+  await escribirGAS({accion:'actualizarVendedor',id_vendedor:id,estado:nuevoEstado});
+  toast(`${nuevoEstado==='Activo'?'✅':'⛔'} ${v.nombre_vendedor} → ${nuevoEstado}`);
+  await cargarDatos();
+}
+
+// =============================================================================
+// UTILS
+// =============================================================================
+function parseFecha(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val)?null:val;
+  const m=String(val).match(/Date\((\d+),(\d+),(\d+)/);
+  if (m) return new Date(parseInt(m[1]),parseInt(m[2]),parseInt(m[3]));
+  const d=new Date(val); return isNaN(d)?null:d;
+}
+function fmt(n){ return '$'+Math.round(n||0).toLocaleString('es-CO'); }
+
+function irA(screenId) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(screenId)?.classList.add('active');
+  const map={screenDashboard:'navDash',screenAlertas:'navAlertas',
+    screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios'};
+  if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function cerrarModal(id){ document.getElementById(id)?.classList.remove('show'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)cerrarModal(m.id);});
+});
+
+function toast(msg,dur=2800){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();});
+</script>
+</body>
+</html>
