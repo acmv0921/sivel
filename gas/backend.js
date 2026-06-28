@@ -5,7 +5,7 @@
 // Arquitectura: GET público para lectura | POST no-cors para escritura
 // =============================================================================
 
-const SHEET_ID = "REEMPLAZAR_CON_ID_DEL_GOOGLE_SHEET";
+const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 
 // Nombres de hojas
 const HOJAS = {
