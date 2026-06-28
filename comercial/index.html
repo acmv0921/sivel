@@ -709,7 +709,7 @@ function cardAP(ap) {
   const est = (ap.estado_ap || "").toLowerCase().replace(/ /g,'-');
   const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
   const nombreC = cliente ? cliente.razon_social : ap.cliente_nit;
-  const fecha   = ap.fecha_creacion ? new Date(ap.fecha_creacion).toLocaleDateString('es-CO') : '';
+  const fecha   = fmtFecha(ap.fecha_creacion);
   return `
     <div class="ap-card ${est}" onclick="verAP('${ap.ap_id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -738,7 +738,7 @@ async function verAP(ap_id) {
     <div style="margin-bottom:1rem;">
       <div style="font-weight:700;">${cliente ? cliente.razon_social : ap.cliente_nit}</div>
       <div style="font-size:0.75rem;color:#666;">${ap.tipo_entrega} · ${ap.estado_ap}</div>
-      <div style="font-size:0.72rem;color:#888;">${ap.fecha_creacion ? new Date(ap.fecha_creacion).toLocaleString('es-CO') : ''}</div>
+      <div style="font-size:0.72rem;color:#888;">${fmtFechaHora(ap.fecha_creacion)}</div>
     </div>
     <div class="card-title">Productos</div>`;
 
@@ -1120,7 +1120,7 @@ async function guardarCliente() {
 // =============================================================================
 function actualizarKPIs() {
   const hoy    = new Date().toDateString();
-  const apsHoy = STATE.aps.filter(a => new Date(a.fecha_creacion).toDateString() === hoy);
+  const apsHoy = STATE.aps.filter(a => { const d = parseFecha(a.fecha_creacion); return d && d.toDateString() === hoy; });
   const pend   = STATE.aps.filter(a => a.estado_ap === "Pendiente");
 
   document.getElementById('kpiAPs').textContent       = apsHoy.length;
@@ -1170,6 +1170,30 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // =============================================================================
 function fmt(n) {
   return '$' + Math.round(n || 0).toLocaleString('es-CO');
+}
+
+// gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"
+function parseFecha(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  // Formato gviz: Date(yyyy,m,d) — mes es 0-indexed
+  const m = String(val).match(/Date\((\d+),(\d+),(\d+)/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+  // Intentar parseo normal
+  const d = new Date(val);
+  return isNaN(d) ? null : d;
+}
+
+function fmtFecha(val) {
+  const d = parseFecha(val);
+  if (!d) return '';
+  return d.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+function fmtFechaHora(val) {
+  const d = parseFecha(val);
+  if (!d) return '';
+  return d.toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
 }
 
 function toast(msg, dur=2500) {
