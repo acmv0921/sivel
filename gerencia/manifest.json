@@ -1,7 +1,7 @@
 {
-  "name": "SIVEL Gerencia",
-  "short_name": "SIVEL GER",
-  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logística",
+  "name": "SIVIL Gerencia",
+  "short_name": "SIVIL GER",
+  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logistica — SIVIL",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
