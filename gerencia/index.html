@@ -804,42 +804,9 @@ async function escribirGAS(body) {
   await new Promise(function(r){setTimeout(r,900);});
 }
 
-function activarSandbox() {
-  _SANDBOX=true;
-  sessionStorage.setItem('sivil_sandbox','1');
-  document.body.classList.add('sandbox-active');
-  if (!document.getElementById('sandboxBanner')) {
-    var b=document.createElement('div');
-    b.id='sandboxBanner'; b.className='sandbox-banner';
-    b.innerHTML='<div class="sb-left"><span>[MODO PRUEBA]</span><span class="sb-badge">'+ADMIN_EMAIL+'</span>'+
-      '<span style="font-weight:400;font-size:.7rem;">Datos reales visibles — operaciones NO se guardan</span></div>'+
-      '<button onclick="verLogSandbox()" style="background:rgba(0,0,0,.25);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:.7rem;cursor:pointer;">Ver log</button>';
-    var hdr=document.querySelector('.header');
-    if (hdr) hdr.after(b); else document.body.prepend(b);
-  }
-}
 
-function verLogSandbox() {
-  if (!_sandboxLog.length) { if(typeof toast==='function') toast('Sin operaciones simuladas'); return; }
-  var ov=document.createElement('div');
-  ov.className='modal-overlay show';
-  var rows=_sandboxLog.map(function(e){
-    return '<div style="background:#fff5f0;border-radius:8px;padding:7px 10px;margin-bottom:5px;border-left:3px solid var(--naranja)">'+
-           '<div style="font-size:.68rem;color:#888;">'+e.ts+'</div>'+
-           '<div style="font-size:.78rem;font-weight:700;color:var(--naranja);">'+e.accion+'</div>'+
-           '<div style="font-size:.65rem;color:#666;word-break:break-all;">'+e.datos+'</div></div>';
-  }).join('');
-  ov.innerHTML='<div class="modal-box">'+
-    '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">X</button>'+
-    '<div style="font-size:1rem;font-weight:800;color:var(--naranja);margin-bottom:1rem;">Log Sandbox SIVIL</div>'+
-    '<p style="font-size:.72rem;color:#666;margin-bottom:.75rem;">Simulado — NO guardado en produccion.</p>'+
-    rows+
-    '<button onclick="_sandboxLog=[];this.closest(\'.modal-overlay\').remove();" '+
-    'style="margin-top:.75rem;background:#fff;border:1px solid var(--naranja);color:var(--naranja);border-radius:8px;padding:7px;width:100%;font-size:.78rem;cursor:pointer;">Limpiar log</button>'+
-    '</div>';
-  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
-  document.body.appendChild(ov);
-}
+
+
 
 const GAS_URL  = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
@@ -927,10 +894,7 @@ async function leerGVIZ(hoja) {
   });
 }
 
-async function escribirGAS(body) {
-  await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
-  await new Promise(r=>setTimeout(r,900));
-}
+
 
 async function cargarDatos() {
   try {
