@@ -1025,16 +1025,7 @@ async function leerGVIZ(hoja) {
 // =============================================================================
 // ESCRIBIR DATOS (POST no-cors)
 // =============================================================================
-async function escribirGAS(body) {
-  await fetch(GAS_URL, {
-    method:  'POST',
-    mode:    'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body:    JSON.stringify(body)
-  });
-  // no-cors no devuelve respuesta — esperamos un tick
-  await new Promise(r => setTimeout(r, 800));
-}
+
 
 // =============================================================================
 // CARGA INICIAL
