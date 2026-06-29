@@ -1492,7 +1492,7 @@ const FUNCIONARIOS_KEY = 'sivel_funcionarios_com';
 function getFuncionarios() {
   const def = [
     { id:1, nombre:"Nohra Constanza Jiménez", cargo:"Gerente General", wa:"", recibe:"si", activo:true },
-    { id:2, nombre:"Valentina Torres Ruiz",   cargo:"Despachadora",    wa:"", recibe:"si", activo:true }
+    { id:2, nombre:"Despachador(a) de turno",   cargo:"Despachadora",    wa:"", recibe:"si", activo:true }
   ];
   return JSON.parse(localStorage.getItem(FUNCIONARIOS_KEY) || JSON.stringify(def));
 }
