@@ -1,7 +1,7 @@
 {
-  "name": "SIVEL Comercial",
-  "short_name": "SIVEL Ventas",
-  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logística",
+  "name": "SIVIL Comercial",
+  "short_name": "SIVIL Ventas",
+  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logistica — SIVIL",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
