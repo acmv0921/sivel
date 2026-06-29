@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a7a4a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="SIVEL Gerencia">
 <title>SIVEL · Gerencia</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIVEL Gerencia">
+<link rel="apple-touch-icon" sizes="192x192" href="../assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="../assets/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="../assets/icon-192.png">
 <style>
 :root{
   --verde:  #1a7a4a; --verde2: #15603b;
@@ -1057,6 +1062,16 @@ function toast(msg,dur=2800){
 }
 
 document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();});
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js', {scope: './'})
+      .then(function(reg) { console.log('SW OK:', reg.scope); })
+      .catch(function(e)  { console.warn('SW error:', e); });
+  });
+}
 </script>
 </body>
 </html>
