@@ -1,50 +1,42 @@
 /**
- * SIVEL - Cargar productos con precios reales POSTECSA
- * Ejecutar: cargarProductosConPrecios
+ * SIVEL - Cargar productos POSTECSA en pasos
+ * PASO 1: ejecutar iniciarCarga()
+ * PASO 2: ejecutar cargarParte1()
+ * PASO 3: ejecutar cargarParte2()
+ * PASO 4: ejecutar cargarParte3()
+ * PASO 5: ejecutar cargarParte4()
+ * PASO 6: ejecutar cargarParte5()
  */
-function cargarProductosConPrecios() {
-  var SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
-  var ss = SpreadsheetApp.openById(SHEET_ID);
 
+var SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+var HDRS = ["tmcode","tmdescrip","tmund","tmcant","precio_base","flete_cali","precio_m2","flete_m2","descuento_max","observacion"];
+
+function iniciarCarga() {
+  var ss   = SpreadsheetApp.openById(SHEET_ID);
   var hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
   if (!hoja) hoja = ss.insertSheet("PRODUCTOS_MAESTRO");
   else hoja.clearContents();
-
-  var hdrs = ["tmcode","tmdescrip","tmund","tmcant","precio_base","flete_cali","precio_m2","flete_m2","descuento_max","observacion"];
-  hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
-  hoja.getRange(1,1,1,hdrs.length).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
+  hoja.getRange(1,1,1,HDRS.length).setValues([HDRS]);
+  hoja.getRange(1,1,1,HDRS.length).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
   hoja.setFrozenRows(1);
-
-  var fila = 2;
-
-  var d1 = getDatos1();
-  hoja.getRange(fila,1,d1.length,hdrs.length).setValues(d1);
-  fila += d1.length;
-  SpreadsheetApp.flush();
-  var d2 = getDatos2();
-  hoja.getRange(fila,1,d2.length,hdrs.length).setValues(d2);
-  fila += d2.length;
-  SpreadsheetApp.flush();
-  var d3 = getDatos3();
-  hoja.getRange(fila,1,d3.length,hdrs.length).setValues(d3);
-  fila += d3.length;
-  SpreadsheetApp.flush();
-  var d4 = getDatos4();
-  hoja.getRange(fila,1,d4.length,hdrs.length).setValues(d4);
-  fila += d4.length;
-  SpreadsheetApp.flush();
-  var d5 = getDatos5();
-  hoja.getRange(fila,1,d5.length,hdrs.length).setValues(d5);
-  fila += d5.length;
-  SpreadsheetApp.flush();
-
-  for (var c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
-  SpreadsheetApp.getUi().alert("PRODUCTOS_MAESTRO actualizado: " + (fila-2) + " productos cargados.");
+  SpreadsheetApp.getUi().alert("Listo. Ahora ejecuta cargarParte1");
 }
 
+function _cargar(datos, parte, total_partes) {
+  var ss   = SpreadsheetApp.openById(SHEET_ID);
+  var hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
+  var ultima = hoja.getLastRow();
+  hoja.getRange(ultima+1, 1, datos.length, HDRS.length).setValues(datos);
+  SpreadsheetApp.getUi().alert(
+    "Parte " + parte + "/" + total_partes + " OK\n" +
+    datos.length + " productos cargados.\n" +
+    "Total acumulado: " + hoja.getLastRow() + " filas.\n\n" +
+    (parte < total_partes ? "Ahora ejecuta cargarParte" + (parte+1) : "Carga completa.")
+  );
+}
 
-function getDatos1() {
-  return [
+function cargarParte1() {
+  _cargar([
     [3101,"POSTES DE 10X510","UND",0.0,0,0,0,0,0.08,""],
     [3102,"POSTE DE 10X510 KG DI","UND",11.0,0,0,0,0,0.08,""],
     [3103,"POSTE DE 10X1050 KD DI","UND",0.0,0,0,0,0,0.08,""],
@@ -145,12 +137,11 @@ function getDatos1() {
     [3229,"S BORDILLO CICLOVIA RECTO U60 80X35X15 2 chaflanes","UND",55.0,0,0,0,0,0.08,""],
     [3230,"SARDINEL 80X65X15","UND",0.0,114440.0,5590.0,114440.0,5590.0,0.08,""],
     [3231,"ALCORQUE 4 PIEZAS 75X75X10","nan",0,737400.0,13420.0,737400.0,13420.0,0.08,""]
-  ];
+  ], 1, 5);
 }
 
-
-function getDatos2() {
-  return [
+function cargarParte2() {
+  _cargar([
     [3232,"ALFAJIA DOS AGUAS 50X22X6 RFZO SIMPLE","UND",304.0,28320.0,820.0,28320.0,820.0,0.08,""],
     [3233,"BANCA TIPO MIO BN-01","UND",0.0,613060.0,26240.0,613060.0,26240.0,0.08,""],
     [3234,"SARDINEL 100X35X15","UND",0.0,0,0,0,0,0.08,""],
@@ -251,12 +242,11 @@ function getDatos2() {
     [3330,"BLOQUE 40X40X6 TRIANGULAR GRIS","UND",0.0,16000.0,696.0,100000.0,4350.0,0.08,"B"],
     [3331,"BLOQUE 40X40X6 TACTIL GUIA AMA CB","UND",188.0,21280.0,696.0,133000.0,4350.0,0.08,"B"],
     [3332,"BLOQUE 40X40X6 TACTIL GUIA GRIS","UND",390.0,17120.0,696.0,107000.0,4350.0,0.08,"B"]
-  ];
+  ], 2, 5);
 }
 
-
-function getDatos3() {
-  return [
+function cargarParte3() {
+  _cargar([
     [3333,"BLOQUE 40X40X6 TACTIL GUIA AMARILLA CG","UND",91.0,20160.0,696.0,126000.0,4350.0,0.08,"B"],
     [3334,"BLOQUE 40X40X6 TACTIL GUIA ROJA","nan",0,20160.0,696.0,126000.0,4350.0,0.08,"B"],
     [3335,"BLOQUE 40X40X6 LISA GRIS","UND",1131.0,15840.0,696.0,99000.0,4350.0,0.08,"B"],
@@ -357,12 +347,11 @@ function getDatos3() {
     [3428,"BLOQUE L 40X40X6 CUADRICULADA GRIS","UND",0.0,0,0,0,0,0.08,""],
     [3429,"BLOQUE 14X19X39 TER","UND",0.0,0,0,0,0,0.08,""],
     [3430,"BLOQUE 14X19X39 SPLIT VIGA","UND",40.0,7490.0,455.0,7490.0,455.0,0.08,"B"]
-  ];
+  ], 3, 5);
 }
 
-
-function getDatos4() {
-  return [
+function cargarParte4() {
+  _cargar([
     [3431,"BLOQUE CILINDRO","UND",0.0,0,0,0,0,0.08,""],
     [3432,"BLOQUE 12X19X19 CORTADO","UND",0.0,0,0,0,0,0.08,""],
     [3433,"BLOQUE 10 MEDIO C S","UND",368.0,0,0,0,0,0.08,""],
@@ -463,12 +452,11 @@ function getDatos4() {
     [33006,"BLOQUE AV 20X10X8 CAMEL L11","UND",0.0,0,0,0,0,0.08,""],
     [33007,"BLOQUE AV 20X10X8 LITCHI L12","UND",0.0,2560.0,108.0,128000.0,5400.0,0.08,"B"],
     [33008,"BLOQUE AV 20X10X8 GRIS VERDOSO L8","UND",269.0,0,0,0,0,0.08,""]
-  ];
+  ], 4, 5);
 }
 
-
-function getDatos5() {
-  return [
+function cargarParte5() {
+  _cargar([
     [33009,"BLOQUE AP 20X10X6 CAFE CLARO L13","UND",189.0,2060.0,79.0,103000.0,3950.0,0.08,"B"],
     [33010,"BLOQUE 20X20X6 NEGRA LISA","UND",0.0,0,0,0,0,0.08,""],
     [33011,"BLOQUE 40X40X6 PARADERO AMARILLO CB","UND",0.0,21280.0,696.0,133000.0,4350.0,0.08,"B"],
@@ -520,5 +508,5 @@ function getDatos5() {
     [33057,"BLOQUE AP 20X10X6 BEIGE OSCURO BIC","UND",603.0,2240.0,79.0,112000.0,3950.0,0.08,"B"],
     [33147,"BLOQUE20X10X8 (7.7)","UND",0.0,0,0,0,0,0.08,""],
     [33148,"BLOQUE 20X10X8","UND",435.0,0,0,0,0,0.08,""]
-  ];
+  ], 5, 5);
 }
