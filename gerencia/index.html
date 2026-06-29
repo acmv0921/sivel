@@ -585,24 +585,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 // =============================================================================
 // SIVIL APP GERENCIA v1.0
 
-// =============================================================================
-// ADMINISTRADOR MASTER — SIVIL
-// =============================================================================
-const ADMIN_EMAIL  = "acmv0921@gmail.com";
-const ADMIN_PIN_KEY = "POSTECSA@2026$";
-let _esAdmin = false;
 
-function restaurarSesionAdmin() {
-  _esAdmin = sessionStorage.getItem("sivel_admin") === "1";
-}
-function loginComoAdmin(correo, pin) {
-  if (correo.toLowerCase().trim() === ADMIN_EMAIL && pin === ADMIN_PIN_KEY) {
-    _esAdmin = true;
-    sessionStorage.setItem("sivel_admin", "1");
-    return true;
-  }
-  return false;
-}
 function cerrarSesionAdmin() {
   _esAdmin = false;
   sessionStorage.removeItem("sivel_admin");
