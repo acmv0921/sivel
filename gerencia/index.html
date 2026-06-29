@@ -317,6 +317,44 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 .ojo-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;font-size:.8rem;font-weight:700;padding:4px 8px;}
 .ojo-btn:hover{color:var(--naranja,#E05C1A);}
 .login-rol-badge{display:none;padding:3px 12px;border-radius:20px;font-size:.68rem;font-weight:700;margin-bottom:.5rem;text-align:center;}
+
+/* ── LOGIN FASE 2: ojo PIN + badge rol ── */
+.pin-field-wrap{position:relative;}
+.pin-field-wrap .form-control{padding-right:52px !important;}
+.pin-toggle{
+  position:absolute;right:0;top:0;bottom:0;
+  width:44px;background:none;border:none;cursor:pointer;
+  color:#aaa;font-size:.8rem;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+  transition:color .2s;
+}
+.pin-toggle:hover{color:var(--naranja,#E05C1A);}
+.rol-display{
+  display:none;
+  margin-top:.6rem;
+  padding:5px 14px;
+  border-radius:20px;
+  font-size:.72rem;
+  font-weight:700;
+  text-align:center;
+  letter-spacing:.5px;
+  background:rgba(26,58,92,.15);
+  border:1px solid rgba(26,58,92,.2);
+  color:var(--azul,#1A3A5C);
+}
+.rol-display.visible{display:block;}
+.rol-ADMIN{background:rgba(224,92,26,.15);color:#c24a0e;border-color:rgba(224,92,26,.3);}
+.rol-GERENTE{background:rgba(26,122,74,.15);color:#15603b;border-color:rgba(26,122,74,.3);}
+.rol-VENDEDOR{background:rgba(26,58,92,.15);color:#1A3A5C;border-color:rgba(26,58,92,.3);}
+.rol-DESPACHADOR{background:rgba(124,50,0,.15);color:#7c3200;border-color:rgba(124,50,0,.3);}
+.rol-JEFE_VENTAS{background:rgba(133,100,4,.15);color:#856404;border-color:rgba(133,100,4,.3);}
+.login-nombre{
+  font-size:.8rem;font-weight:700;
+  color:var(--azul,#1A3A5C);
+  margin-top:.4rem;text-align:center;
+  display:none;
+}
+.login-nombre.visible{display:block;}
 </style>
 </head>
 <body>
@@ -332,9 +370,18 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <input id="loginCorreo" class="form-control" type="email" placeholder="gerencia@postecsa.com">
     </div>
     <div class="form-group">
-      <label class="form-label">PIN</label>
-      <input id="loginPin" class="form-control" type="password" placeholder="••••••••" maxlength="20">
-    </div>
+                  <label class="form-label">PIN de acceso</label>
+      <div class="pin-field-wrap">
+        <input id="loginPin" class="form-control" type="password"
+               placeholder="Ingresa tu PIN" maxlength="20"
+               onkeydown="if(event.key==='Enter')hacerLogin()">
+        <button type="button" class="pin-toggle" id="pinToggleBtn"
+                onclick="toggleVerPin('loginPin','pinToggleBtn')" title="Ver/ocultar PIN">
+          VER
+        </button>
+      </div>
+      <div id="loginRolDisplay" class="rol-display"></div>
+      <div id="loginNombreDisplay" class="login-nombre"></div>
     <button class="btn btn-primary" onclick="hacerLogin()">🔐 Ingresar</button>
     <div id="loginErr" class="login-err"></div>
   </div>
@@ -720,11 +767,17 @@ async function hacerLoginIndividual(correoInput, pinInput, rolesPermitidos) {
   return {ok:true,usuario:usuario,rol:rol};
 }
 
-function toggleVerPin(inputId,btnId) {
-  var inp=document.getElementById(inputId), btn=document.getElementById(btnId);
+function toggleVerPin(inputId, btnId) {
+  var inp = document.getElementById(inputId);
+  var btn = document.getElementById(btnId);
   if (!inp) return;
-  inp.type = inp.type==='password' ? 'text' : 'password';
-  if (btn) btn.textContent = inp.type==='password' ? '(ver)' : '(ocultar)';
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    if (btn) btn.textContent = 'OCULTAR';
+  } else {
+    inp.type = 'password';
+    if (btn) btn.textContent = 'VER';
+  }
 }
 
 async function escribirGAS(body) {
@@ -802,17 +855,34 @@ async function hacerLogin() {
   var correo = document.getElementById('loginCorreo').value.trim();
   var pin    = document.getElementById('loginPin').value.trim();
   var err    = document.getElementById('loginErr');
+  var rolDiv = document.getElementById('loginRolDisplay');
+  var nomDiv = document.getElementById('loginNombreDisplay');
   if (!correo||!pin) { err.textContent='Completa correo y PIN'; return; }
   err.textContent='Verificando...';
+  if (rolDiv) { rolDiv.className='rol-display'; rolDiv.textContent=''; }
+  if (nomDiv) { nomDiv.className='login-nombre'; nomDiv.textContent=''; }
   try {
     var resultado = await hacerLoginIndividual(correo, pin, ["GERENTE","JEFE_VENTAS","ADMIN"]);
-    if (!resultado.ok) { err.textContent='Error: '+resultado.error; return; }
+    if (!resultado.ok) {
+      err.textContent='Error: '+resultado.error;
+      return;
+    }
     G.usuario  = correo.toLowerCase().trim();
     G.vendedor = resultado.usuario;
-    var badge = document.getElementById('loginRolBadge');
-    if (badge) { badge.textContent=resultado.rol; badge.style.display='block'; }
+    // Mostrar nombre y rol antes de entrar
+    var nombre = String(resultado.usuario.nombre_completo||resultado.usuario.nombre_vendedor||'').trim();
+    var rol    = resultado.rol;
+    if (rolDiv) {
+      rolDiv.textContent = rol;
+      rolDiv.className = 'rol-display visible rol-'+rol;
+    }
+    if (nomDiv && nombre) {
+      nomDiv.textContent = nombre;
+      nomDiv.className = 'login-nombre visible';
+    }
+    err.textContent = '';
     if (SANDBOX_CORREOS.indexOf(G.usuario)>=0) activarSandbox();
-    setTimeout(function(){iniciarApp();},350);
+    setTimeout(function(){iniciarApp();}, 600);
   } catch(e) { err.textContent='Error de conexion: '+e.message; }
 }
 
