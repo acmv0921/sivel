@@ -972,14 +972,7 @@ async function leerGVIZ(hoja) {
   });
 }
 
-async function escribirGAS(body) {
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type':'text/plain'},
-    body: JSON.stringify(body)
-  });
-  await new Promise(r => setTimeout(r, 900));
-}
+
 
 async function cargarTodo() {
   try {
