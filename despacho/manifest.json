@@ -1,7 +1,7 @@
 {
-  "name": "SIVEL Despacho",
-  "short_name": "SIVEL Patio",
-  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logística",
+  "name": "SIVIL Despacho",
+  "short_name": "SIVIL Patio",
+  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logistica — SIVIL",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
