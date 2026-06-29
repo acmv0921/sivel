@@ -1,31 +1,22 @@
 /**
- * SIVEL — Cargar catálogo completo con PRECIOS
- * Fuente: BASE DE DATOS PRODUCTO + Hoja1 (inventario)
- * Ejecutar: cargarProductosConPrecios()
- *
- * Columnas PRODUCTOS_MAESTRO:
- * tmcode | tmdescrip | tmund | tmcant | precio_base | flete_cali
- * precio_m2 | flete_m2 | descuento_max | observacion
+ * SIVEL - Cargar productos con precios reales POSTECSA
+ * Ejecutar: cargarProductosConPrecios
  */
 function cargarProductosConPrecios() {
-  const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
-  const ss   = SpreadsheetApp.openById(SHEET_ID);
+  var SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+  var ss = SpreadsheetApp.openById(SHEET_ID);
 
-  let hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
+  var hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
   if (!hoja) hoja = ss.insertSheet("PRODUCTOS_MAESTRO");
   else hoja.clearContents();
 
-  const hdrs = ["tmcode","tmdescrip","tmund","tmcant",
-                "precio_base","flete_cali","precio_m2","flete_m2",
-                "descuento_max","observacion"];
-
-  const rngH = hoja.getRange(1, 1, 1, hdrs.length);
+  var hdrs = ["tmcode","tmdescrip","tmund","tmcant","precio_base","flete_cali","precio_m2","flete_m2","descuento_max","observacion"];
+  var rngH = hoja.getRange(1, 1, 1, hdrs.length);
   rngH.setValues([hdrs]);
-  rngH.setBackground("#1a3a5c").setFontColor("#fff")
-      .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
+  rngH.setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
   hoja.setFrozenRows(1);
 
-  const datos = [
+  var datos = [
     [3101,"POSTES DE 10X510","UND",0.0,0,0,0,0,0.08,""],
     [3102,"POSTE DE 10X510 KG DI","UND",11.0,0,0,0,0,0.08,""],
     [3103,"POSTE DE 10X1050 KD DI","UND",0.0,0,0,0,0,0.08,""],
@@ -462,7 +453,7 @@ function cargarProductosConPrecios() {
     [33042,"BLOQUE 40X40X6 CUADRICULADA NARANJA","UND",0.0,0,0,0,0,0.08,""],
     [33043,"BLOQUE 40X40X6 TRIANGULAR NARANJA","UND",0.0,0,0,0,0,0.08,""],
     [33044,"BLOQUE AV 20X10X8 GRIS MONO CAPA","UND",1901.0,2679.8,108.0,133990.0,5400.0,0.08,"B"],
-    [33045,"BLOQUE AP 20X10X6 GRIS MONO CAPA","UND",9330.0,2112.8,79.0,105640.00000000001,3950.0,0.08,"B"],
+    [33045,"BLOQUE AP 20X10X6 GRIS MONO CAPA","UND",9330.0,2112.8,79.0,105640.0,3950.0,0.08,"B"],
     [33046,"BLOQUE AP 20X10X6 TERRACOTA BIC","UND",1106.0,2240.0,79.0,112000.0,3950.0,0.08,"B"],
     [33047,"BLOQUE AP 20X10X6 ROJO MONO CAPA","UND",1402.0,2906.6,79.0,145330.0,3950.0,0.08,"B"],
     [33048,"BLOQUE AP 20X10X6 OCRE MONO CAPA","UND",2482.0,0,0,0,0,0.08,""],
@@ -479,55 +470,56 @@ function cargarProductosConPrecios() {
     [33148,"BLOQUE 20X10X8","UND",435.0,0,0,0,0,0.08,""]
   ];
 
-  for (let i = 0; i < datos.length; i += 100) {
-    const lote = datos.slice(i, i + 100);
+  for (var i = 0; i < datos.length; i += 100) {
+    var lote = datos.slice(i, i + 100);
     hoja.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
     SpreadsheetApp.flush();
   }
 
-  for (let c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
+  for (var c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
 
-  actualizarPreciosGerencia(ss, datos);
+  cargarPrecios(ss, datos);
 
-  const conPrecio = datos.filter(r => r[4] > 0).length;
+  var conPrecio = 0;
+  for (var j = 0; j < datos.length; j++) { if (datos[j][4] > 0) conPrecio++; }
+
   SpreadsheetApp.getUi().alert(
-    "✅ PRODUCTOS_MAESTRO actualizado\n\n" +
-    "Total productos: " + datos.length + "\n" +
-    "Con precio real: " + conPrecio + "\n" +
-    "Sin precio (solo inventario): " + (datos.length - conPrecio) + "\n\n" +
-    "PRECIOS_GERENCIA también actualizado."
+    "PRODUCTOS_MAESTRO actualizado\n" +
+    "Total: " + datos.length + "\n" +
+    "Con precio: " + conPrecio + "\n" +
+    "Sin precio: " + (datos.length - conPrecio) + "\n\n" +
+    "PRECIOS_GERENCIA actualizado."
   );
-  Logger.log("✅ " + datos.length + " productos cargados");
 }
 
-function actualizarPreciosGerencia(ss, datos) {
-  let hP = ss.getSheetByName("PRECIOS_GERENCIA");
+function cargarPrecios(ss, datos) {
+  var hP = ss.getSheetByName("PRECIOS_GERENCIA");
   if (!hP) hP = ss.insertSheet("PRECIOS_GERENCIA");
   else hP.clearContents();
 
-  const hdrs = ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor",
-                "costo_flete_unidad_zonaA","costo_flete_unidad_zonaB",
-                "fecha_vigencia_inicio","fecha_vigencia_fin"];
-  const rH = hP.getRange(1,1,1,hdrs.length);
+  var hdrs = ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor",
+              "costo_flete_unidad_zonaA","costo_flete_unidad_zonaB",
+              "fecha_vigencia_inicio","fecha_vigencia_fin"];
+  var rH = hP.getRange(1,1,1,hdrs.length);
   rH.setValues([hdrs]);
-  rH.setBackground("#15603b").setFontColor("#fff")
-    .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
+  rH.setBackground("#15603b").setFontColor("#fff").setFontWeight("bold");
   hP.setFrozenRows(1);
 
-  const filas = datos
-    .filter(r => r[4] > 0)
-    .map((r, i) => [
-      i + 1, r[0], r[4], r[8],
-      r[5], r[5] * 1.3,
-      "2026-01-01", "2026-12-31"
-    ]);
+  var filas = [];
+  var id = 1;
+  for (var i = 0; i < datos.length; i++) {
+    if (datos[i][4] > 0) {
+      filas.push([id++, datos[i][0], datos[i][4], datos[i][8],
+                  datos[i][5], datos[i][5] * 1.3,
+                  "2026-01-01", "2026-12-31"]);
+    }
+  }
 
-  for (let i = 0; i < filas.length; i += 100) {
-    const lote = filas.slice(i, i + 100);
-    hP.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
+  for (var j = 0; j < filas.length; j += 100) {
+    var lote = filas.slice(j, j + 100);
+    hP.getRange(j + 2, 1, lote.length, hdrs.length).setValues(lote);
     SpreadsheetApp.flush();
   }
 
-  for (let c = 1; c <= hdrs.length; c++) hP.autoResizeColumn(c);
-  Logger.log("✅ PRECIOS_GERENCIA: " + filas.length + " politicas");
+  for (var c = 1; c <= hdrs.length; c++) hP.autoResizeColumn(c);
 }
