@@ -773,18 +773,9 @@ function restaurarSesiones() {
   if (sessionStorage.getItem('sivil_admin')==='1' && typeof _esAdmin!=='undefined') _esAdmin=true;
 }
 
-async function toggleVerPin(inputId, btnId) {
-  var inp = document.getElementById(inputId);
-  var btn = document.getElementById(btnId);
-  if (!inp) return;
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    if (btn) btn.innerHTML = 'OCULTAR';
-  } else {
-    inp.type = 'password';
-    if (btn) btn.innerHTML = 'VER';
-  }
-}
+
+
+
 
 function toggleVerPin(inputId, btnId) {
   var inp = document.getElementById(inputId);
