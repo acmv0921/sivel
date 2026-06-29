@@ -3,7 +3,7 @@
  * Fuente: BASE DE DATOS PRODUCTO + Hoja1 (inventario)
  * Ejecutar: cargarProductosConPrecios()
  *
- * Columnas de PRODUCTOS_MAESTRO (expandida):
+ * Columnas PRODUCTOS_MAESTRO:
  * tmcode | tmdescrip | tmund | tmcant | precio_base | flete_cali
  * precio_m2 | flete_m2 | descuento_max | observacion
  */
@@ -11,7 +11,6 @@ function cargarProductosConPrecios() {
   const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
   const ss   = SpreadsheetApp.openById(SHEET_ID);
 
-  // Actualizar PRODUCTOS_MAESTRO con columnas extendidas
   let hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
   if (!hoja) hoja = ss.insertSheet("PRODUCTOS_MAESTRO");
   else hoja.clearContents();
@@ -26,7 +25,6 @@ function cargarProductosConPrecios() {
       .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
   hoja.setFrozenRows(1);
 
-  // 449 productos con precios reales
   const datos = [
     [3101,"POSTES DE 10X510","UND",0.0,0,0,0,0,0.08,""]
     [3102,"POSTE DE 10X510 KG DI","UND",11.0,0,0,0,0,0.08,""]
@@ -481,17 +479,14 @@ function cargarProductosConPrecios() {
     [33148,"BLOQUE 20X10X8","UND",435.0,0,0,0,0,0.08,""]
   ];
 
-  // Escribir en lotes de 100
   for (let i = 0; i < datos.length; i += 100) {
     const lote = datos.slice(i, i + 100);
     hoja.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
     SpreadsheetApp.flush();
   }
 
-  // Autoajustar columnas
   for (let c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
 
-  // También actualizar PRECIOS_GERENCIA con los precios reales
   actualizarPreciosGerencia(ss, datos);
 
   const conPrecio = datos.filter(r => r[4] > 0).length;
@@ -499,46 +494,40 @@ function cargarProductosConPrecios() {
     "✅ PRODUCTOS_MAESTRO actualizado\n\n" +
     "Total productos: " + datos.length + "\n" +
     "Con precio real: " + conPrecio + "\n" +
-    "Sin precio (solo en inventario): " + (datos.length - conPrecio) + "\n\n" +
+    "Sin precio (solo inventario): " + (datos.length - conPrecio) + "\n\n" +
     "PRECIOS_GERENCIA también actualizado."
   );
   Logger.log("✅ " + datos.length + " productos cargados");
 }
 
 function actualizarPreciosGerencia(ss, datos) {
-  let hPrecio = ss.getSheetByName("PRECIOS_GERENCIA");
-  if (!hPrecio) hPrecio = ss.insertSheet("PRECIOS_GERENCIA");
-  else hPrecio.clearContents();
+  let hP = ss.getSheetByName("PRECIOS_GERENCIA");
+  if (!hP) hP = ss.insertSheet("PRECIOS_GERENCIA");
+  else hP.clearContents();
 
   const hdrs = ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor",
                 "costo_flete_unidad_zonaA","costo_flete_unidad_zonaB",
                 "fecha_vigencia_inicio","fecha_vigencia_fin"];
-  const rngH = hPrecio.getRange(1, 1, 1, hdrs.length);
-  rngH.setValues([hdrs]);
-  rngH.setBackground("#15603b").setFontColor("#fff")
-      .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
-  hPrecio.setFrozenRows(1);
+  const rH = hP.getRange(1,1,1,hdrs.length);
+  rH.setValues([hdrs]);
+  rH.setBackground("#15603b").setFontColor("#fff")
+    .setFontWeight("bold").setFontFamily("Arial").setFontSize(10);
+  hP.setFrozenRows(1);
 
-  // Solo productos con precio > 0
-  const conPrecio = datos.filter(r => r[4] > 0);
-  const filas = conPrecio.map((r, i) => [
-    i + 1,       // id_precio
-    r[0],        // tmcode
-    r[4],        // precio_base_planta
-    r[8],        // descuento_max (0.08 = 8%)
-    r[5],        // flete zona A (Cali)
-    r[5] * 1.3, // flete zona B (Yumbo/CENCAR ~30% más)
-    "2026-01-01",
-    "2026-12-31"
-  ]);
+  const filas = datos
+    .filter(r => r[4] > 0)
+    .map((r, i) => [
+      i + 1, r[0], r[4], r[8],
+      r[5], r[5] * 1.3,
+      "2026-01-01", "2026-12-31"
+    ]);
 
-  if (filas.length > 0) {
-    for (let i = 0; i < filas.length; i += 100) {
-      const lote = filas.slice(i, i + 100);
-      hPrecio.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
-      SpreadsheetApp.flush();
-    }
+  for (let i = 0; i < filas.length; i += 100) {
+    const lote = filas.slice(i, i + 100);
+    hP.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
+    SpreadsheetApp.flush();
   }
-  for (let c = 1; c <= hdrs.length; c++) hPrecio.autoResizeColumn(c);
-  Logger.log("✅ PRECIOS_GERENCIA: " + filas.length + " políticas de precio");
+
+  for (let c = 1; c <= hdrs.length; c++) hP.autoResizeColumn(c);
+  Logger.log("✅ PRECIOS_GERENCIA: " + filas.length + " politicas");
 }
