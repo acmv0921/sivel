@@ -1,37 +1,51 @@
-// SIVEL Service Worker v1.0
+// SIVEL PWA Service Worker v2.0
 // POSTEC DE OCCIDENTE S.A.S.
-const CACHE = 'sivel-v1';
-const ASSETS = ['./', './index.html'];
+const CACHE_NAME = 'sivel-cache-v2';
+const PRECACHE = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+// INSTALL — cachear recursos base
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+// ACTIVATE — limpiar caches viejos
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', e => {
-  // Solo cachear recursos propios, no GAS ni Google Sheets
-  if (e.request.url.includes('script.google.com') ||
-      e.request.url.includes('docs.google.com') ||
-      e.request.url.includes('maps.google.com') ||
-      e.request.url.includes('wa.me')) {
+// FETCH — network first, cache fallback
+self.addEventListener('fetch', event => {
+  const url = event.request.url;
+
+  // No interceptar llamadas externas
+  if (url.includes('script.google.com') ||
+      url.includes('docs.google.com')   ||
+      url.includes('maps.google.com')   ||
+      url.includes('wa.me')             ||
+      url.includes('googleapis.com')) {
     return;
   }
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
-      if (resp && resp.status === 200 && resp.type === 'basic') {
-        const clone = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-      }
-      return resp;
-    }))
+
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        // Guardar en cache si es válido
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
