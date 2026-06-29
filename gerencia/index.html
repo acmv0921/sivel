@@ -4,15 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1a7a4a">
-
-
-<title>SIVEL · Gerencia</title>
-<link rel="manifest" href="./manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SIVEL GER">
-<link rel="apple-touch-icon" href="../assets/icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="../assets/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="SIVEL Gerencia">
+<title>SIVEL · Gerencia</title>
 <style>
 :root{
   --verde:  #1a7a4a; --verde2: #15603b;
@@ -154,7 +148,144 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 .badge-pendiente{background:#ede9fe;color:var(--morado);}
 .notif-dot{width:8px;height:8px;background:var(--rojo);border-radius:50%;display:inline-block;margin-left:3px;vertical-align:middle;}
 
-@media(min-width:600px){.screen{max-width:600px;margin:0 auto;}.nav-bottom{max-width:600px;left:50%;transform:translateX(-50%);}}
+/* responsive actualizado */
+
+/* ============================================================
+   RESPONSIVE COMPLETO — SIVEL v1.0
+   Breakpoints: 480 | 600 | 768 | 1024 | 1280
+   ============================================================ */
+
+/* Fuentes fluidas */
+html { font-size: clamp(13px, 1.5vw, 16px); }
+
+/* Evitar scroll horizontal en todos los dispositivos */
+html, body { overflow-x: hidden; width: 100%; }
+
+/* Tablas con scroll horizontal en móvil */
+.tabla-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table       { min-width: 480px; }
+
+/* ── MÓVIL PEQUEÑO (< 480px) ─────────────────────────────── */
+@media (max-width: 479px) {
+  .kpi-grid       { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .kpi-val        { font-size: 1.5rem; }
+  .card           { padding: 1rem; }
+  .btn            { padding: 10px 12px; font-size: .82rem; }
+  .modal-box      { padding: 1.2rem; }
+  .header-title   { font-size: .88rem; }
+  .apps-grid      { grid-template-columns: 1fr; }
+}
+
+/* ── MÓVIL GRANDE / TABLET PORTRAIT (480px – 767px) ────────── */
+@media (min-width: 480px) and (max-width: 767px) {
+  .screen         { max-width: 540px; margin: 0 auto; padding: 1rem; }
+  .nav-bottom     { max-width: 540px; left: 50%; transform: translateX(-50%); }
+  .kpi-grid       { grid-template-columns: repeat(2, 1fr); }
+  .apps-grid      { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── TABLET LANDSCAPE (768px – 1023px) ───────────────────── */
+@media (min-width: 768px) {
+  body            { padding-bottom: 0; padding-left: 220px; }
+
+  /* Nav lateral en tablet/desktop */
+  .nav-bottom {
+    position: fixed;
+    left: 0; top: 56px; bottom: 0; right: auto;
+    width: 220px;
+    flex-direction: column;
+    border-top: none;
+    border-right: 2px solid var(--borde);
+    box-shadow: 2px 0 12px rgba(0,0,0,.07);
+    padding: .75rem .5rem;
+    overflow-y: auto;
+    transform: none !important;
+  }
+  .nav-btn {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    font-size: .82rem;
+    border-radius: 10px;
+    width: 100%;
+  }
+  .nav-btn .icon  { font-size: 1.2rem; }
+  .nav-btn.active { background: rgba(0,0,0,.06); }
+  .nav-btn .notif-dot { margin-left: auto; }
+
+  /* Header más alto en desktop */
+  .header         { height: 60px; padding: 0 1.5rem; }
+  .header-title   { font-size: 1.05rem; }
+
+  /* Contenido más ancho */
+  .screen         { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+  /* KPIs en 4 columnas */
+  .kpi-grid       { grid-template-columns: repeat(4, 1fr); }
+
+  /* Cards en 2 columnas donde aplique */
+  .apps-grid      { grid-template-columns: repeat(2, 1fr); }
+  .arch-grid      { grid-template-columns: repeat(3, 1fr); }
+
+  /* Modal centrado en pantalla (no desde abajo) */
+  .modal-overlay  { align-items: center; justify-content: center; padding: 2rem; }
+  .modal-box      {
+    border-radius: 16px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 85vh;
+  }
+
+  /* Tablas completas */
+  table           { min-width: unset; }
+}
+
+/* ── DESKTOP GRANDE (1024px+) ────────────────────────────── */
+@media (min-width: 1024px) {
+  body            { padding-left: 240px; }
+  .nav-bottom     { width: 240px; }
+  .screen         { max-width: 1100px; }
+  .kpi-grid       { grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .apps-grid      { grid-template-columns: repeat(3, 1fr); }
+  .arch-grid      { grid-template-columns: repeat(4, 1fr); }
+  .kpi-val        { font-size: 2.2rem; }
+  .card           { padding: 1.5rem; }
+  .modal-box      { max-width: 640px; }
+}
+
+/* ── DESKTOP XL (1280px+) ────────────────────────────── */
+@media (min-width: 1280px) {
+  .screen         { max-width: 1300px; }
+  .apps-grid      { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── HORIZONTAL (landscape en móvil) ─────────────────────── */
+@media (max-width: 767px) and (orientation: landscape) {
+  .login-screen   { flex-direction: row; padding: 1rem 2rem; gap: 2rem; }
+  .login-screen img { height: 55px; }
+  .login-title    { font-size: 1.1rem; }
+  .login-sub      { font-size: .72rem; margin-bottom: .75rem; }
+  .login-card     { padding: 1.25rem; }
+  .nav-bottom     { height: 52px; }
+  .nav-btn        { padding: 7px 4px 5px; font-size: .55rem; }
+  .nav-btn .icon  { font-size: 1.1rem; }
+  body            { padding-bottom: 52px; }
+  .screen         { padding: .75rem; }
+  .kpi-grid       { grid-template-columns: repeat(4, 1fr); gap: .5rem; }
+  .kpi-val        { font-size: 1.4rem; }
+  .modal-overlay  { align-items: center; }
+  .modal-box      { border-radius: 12px; max-height: 85vh; max-width: 480px; margin: auto; }
+}
+
+/* ── IMPRESIÓN ────────────────────────────────────────────── */
+@media print {
+  .nav-bottom, .header, .btn, .modal-overlay { display: none !important; }
+  body   { padding: 0; background: #fff; }
+  .screen { display: block !important; max-width: 100%; }
+  .card  { box-shadow: none; border: 1px solid #ddd; }
+}
+
 </style>
 </head>
 <body>
@@ -926,16 +1057,6 @@ function toast(msg,dur=2800){
 }
 
 document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();});
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('SW registrado:', r.scope))
-      .catch(e => console.warn('SW error:', e));
-  });
-}
 </script>
 </body>
 </html>
