@@ -312,49 +312,19 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 }
 
 
-.login-pin-wrap{position:relative;margin-bottom:.75rem;}
-.login-pin-wrap .form-control{padding-right:50px;}
-.ojo-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;font-size:.8rem;font-weight:700;padding:4px 8px;}
-.ojo-btn:hover{color:var(--naranja,#E05C1A);}
-.login-rol-badge{display:none;padding:3px 12px;border-radius:20px;font-size:.68rem;font-weight:700;margin-bottom:.5rem;text-align:center;}
-
-/* ── LOGIN FASE 2: ojo PIN + badge rol ── */
 .pin-field-wrap{position:relative;}
-.pin-field-wrap .form-control{padding-right:52px !important;}
-.pin-toggle{
-  position:absolute;right:0;top:0;bottom:0;
-  width:44px;background:none;border:none;cursor:pointer;
-  color:#aaa;font-size:.8rem;font-weight:600;
-  display:flex;align-items:center;justify-content:center;
-  transition:color .2s;
-}
-.pin-toggle:hover{color:var(--naranja,#E05C1A);}
-.rol-display{
-  display:none;
-  margin-top:.6rem;
-  padding:5px 14px;
-  border-radius:20px;
-  font-size:.72rem;
-  font-weight:700;
-  text-align:center;
-  letter-spacing:.5px;
-  background:rgba(26,58,92,.15);
-  border:1px solid rgba(26,58,92,.2);
-  color:var(--azul,#1A3A5C);
-}
-.rol-display.visible{display:block;}
-.rol-ADMIN{background:rgba(224,92,26,.15);color:#c24a0e;border-color:rgba(224,92,26,.3);}
-.rol-GERENTE{background:rgba(26,122,74,.15);color:#15603b;border-color:rgba(26,122,74,.3);}
-.rol-VENDEDOR{background:rgba(26,58,92,.15);color:#1A3A5C;border-color:rgba(26,58,92,.3);}
-.rol-DESPACHADOR{background:rgba(124,50,0,.15);color:#7c3200;border-color:rgba(124,50,0,.3);}
-.rol-JEFE_VENTAS{background:rgba(133,100,4,.15);color:#856404;border-color:rgba(133,100,4,.3);}
-.login-nombre{
-  font-size:.8rem;font-weight:700;
-  color:var(--azul,#1A3A5C);
-  margin-top:.4rem;text-align:center;
-  display:none;
-}
-.login-nombre.visible{display:block;}
+.pin-field-wrap .form-control{padding-right:60px !important;}
+.pin-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  background:#f0f4f8;border:1px solid #ccc;border-radius:5px;cursor:pointer;
+  padding:3px 8px;font-size:.7rem;font-weight:700;color:#555;z-index:5;}
+.pin-toggle:hover{background:#e05c1a;color:#fff;}
+.user-card{display:none;margin-top:.5rem;padding:.5rem .8rem;
+  border-radius:8px;background:#eef4ff;border-left:4px solid #1A3A5C;}
+.user-card.show{display:block;}
+.uc-nombre{font-size:.82rem;font-weight:700;color:#1A3A5C;}
+.uc-rol{display:inline-block;font-size:.65rem;font-weight:700;
+  padding:2px 8px;border-radius:12px;margin-top:2px;
+  background:#dbeafe;color:#1e40af;}
 </style>
 </head>
 <body>
@@ -370,19 +340,10 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <input id="loginCorreo" class="form-control" type="email" placeholder="gerencia@postecsa.com">
     </div>
     <div class="form-group">
-                  <label class="form-label">PIN de acceso</label>
-      <div class="pin-field-wrap">
-        <input id="loginPin" class="form-control" type="password"
-               placeholder="Ingresa tu PIN" maxlength="20"
-               onkeydown="if(event.key==='Enter')hacerLogin()">
-        <button type="button" class="pin-toggle" id="pinToggleBtn"
-                onclick="toggleVerPin('loginPin','pinToggleBtn')" title="Ver/ocultar PIN">
-          VER
-        </button>
-      </div>
-      <div id="loginRolDisplay" class="rol-display"></div>
-      <div id="loginNombreDisplay" class="login-nombre"></div>
-    <div id="userCard" class="user-card"><div id="ucNombre" class="user-card-nombre"></div><span id="ucRol" class="user-card-rol"></span></div>
+      <label class="form-label">PIN</label>
+      <div class="pin-field-wrap"><input id="loginPin" class="form-control" type="password" placeholder="••••••••" maxlength="20"><button type="button" class="pin-toggle" id="pinBtn" onclick="this.previousElementSibling.type=(this.previousElementSibling.type==='password'?'text':'password');this.textContent=(this.previousElementSibling.type==='password'?'VER':'OCULTAR');">VER</button></div>
+    </div>
+    <div id="userCard" class="user-card" style="display:none"><span id="ucNombre" class="uc-nombre"></span><br><span id="ucRol" class="uc-rol"></span></div>
     <button class="btn btn-primary" onclick="hacerLogin()">🔐 Ingresar</button>
     <div id="loginErr" class="login-err"></div>
   </div>
@@ -394,8 +355,6 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 </div>
 
 <!-- APP -->
-</div>
-
 <div id="appMain" style="display:none;">
   <div class="header">
     <div class="header-left">
@@ -641,7 +600,24 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 // =============================================================================
 // SIVIL APP GERENCIA v1.0
 
+// =============================================================================
+// ADMINISTRADOR MASTER — SIVIL
+// =============================================================================
+const ADMIN_EMAIL  = "acmv0921@gmail.com";
+const ADMIN_PIN_KEY = "POSTECSA@2026$";
+let _esAdmin = false;
 
+function restaurarSesionAdmin() {
+  _esAdmin = sessionStorage.getItem("sivel_admin") === "1";
+}
+function loginComoAdmin(correo, pin) {
+  if (correo.toLowerCase().trim() === ADMIN_EMAIL && pin === ADMIN_PIN_KEY) {
+    _esAdmin = true;
+    sessionStorage.setItem("sivel_admin", "1");
+    return true;
+  }
+  return false;
+}
 function cerrarSesionAdmin() {
   _esAdmin = false;
   sessionStorage.removeItem("sivel_admin");
@@ -653,9 +629,9 @@ function cerrarSesionAdmin() {
 // MODO SANDBOX — Solo acmv0921@gmail.com
 // Simula operaciones SIN escribir al Sheet real
 // =============================================================================
-
-
- // registro de operaciones simuladas
+const SANDBOX_ADMIN = "acmv0921@gmail.com";
+let _SANDBOX = false;
+let _sandboxLog = []; // registro de operaciones simuladas
 
 function activarSandbox() {
   _SANDBOX = true;
@@ -735,65 +711,10 @@ function verLogSandbox() {
 }
 // ── FIN SANDBOX ─────────────────────────────────────────────
 
-
-var ADMIN_EMAIL   = "acmv0921@gmail.com";
-var GERENTE_EMAIL = "gerencia@postecsa.com";
-var SUPERUSUARIOS = [ADMIN_EMAIL, GERENTE_EMAIL];
-var SANDBOX_CORREOS = [ADMIN_EMAIL];
-var _SANDBOX=false, _sandboxLog=[], _rolUsuario=null;
-
-function restaurarSesiones() {
-  if (sessionStorage.getItem('sivil_sandbox')==='1') _SANDBOX=true;
-  if (sessionStorage.getItem('sivil_admin')==='1' && typeof _esAdmin!=='undefined') _esAdmin=true;
-}
-
-
-
-
-
-function toggleVerPin(inputId, btnId) {
-  var inp = document.getElementById(inputId);
-  var btn = document.getElementById(btnId);
-  if (!inp) return;
-  inp.type = (inp.type === 'password') ? 'text' : 'password';
-  if (btn) btn.textContent = (inp.type === 'password') ? 'VER' : 'OCULTAR';
-}
-
-async function hacerLoginIndividual(correoInput, pinInput, rolesPermitidos) {
-  var correo=correoInput.trim().toLowerCase(), pin=pinInput.trim(), usuarios;
-  try { usuarios=await leerGVIZ('USUARIOS_MAESTRO'); }
-  catch(e) { usuarios=await leerGVIZ('VENDEDORES'); }
-  var usuario=usuarios.find(function(u){
-    return String(u.correo||u.correo_usuario||'').toLowerCase().trim()===correo;
-  });
-  if (!usuario) return {ok:false, error:'Correo no registrado en el sistema'};
-  var estado=String(usuario.estado||'').trim();
-  if (estado!=='ACTIVO'&&estado!=='Activo') return {ok:false,error:'Usuario inactivo — contacta al Administrador'};
-  var pinGuardado=String(usuario.pin_individual||usuario.pin||'').trim();
-  if (pin!==pinGuardado) return {ok:false,error:'PIN incorrecto'};
-  var rol=String(usuario.rol||usuario.cargo||'').trim();
-  var esSuperusuario=SUPERUSUARIOS.indexOf(correo)>=0;
-  if (!esSuperusuario&&rolesPermitidos&&rolesPermitidos.length>0) {
-    if (rolesPermitidos.indexOf(rol)===-1)
-      return {ok:false,error:'Tu rol ('+rol+') no tiene acceso a esta aplicacion'};
-  }
-  _rolUsuario=rol;
-  if (SANDBOX_CORREOS.indexOf(correo)>=0) { _SANDBOX=true; sessionStorage.setItem('sivil_sandbox','1'); }
-  return {ok:true,usuario:usuario,rol:rol};
-}
-
-
-
-
-
-
-
-
-
 const GAS_URL  = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 const GVIZ     = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
-
+const PIN_GERENCIA = "GER2025";
 
 let G = {
   usuario:null, vendedor:null,
@@ -805,37 +726,70 @@ let G = {
 // LOGIN
 // =============================================================================
 async function hacerLogin() {
-  var correo = document.getElementById('loginCorreo').value.trim();
-  var pin    = document.getElementById('loginPin').value.trim();
-  var err    = document.getElementById('loginErr');
+  const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
+  const pin    = document.getElementById('loginPin').value.trim();
+  const err    = document.getElementById('loginErr');
   if (!correo || !pin) { err.textContent = 'Completa correo y PIN'; return; }
   err.textContent = 'Verificando...';
   try {
-    var resultado = await hacerLoginIndividual(correo, pin, ["GERENTE","JEFE_VENTAS","ADMIN"]);
-    if (!resultado.ok) { err.textContent = 'Error: ' + resultado.error; return; }
-    var usr = resultado.usuario;
-    // Normalizar nombre para compatibilidad USUARIOS_MAESTRO y VENDEDORES
-    if (!usr.nombre_vendedor) {
-      usr.nombre_vendedor = usr.nombre_completo || usr.nombre || correo;
+    // Leer USUARIOS_MAESTRO (con fallback a VENDEDORES)
+    let usuarios;
+    try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
+    catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+
+    const usuario = usuarios.find(u =>
+      String(u.correo || u.correo_usuario || '').toLowerCase().trim() === correo
+    );
+    if (!usuario) { err.textContent = '❌ Correo no registrado'; return; }
+    
+    const estado = String(usuario.estado || '').trim();
+    if (estado !== 'ACTIVO' && estado !== 'Activo') {
+      err.textContent = '❌ Usuario inactivo'; return;
     }
-    G.usuario  = correo.toLowerCase().trim();
-    G.vendedor = usr;
-    // Mostrar tarjeta visual (no bloquea la entrada)
-    var card = document.getElementById('userCard');
-    var ucN  = document.getElementById('ucNombre');
-    var ucR  = document.getElementById('ucRol');
-    if (card && ucN && ucR) {
-      ucN.textContent = usr.nombre_vendedor;
-      ucR.textContent = resultado.rol || '';
-      ucR.className   = 'user-card-rol ucr-' + (resultado.rol || '');
-      card.className  = 'user-card show';
+    
+    // Validar PIN individual (con fallback a PINs anteriores)
+    const pinGuardado = String(usuario.pin_individual || usuario.pin || '').trim();
+    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(correo) >= 0;
+    if (pin !== pinGuardado) {
+      err.textContent = '❌ PIN incorrecto'; return;
     }
-    err.textContent = '';
-    if (SANDBOX_CORREOS.indexOf(G.usuario) >= 0) activarSandbox();
-    setTimeout(function() { iniciarApp(); }, 600);
+    
+    // Validar rol (superusuarios pasan siempre)
+    const rol = String(usuario.rol || usuario.cargo || '').trim();
+    const rolesPermitidos = ["GERENTE","JEFE_VENTAS","ADMIN"];
+    if (!esSuperusuario && rolesPermitidos.indexOf(rol) === -1) {
+      err.textContent = '❌ Sin acceso a esta app (' + rol + ')'; return;
+    }
+    
+    // Normalizar nombre
+    const nombre = usuario.nombre_vendedor || usuario.nombre_completo || usuario.nombre || correo;
+    usuario.nombre_vendedor = nombre;
+    
+    // Asignar estado global
+    G.usuario  = correo;
+    G.vendedor = usuario;
+    
+    // Mostrar tarjeta de identificación
+    const card = document.getElementById('userCard');
+    const ucN  = document.getElementById('ucNombre');
+    const ucR  = document.getElementById('ucRol');
+    if (card) {
+      if (ucN) ucN.textContent = nombre;
+      if (ucR) ucR.textContent = rol;
+      card.style.display = 'block';
+    }
+    
+    // Activar sandbox si es admin
+    if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
+      activarSandbox();
+    }
+    
+    // Entrar a la app — sin setTimeout para no cambiar comportamiento
+    iniciarApp();
+    
   } catch(e) {
-    err.textContent = 'Error de conexion: ' + e.message;
-    console.error('hacerLogin error:', e);
+    err.textContent = 'Error de conexión: ' + e.message;
+    console.error('Login error:', e);
   }
 }
 
@@ -876,7 +830,10 @@ async function leerGVIZ(hoja) {
   });
 }
 
-
+async function escribirGAS(body) {
+  await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+  await new Promise(r=>setTimeout(r,900));
+}
 
 async function cargarDatos() {
   try {
