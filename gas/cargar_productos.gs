@@ -11,12 +11,40 @@ function cargarProductosConPrecios() {
   else hoja.clearContents();
 
   var hdrs = ["tmcode","tmdescrip","tmund","tmcant","precio_base","flete_cali","precio_m2","flete_m2","descuento_max","observacion"];
-  var rngH = hoja.getRange(1, 1, 1, hdrs.length);
-  rngH.setValues([hdrs]);
-  rngH.setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
+  hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
+  hoja.getRange(1,1,1,hdrs.length).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
   hoja.setFrozenRows(1);
 
-  var datos = [
+  var fila = 2;
+
+  var d1 = getDatos1();
+  hoja.getRange(fila,1,d1.length,hdrs.length).setValues(d1);
+  fila += d1.length;
+  SpreadsheetApp.flush();
+  var d2 = getDatos2();
+  hoja.getRange(fila,1,d2.length,hdrs.length).setValues(d2);
+  fila += d2.length;
+  SpreadsheetApp.flush();
+  var d3 = getDatos3();
+  hoja.getRange(fila,1,d3.length,hdrs.length).setValues(d3);
+  fila += d3.length;
+  SpreadsheetApp.flush();
+  var d4 = getDatos4();
+  hoja.getRange(fila,1,d4.length,hdrs.length).setValues(d4);
+  fila += d4.length;
+  SpreadsheetApp.flush();
+  var d5 = getDatos5();
+  hoja.getRange(fila,1,d5.length,hdrs.length).setValues(d5);
+  fila += d5.length;
+  SpreadsheetApp.flush();
+
+  for (var c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
+  SpreadsheetApp.getUi().alert("PRODUCTOS_MAESTRO actualizado: " + (fila-2) + " productos cargados.");
+}
+
+
+function getDatos1() {
+  return [
     [3101,"POSTES DE 10X510","UND",0.0,0,0,0,0,0.08,""],
     [3102,"POSTE DE 10X510 KG DI","UND",11.0,0,0,0,0,0.08,""],
     [3103,"POSTE DE 10X1050 KD DI","UND",0.0,0,0,0,0,0.08,""],
@@ -116,7 +144,13 @@ function cargarProductosConPrecios() {
     [3228,"S BORDILLO BARRERA RECTO U10 80X45X15 (1 chaflan redondo)","nan",0,0,0,0,0,0.08,""],
     [3229,"S BORDILLO CICLOVIA RECTO U60 80X35X15 2 chaflanes","UND",55.0,0,0,0,0,0.08,""],
     [3230,"SARDINEL 80X65X15","UND",0.0,114440.0,5590.0,114440.0,5590.0,0.08,""],
-    [3231,"ALCORQUE 4 PIEZAS 75X75X10","nan",0,737400.0,13420.0,737400.0,13420.0,0.08,""],
+    [3231,"ALCORQUE 4 PIEZAS 75X75X10","nan",0,737400.0,13420.0,737400.0,13420.0,0.08,""]
+  ];
+}
+
+
+function getDatos2() {
+  return [
     [3232,"ALFAJIA DOS AGUAS 50X22X6 RFZO SIMPLE","UND",304.0,28320.0,820.0,28320.0,820.0,0.08,""],
     [3233,"BANCA TIPO MIO BN-01","UND",0.0,613060.0,26240.0,613060.0,26240.0,0.08,""],
     [3234,"SARDINEL 100X35X15","UND",0.0,0,0,0,0,0.08,""],
@@ -216,7 +250,13 @@ function cargarProductosConPrecios() {
     [3329,"BLOQUE 40X40X6 CUADRICULADA ROJA","UND",0.0,18080.0,696.0,113000.0,4350.0,0.08,"B"],
     [3330,"BLOQUE 40X40X6 TRIANGULAR GRIS","UND",0.0,16000.0,696.0,100000.0,4350.0,0.08,"B"],
     [3331,"BLOQUE 40X40X6 TACTIL GUIA AMA CB","UND",188.0,21280.0,696.0,133000.0,4350.0,0.08,"B"],
-    [3332,"BLOQUE 40X40X6 TACTIL GUIA GRIS","UND",390.0,17120.0,696.0,107000.0,4350.0,0.08,"B"],
+    [3332,"BLOQUE 40X40X6 TACTIL GUIA GRIS","UND",390.0,17120.0,696.0,107000.0,4350.0,0.08,"B"]
+  ];
+}
+
+
+function getDatos3() {
+  return [
     [3333,"BLOQUE 40X40X6 TACTIL GUIA AMARILLA CG","UND",91.0,20160.0,696.0,126000.0,4350.0,0.08,"B"],
     [3334,"BLOQUE 40X40X6 TACTIL GUIA ROJA","nan",0,20160.0,696.0,126000.0,4350.0,0.08,"B"],
     [3335,"BLOQUE 40X40X6 LISA GRIS","UND",1131.0,15840.0,696.0,99000.0,4350.0,0.08,"B"],
@@ -316,7 +356,13 @@ function cargarProductosConPrecios() {
     [3427,"BLOQUE 12X19X19 MEDIO VIGA","UND",16.0,3680.0,175.0,3680.0,175.0,0.08,"B"],
     [3428,"BLOQUE L 40X40X6 CUADRICULADA GRIS","UND",0.0,0,0,0,0,0.08,""],
     [3429,"BLOQUE 14X19X39 TER","UND",0.0,0,0,0,0,0.08,""],
-    [3430,"BLOQUE 14X19X39 SPLIT VIGA","UND",40.0,7490.0,455.0,7490.0,455.0,0.08,"B"],
+    [3430,"BLOQUE 14X19X39 SPLIT VIGA","UND",40.0,7490.0,455.0,7490.0,455.0,0.08,"B"]
+  ];
+}
+
+
+function getDatos4() {
+  return [
     [3431,"BLOQUE CILINDRO","UND",0.0,0,0,0,0,0.08,""],
     [3432,"BLOQUE 12X19X19 CORTADO","UND",0.0,0,0,0,0,0.08,""],
     [3433,"BLOQUE 10 MEDIO C S","UND",368.0,0,0,0,0,0.08,""],
@@ -416,7 +462,13 @@ function cargarProductosConPrecios() {
     [33005,"BLOQUE AV 20X10X8 VERDE OSCURO BIC","UND",306.0,2900.0,108.0,145000.0,5400.0,0.08,"B"],
     [33006,"BLOQUE AV 20X10X8 CAMEL L11","UND",0.0,0,0,0,0,0.08,""],
     [33007,"BLOQUE AV 20X10X8 LITCHI L12","UND",0.0,2560.0,108.0,128000.0,5400.0,0.08,"B"],
-    [33008,"BLOQUE AV 20X10X8 GRIS VERDOSO L8","UND",269.0,0,0,0,0,0.08,""],
+    [33008,"BLOQUE AV 20X10X8 GRIS VERDOSO L8","UND",269.0,0,0,0,0,0.08,""]
+  ];
+}
+
+
+function getDatos5() {
+  return [
     [33009,"BLOQUE AP 20X10X6 CAFE CLARO L13","UND",189.0,2060.0,79.0,103000.0,3950.0,0.08,"B"],
     [33010,"BLOQUE 20X20X6 NEGRA LISA","UND",0.0,0,0,0,0,0.08,""],
     [33011,"BLOQUE 40X40X6 PARADERO AMARILLO CB","UND",0.0,21280.0,696.0,133000.0,4350.0,0.08,"B"],
@@ -469,57 +521,4 @@ function cargarProductosConPrecios() {
     [33147,"BLOQUE20X10X8 (7.7)","UND",0.0,0,0,0,0,0.08,""],
     [33148,"BLOQUE 20X10X8","UND",435.0,0,0,0,0,0.08,""]
   ];
-
-  for (var i = 0; i < datos.length; i += 100) {
-    var lote = datos.slice(i, i + 100);
-    hoja.getRange(i + 2, 1, lote.length, hdrs.length).setValues(lote);
-    SpreadsheetApp.flush();
-  }
-
-  for (var c = 1; c <= hdrs.length; c++) hoja.autoResizeColumn(c);
-
-  cargarPrecios(ss, datos);
-
-  var conPrecio = 0;
-  for (var j = 0; j < datos.length; j++) { if (datos[j][4] > 0) conPrecio++; }
-
-  SpreadsheetApp.getUi().alert(
-    "PRODUCTOS_MAESTRO actualizado\n" +
-    "Total: " + datos.length + "\n" +
-    "Con precio: " + conPrecio + "\n" +
-    "Sin precio: " + (datos.length - conPrecio) + "\n\n" +
-    "PRECIOS_GERENCIA actualizado."
-  );
-}
-
-function cargarPrecios(ss, datos) {
-  var hP = ss.getSheetByName("PRECIOS_GERENCIA");
-  if (!hP) hP = ss.insertSheet("PRECIOS_GERENCIA");
-  else hP.clearContents();
-
-  var hdrs = ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor",
-              "costo_flete_unidad_zonaA","costo_flete_unidad_zonaB",
-              "fecha_vigencia_inicio","fecha_vigencia_fin"];
-  var rH = hP.getRange(1,1,1,hdrs.length);
-  rH.setValues([hdrs]);
-  rH.setBackground("#15603b").setFontColor("#fff").setFontWeight("bold");
-  hP.setFrozenRows(1);
-
-  var filas = [];
-  var id = 1;
-  for (var i = 0; i < datos.length; i++) {
-    if (datos[i][4] > 0) {
-      filas.push([id++, datos[i][0], datos[i][4], datos[i][8],
-                  datos[i][5], datos[i][5] * 1.3,
-                  "2026-01-01", "2026-12-31"]);
-    }
-  }
-
-  for (var j = 0; j < filas.length; j += 100) {
-    var lote = filas.slice(j, j + 100);
-    hP.getRange(j + 2, 1, lote.length, hdrs.length).setValues(lote);
-    SpreadsheetApp.flush();
-  }
-
-  for (var c = 1; c <= hdrs.length; c++) hP.autoResizeColumn(c);
 }
