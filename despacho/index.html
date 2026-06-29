@@ -347,6 +347,13 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   .sandbox-banner{top:60px;}
 }
 
+
+/* Fase 2: PIN ojo y roles */
+.login-pin-wrap{position:relative;margin-bottom:.75rem;}
+.login-pin-wrap .form-control{padding-right:50px;}
+.ojo-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;font-size:.8rem;font-weight:700;padding:4px 8px;}
+.ojo-btn:hover{color:var(--naranja,#E05C1A);}
+.login-rol-badge{display:none;padding:3px 12px;border-radius:20px;font-size:.68rem;font-weight:700;margin-bottom:.5rem;text-align:center;}
 </style>
 </head>
 <body>
@@ -706,91 +713,105 @@ function verFotoGrande(src) {
 
 // =============================================================================
 
-// =============================================================================
-// MODO SANDBOX — Solo acmv0921@gmail.com
-// Simula operaciones SIN escribir al Sheet real
-// =============================================================================
-const SANDBOX_ADMIN = "acmv0921@gmail.com";
-let _SANDBOX = false;
-let _sandboxLog = []; // registro de operaciones simuladas
 
-function activarSandbox() {
-  _SANDBOX = true;
-  document.body.classList.add('sandbox-active');
 
-  // Insertar banner si no existe
-  if (!document.getElementById('sandboxBanner')) {
-    const banner = document.createElement('div');
-    banner.id        = 'sandboxBanner';
-    banner.className = 'sandbox-banner';
-    banner.innerHTML = `
-      <div class="sb-left">
-        <span>⚠️ MODO PRUEBA</span>
-        <span class="sb-badge">acmv0921@gmail.com</span>
-        <span style="font-weight:400;font-size:.7rem;">Las operaciones son simuladas — no afectan datos reales</span>
-      </div>
-      <button onclick="verLogSandbox()" style="background:rgba(0,0,0,.25);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:.7rem;cursor:pointer;">Ver log</button>`;
-    // Insertar después del header
-    const header = document.querySelector('.header');
-    if (header) header.after(banner);
-    else document.body.prepend(banner);
-  }
+var ADMIN_EMAIL   = "acmv0921@gmail.com";
+var GERENTE_EMAIL = "gerencia@postecsa.com";
+var SUPERUSUARIOS = [ADMIN_EMAIL, GERENTE_EMAIL];
+var SANDBOX_CORREOS = [ADMIN_EMAIL];
+var _SANDBOX=false, _sandboxLog=[], _rolUsuario=null;
+
+function restaurarSesiones() {
+  if (sessionStorage.getItem('sivil_sandbox')==='1') _SANDBOX=true;
+  if (sessionStorage.getItem('sivil_admin')==='1' && typeof _esAdmin!=='undefined') _esAdmin=true;
 }
 
-// Reemplazar escribirGAS en modo sandbox
-const _escribirGAS_real = typeof escribirGAS !== 'undefined' ? escribirGAS : null;
+async function hacerLoginIndividual(correoInput, pinInput, rolesPermitidos) {
+  var correo=correoInput.trim().toLowerCase(), pin=pinInput.trim(), usuarios;
+  try { usuarios=await leerGVIZ('USUARIOS_MAESTRO'); }
+  catch(e) { usuarios=await leerGVIZ('VENDEDORES'); }
+  var usuario=usuarios.find(function(u){
+    return String(u.correo||u.correo_usuario||'').toLowerCase().trim()===correo;
+  });
+  if (!usuario) return {ok:false, error:'Correo no registrado en el sistema'};
+  var estado=String(usuario.estado||'').trim();
+  if (estado!=='ACTIVO'&&estado!=='Activo') return {ok:false,error:'Usuario inactivo — contacta al Administrador'};
+  var pinGuardado=String(usuario.pin_individual||usuario.pin||'').trim();
+  if (pin!==pinGuardado) return {ok:false,error:'PIN incorrecto'};
+  var rol=String(usuario.rol||usuario.cargo||'').trim();
+  var esSuperusuario=SUPERUSUARIOS.indexOf(correo)>=0;
+  if (!esSuperusuario&&rolesPermitidos&&rolesPermitidos.length>0) {
+    if (rolesPermitidos.indexOf(rol)===-1)
+      return {ok:false,error:'Tu rol ('+rol+') no tiene acceso a esta aplicacion'};
+  }
+  _rolUsuario=rol;
+  if (SANDBOX_CORREOS.indexOf(correo)>=0) { _SANDBOX=true; sessionStorage.setItem('sivil_sandbox','1'); }
+  return {ok:true,usuario:usuario,rol:rol};
+}
+
+function toggleVerPin(inputId,btnId) {
+  var inp=document.getElementById(inputId), btn=document.getElementById(btnId);
+  if (!inp) return;
+  inp.type = inp.type==='password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type==='password' ? '(ver)' : '(ocultar)';
+}
 
 async function escribirGAS(body) {
   if (_SANDBOX) {
-    const entrada = {
-      ts:     new Date().toLocaleTimeString('es-CO'),
-      accion: body.accion || 'desconocida',
-      datos:  JSON.stringify(body).substring(0, 120)
-    };
-    _sandboxLog.unshift(entrada);
-    console.log('🟠 SANDBOX — Simulado:', entrada);
-    // Simular delay de red
-    await new Promise(r => setTimeout(r, 600));
-    toast('🟠 PRUEBA: ' + (body.accion || 'operación') + ' simulada (no guardada)');
-    return; // NO escribe al Sheet
+    var e={ts:new Date().toLocaleTimeString('es-CO'),accion:body.accion||'operacion',datos:JSON.stringify(body).substring(0,150)};
+    _sandboxLog.unshift(e);
+    console.log('SIVIL SANDBOX:',e);
+    await new Promise(function(r){setTimeout(r,500);});
+    if (typeof toast==='function') toast('[PRUEBA] '+e.accion+' simulada — no guardada');
+    return;
   }
-  // Si no es sandbox, llamar la función real
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify(body)
-  });
-  await new Promise(r => setTimeout(r, 900));
+  try {
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+  } catch(err) {
+    var x=new XMLHttpRequest();
+    x.open('POST',GAS_URL,true);
+    x.setRequestHeader('Content-Type','text/plain');
+    x.send(JSON.stringify(body));
+  }
+  await new Promise(function(r){setTimeout(r,900);});
+}
+
+function activarSandbox() {
+  _SANDBOX=true;
+  sessionStorage.setItem('sivil_sandbox','1');
+  document.body.classList.add('sandbox-active');
+  if (!document.getElementById('sandboxBanner')) {
+    var b=document.createElement('div');
+    b.id='sandboxBanner'; b.className='sandbox-banner';
+    b.innerHTML='<div class="sb-left"><span>[MODO PRUEBA]</span><span class="sb-badge">'+ADMIN_EMAIL+'</span>'+
+      '<span style="font-weight:400;font-size:.7rem;">Datos reales visibles — operaciones NO se guardan</span></div>'+
+      '<button onclick="verLogSandbox()" style="background:rgba(0,0,0,.25);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:.7rem;cursor:pointer;">Ver log</button>';
+    var hdr=document.querySelector('.header');
+    if (hdr) hdr.after(b); else document.body.prepend(b);
+  }
 }
 
 function verLogSandbox() {
-  if (!_sandboxLog.length) { toast('Sin operaciones simuladas aún'); return; }
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay show';
-  overlay.innerHTML = `
-    <div class="modal-box">
-      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
-      <div style="font-size:1rem;font-weight:800;color:var(--naranja);margin-bottom:1rem;">
-        🟠 Log de Operaciones Simuladas
-      </div>
-      <p style="font-size:.75rem;color:#666;margin-bottom:1rem;">
-        Estas operaciones fueron ejecutadas en modo prueba y NO se guardaron en el sistema real.
-      </p>
-      ${_sandboxLog.map(e => `
-        <div style="background:#fff5f0;border-radius:8px;padding:8px 10px;margin-bottom:6px;border-left:3px solid var(--naranja);">
-          <div style="font-size:.7rem;color:#888;">${e.ts}</div>
-          <div style="font-size:.8rem;font-weight:700;color:var(--naranja);">${e.accion}</div>
-          <div style="font-size:.68rem;color:#666;word-break:break-all;">${e.datos}</div>
-        </div>`).join('')}
-      <button onclick="_sandboxLog=[];this.closest('.modal-overlay').remove();toast('Log limpiado');"
-              style="margin-top:1rem;background:#fff;border:1px solid var(--naranja);color:var(--naranja);border-radius:8px;padding:8px;width:100%;font-size:.8rem;cursor:pointer;">
-        🗑️ Limpiar log
-      </button>
-    </div>`;
-  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
+  if (!_sandboxLog.length) { if(typeof toast==='function') toast('Sin operaciones simuladas'); return; }
+  var ov=document.createElement('div');
+  ov.className='modal-overlay show';
+  var rows=_sandboxLog.map(function(e){
+    return '<div style="background:#fff5f0;border-radius:8px;padding:7px 10px;margin-bottom:5px;border-left:3px solid var(--naranja)">'+
+           '<div style="font-size:.68rem;color:#888;">'+e.ts+'</div>'+
+           '<div style="font-size:.78rem;font-weight:700;color:var(--naranja);">'+e.accion+'</div>'+
+           '<div style="font-size:.65rem;color:#666;word-break:break-all;">'+e.datos+'</div></div>';
+  }).join('');
+  ov.innerHTML='<div class="modal-box">'+
+    '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">X</button>'+
+    '<div style="font-size:1rem;font-weight:800;color:var(--naranja);margin-bottom:1rem;">Log Sandbox SIVIL</div>'+
+    '<p style="font-size:.72rem;color:#666;margin-bottom:.75rem;">Simulado — NO guardado en produccion.</p>'+
+    rows+
+    '<button onclick="_sandboxLog=[];this.closest(\'.modal-overlay\').remove();" '+
+    'style="margin-top:.75rem;background:#fff;border:1px solid var(--naranja);color:var(--naranja);border-radius:8px;padding:7px;width:100%;font-size:.78rem;cursor:pointer;">Limpiar log</button>'+
+    '</div>';
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
 }
-// ── FIN SANDBOX ─────────────────────────────────────────────
 
 const GAS_URL  = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
@@ -809,19 +830,21 @@ let S = {
 // LOGIN
 // =============================================================================
 async function hacerLogin() {
-  const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
-  const pin    = document.getElementById('loginPin').value.trim();
-  const err    = document.getElementById('loginErr');
-  if (!correo || !pin) { err.textContent = "Completa los campos"; return; }
-  err.textContent = "Verificando...";
+  var correo = document.getElementById('loginCorreo').value.trim();
+  var pin    = document.getElementById('loginPin').value.trim();
+  var err    = document.getElementById('loginErr');
+  if (!correo||!pin) { err.textContent='Completa correo y PIN'; return; }
+  err.textContent='Verificando...';
   try {
-    const vends = await leerGVIZ("VENDEDORES");
-    const v = vends.find(x => x.correo_usuario?.toLowerCase().trim() === correo && x.estado === "Activo");
-    if (!v) { err.textContent = "❌ Correo no registrado o inactivo"; return; }
-    if (pin !== "POST2025" && pin !== "DESP2026") { err.textContent = "❌ PIN incorrecto"; return; }
-    S.usuario = correo; S.vendedor = v;
-    iniciarApp();
-  } catch(e) { err.textContent = "Error: " + e.message; }
+    var resultado = await hacerLoginIndividual(correo, pin, ["DESPACHADOR","ADMIN","GERENTE"]);
+    if (!resultado.ok) { err.textContent='Error: '+resultado.error; return; }
+    S.usuario  = correo.toLowerCase().trim();
+    S.vendedor = resultado.usuario;
+    var badge = document.getElementById('loginRolBadge');
+    if (badge) { badge.textContent=resultado.rol; badge.style.display='block'; }
+    if (SANDBOX_CORREOS.indexOf(S.usuario)>=0) activarSandbox();
+    setTimeout(function(){iniciarApp();},350);
+  } catch(e) { err.textContent='Error de conexion: '+e.message; }
 }
 
 function iniciarApp() {
