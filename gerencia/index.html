@@ -757,6 +757,14 @@ async function toggleVerPin(inputId, btnId) {
   }
 }
 
+function toggleVerPin(inputId, btnId) {
+  var inp = document.getElementById(inputId);
+  var btn = document.getElementById(btnId);
+  if (!inp) return;
+  inp.type = (inp.type === 'password') ? 'text' : 'password';
+  if (btn) btn.textContent = (inp.type === 'password') ? 'VER' : 'OCULTAR';
+}
+
 async function hacerLoginIndividual(correoInput, pinInput, rolesPermitidos) {
   var correo=correoInput.trim().toLowerCase(), pin=pinInput.trim(), usuarios;
   try { usuarios=await leerGVIZ('USUARIOS_MAESTRO'); }
