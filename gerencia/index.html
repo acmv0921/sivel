@@ -784,25 +784,7 @@ async function hacerLoginIndividual(correoInput, pinInput, rolesPermitidos) {
 
 
 
-async function escribirGAS(body) {
-  if (_SANDBOX) {
-    var e={ts:new Date().toLocaleTimeString('es-CO'),accion:body.accion||'operacion',datos:JSON.stringify(body).substring(0,150)};
-    _sandboxLog.unshift(e);
-    console.log('SIVIL SANDBOX:',e);
-    await new Promise(function(r){setTimeout(r,500);});
-    if (typeof toast==='function') toast('[PRUEBA] '+e.accion+' simulada — no guardada');
-    return;
-  }
-  try {
-    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
-  } catch(err) {
-    var x=new XMLHttpRequest();
-    x.open('POST',GAS_URL,true);
-    x.setRequestHeader('Content-Type','text/plain');
-    x.send(JSON.stringify(body));
-  }
-  await new Promise(function(r){setTimeout(r,900);});
-}
+
 
 
 
