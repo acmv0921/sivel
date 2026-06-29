@@ -342,6 +342,26 @@ table       { min-width: 480px; }
   .card  { box-shadow: none; border: 1px solid #ddd; }
 }
 
+
+/* ── MODO PRUEBA ── */
+.sandbox-banner{
+  position:fixed;top:56px;left:0;right:0;z-index:199;
+  background:var(--naranja,#e05c1a);color:#fff;
+  padding:6px 1rem;font-size:.75rem;font-weight:700;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+  animation:pulso 2.5s ease-in-out infinite;
+}
+@keyframes pulso{0%,100%{opacity:1;}50%{opacity:.85;}}
+.sandbox-banner .sb-left{display:flex;align-items:center;gap:8px;}
+.sandbox-banner .sb-badge{background:rgba(0,0,0,.25);border-radius:20px;padding:2px 8px;font-size:.68rem;}
+body.sandbox-active{padding-top:calc(56px + 34px) !important;}
+body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
+@media(min-width:768px){
+  body.sandbox-active{padding-top:0;padding-left:240px;}
+  .sandbox-banner{top:60px;}
+}
+
 </style>
 </head>
 <body>
@@ -734,6 +754,93 @@ async function procesarFotoMDA(file,gps,quien){
 let _VGPS=null,_VFOTOS=[],_VCLI=null;
 function _cntF(){const n=_VFOTOS.length,el=document.getElementById('visitaCnt');if(!el)return;el.className='foto-cnt '+(n>=3?'ok':n>0?'warn':'err');el.textContent=(n>=3?'✅':'⚠️')+' '+n+'/3';}
 function _renderVF(){const c=document.getElementById('visitaFotos');if(!c)return;c.innerHTML=_VFOTOS.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="_VFOTOS.splice('+i+',1);_renderVF();_cntF();">✕</button></div>').join('');}
+
+
+// =============================================================================
+// MODO SANDBOX — Solo acmv0921@gmail.com
+// Simula operaciones SIN escribir al Sheet real
+// =============================================================================
+const SANDBOX_ADMIN = "acmv0921@gmail.com";
+let _SANDBOX = false;
+let _sandboxLog = []; // registro de operaciones simuladas
+
+function activarSandbox() {
+  _SANDBOX = true;
+  document.body.classList.add('sandbox-active');
+
+  // Insertar banner si no existe
+  if (!document.getElementById('sandboxBanner')) {
+    const banner = document.createElement('div');
+    banner.id        = 'sandboxBanner';
+    banner.className = 'sandbox-banner';
+    banner.innerHTML = `
+      <div class="sb-left">
+        <span>⚠️ MODO PRUEBA</span>
+        <span class="sb-badge">acmv0921@gmail.com</span>
+        <span style="font-weight:400;font-size:.7rem;">Las operaciones son simuladas — no afectan datos reales</span>
+      </div>
+      <button onclick="verLogSandbox()" style="background:rgba(0,0,0,.25);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:.7rem;cursor:pointer;">Ver log</button>`;
+    // Insertar después del header
+    const header = document.querySelector('.header');
+    if (header) header.after(banner);
+    else document.body.prepend(banner);
+  }
+}
+
+// Reemplazar escribirGAS en modo sandbox
+const _escribirGAS_real = typeof escribirGAS !== 'undefined' ? escribirGAS : null;
+
+async function escribirGAS(body) {
+  if (_SANDBOX) {
+    const entrada = {
+      ts:     new Date().toLocaleTimeString('es-CO'),
+      accion: body.accion || 'desconocida',
+      datos:  JSON.stringify(body).substring(0, 120)
+    };
+    _sandboxLog.unshift(entrada);
+    console.log('🟠 SANDBOX — Simulado:', entrada);
+    // Simular delay de red
+    await new Promise(r => setTimeout(r, 600));
+    toast('🟠 PRUEBA: ' + (body.accion || 'operación') + ' simulada (no guardada)');
+    return; // NO escribe al Sheet
+  }
+  // Si no es sandbox, llamar la función real
+  await fetch(GAS_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify(body)
+  });
+  await new Promise(r => setTimeout(r, 900));
+}
+
+function verLogSandbox() {
+  if (!_sandboxLog.length) { toast('Sin operaciones simuladas aún'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      <div style="font-size:1rem;font-weight:800;color:var(--naranja);margin-bottom:1rem;">
+        🟠 Log de Operaciones Simuladas
+      </div>
+      <p style="font-size:.75rem;color:#666;margin-bottom:1rem;">
+        Estas operaciones fueron ejecutadas en modo prueba y NO se guardaron en el sistema real.
+      </p>
+      ${_sandboxLog.map(e => `
+        <div style="background:#fff5f0;border-radius:8px;padding:8px 10px;margin-bottom:6px;border-left:3px solid var(--naranja);">
+          <div style="font-size:.7rem;color:#888;">${e.ts}</div>
+          <div style="font-size:.8rem;font-weight:700;color:var(--naranja);">${e.accion}</div>
+          <div style="font-size:.68rem;color:#666;word-break:break-all;">${e.datos}</div>
+        </div>`).join('')}
+      <button onclick="_sandboxLog=[];this.closest('.modal-overlay').remove();toast('Log limpiado');"
+              style="margin-top:1rem;background:#fff;border:1px solid var(--naranja);color:var(--naranja);border-radius:8px;padding:8px;width:100%;font-size:.8rem;cursor:pointer;">
+        🗑️ Limpiar log
+      </button>
+    </div>`;
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+// ── FIN SANDBOX ─────────────────────────────────────────────
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
