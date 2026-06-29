@@ -946,34 +946,34 @@ async function hacerLogin() {
   var correo = document.getElementById('loginCorreo').value.trim();
   var pin    = document.getElementById('loginPin').value.trim();
   var err    = document.getElementById('loginErr');
-  var card   = document.getElementById('userCard');
-  var ucNom  = document.getElementById('ucNombre');
-  var ucRol  = document.getElementById('ucRol');
-  if (!correo||!pin) { err.textContent='Completa correo y PIN'; return; }
-  err.textContent='Verificando...';
-  if (card) card.className='user-card';
+  if (!correo || !pin) { err.textContent = 'Completa correo y PIN'; return; }
+  err.textContent = 'Verificando...';
   try {
     var resultado = await hacerLoginIndividual(correo, pin, ["VENDEDOR","JEFE_VENTAS","ADMIN","GERENTE"]);
-    if (!resultado.ok) { err.textContent='Error: '+resultado.error; return; }
-    // Normalizar: garantizar que nombre_vendedor existe siempre
+    if (!resultado.ok) { err.textContent = 'Error: ' + resultado.error; return; }
     var usr = resultado.usuario;
-    usr.nombre_vendedor = usr.nombre_vendedor || usr.nombre_completo || usr.nombre || correo;
+    // Normalizar nombre para compatibilidad USUARIOS_MAESTRO y VENDEDORES
+    if (!usr.nombre_vendedor) {
+      usr.nombre_vendedor = usr.nombre_completo || usr.nombre || correo;
+    }
     STATE.usuario  = correo.toLowerCase().trim();
     STATE.vendedor = usr;
-    var nombre = usr.nombre_vendedor;
-    var rol    = String(resultado.rol||'').trim();
-    if (card && ucNom && ucRol) {
-      ucNom.textContent = nombre;
-      ucRol.textContent = rol;
-      ucRol.className   = 'user-card-rol ucr-'+rol;
-      card.className    = 'user-card show';
+    // Mostrar tarjeta visual (no bloquea la entrada)
+    var card = document.getElementById('userCard');
+    var ucN  = document.getElementById('ucNombre');
+    var ucR  = document.getElementById('ucRol');
+    if (card && ucN && ucR) {
+      ucN.textContent = usr.nombre_vendedor;
+      ucR.textContent = resultado.rol || '';
+      ucR.className   = 'user-card-rol ucr-' + (resultado.rol || '');
+      card.className  = 'user-card show';
     }
     err.textContent = '';
-    if (SANDBOX_CORREOS.indexOf(STATE.usuario)>=0) activarSandbox();
-    setTimeout(function(){iniciarApp();}, 700);
+    if (SANDBOX_CORREOS.indexOf(STATE.usuario) >= 0) activarSandbox();
+    setTimeout(function() { iniciarApp(); }, 600);
   } catch(e) {
-    err.textContent='Error de conexion: '+e.message;
-    console.error('Login error:', e);
+    err.textContent = 'Error de conexion: ' + e.message;
+    console.error('hacerLogin error:', e);
   }
 }
 
