@@ -409,7 +409,7 @@ table       { min-width: 480px; }
   <div id="screenUsuarios" class="screen">
     <div class="card">
       <div class="card-title">👥 Control de Vendedores</div>
-      <button class="btn btn-primary btn-sm" onclick="abrirModalVendedor()">➕ Nuevo vendedor</button>
+      
     </div>
     <div id="listaVendedores"><div class="loading"><div class="spinner"></div></div></div>
   </div>
@@ -522,6 +522,34 @@ table       { min-width: 480px; }
   </div>
 </div>
 
+
+<!-- MODAL: LOGIN ADMINISTRADOR -->
+<div id="modalLoginAdmin" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalLoginAdmin')">✕</button>
+    <div style="text-align:center;margin-bottom:1rem;">
+      <div style="font-size:2rem;">🔑</div>
+      <div class="modal-title" style="margin-bottom:.25rem;">Acceso Administrador</div>
+      <div style="font-size:.75rem;color:#888;">Solo el administrador del sistema puede gestionar usuarios</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo de administrador</label>
+      <input id="adminCorreo" class="form-control" type="email" placeholder="acmv0921@gmail.com">
+    </div>
+    <div class="form-group" style="position:relative;">
+      <label class="form-label">PIN de administrador</label>
+      <input id="adminPin" class="form-control" type="password" placeholder="••••••••••••" id="adminPinInput">
+      <button onclick="toggleAdminPin()" style="position:absolute;right:10px;top:34px;background:none;border:none;cursor:pointer;font-size:1rem;">👁</button>
+    </div>
+    <div id="adminErr" style="font-size:.75rem;color:var(--rojo);margin-bottom:.75rem;min-height:18px;"></div>
+    <button class="btn btn-primary" onclick="submitLoginAdmin()">🔑 Ingresar como Administrador</button>
+    <p style="font-size:.68rem;color:#aaa;text-align:center;margin-top:.75rem;">
+      Este acceso es exclusivo de Abdiel Cicar Moreno Velásquez<br>
+      POSTEC DE OCCIDENTE S.A.S.
+    </p>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav class="nav-bottom" id="navBottom" style="display:none;">
   <button class="nav-btn active" onclick="irA('screenDashboard')"   id="navDash">   <span class="icon">📊</span>Dashboard</button>
@@ -536,6 +564,30 @@ table       { min-width: 480px; }
 <script>
 // =============================================================================
 // SIVEL APP GERENCIA v1.0
+
+// =============================================================================
+// ADMINISTRADOR MASTER — SIVEL
+// =============================================================================
+const ADMIN_EMAIL  = "acmv0921@gmail.com";
+const ADMIN_PIN_KEY = "POSTECSA@2026$";
+let _esAdmin = false;
+
+function restaurarSesionAdmin() {
+  _esAdmin = sessionStorage.getItem("sivel_admin") === "1";
+}
+function loginComoAdmin(correo, pin) {
+  if (correo.toLowerCase().trim() === ADMIN_EMAIL && pin === ADMIN_PIN_KEY) {
+    _esAdmin = true;
+    sessionStorage.setItem("sivel_admin", "1");
+    return true;
+  }
+  return false;
+}
+function cerrarSesionAdmin() {
+  _esAdmin = false;
+  sessionStorage.removeItem("sivel_admin");
+}
+
 // =============================================================================
 const GAS_URL  = "https://script.google.com/macros/s/AKfycbydQjzcYnlCtiaqitnt8-2lCA-Qx6y3D4wx_WHCOQwrHfYPbCBA2YijVsLm0vfzgdK3MQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
@@ -568,6 +620,7 @@ async function hacerLogin() {
 }
 
 function iniciarApp() {
+  restaurarSesionAdmin();
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appMain').style.display='block';
   document.getElementById('navBottom').style.display='flex';
@@ -962,8 +1015,33 @@ async function actualizarPrecio() {
 // =============================================================================
 function renderVendedores() {
   const cont = document.getElementById('listaVendedores');
-  cont.innerHTML = G.vendedores.map(v => {
+
+  // Banner admin o candado
+  const bannerAdmin = _esAdmin
+    ? `<div style="background:#d1f5e0;border-radius:10px;padding:10px 14px;margin-bottom:1rem;display:flex;align-items:center;gap:8px;">
+         <span style="font-size:1.1rem;">🔑</span>
+         <div><div style="font-size:.78rem;font-weight:700;color:var(--verde);">Modo Administrador activo</div>
+         <div style="font-size:.7rem;color:#555;">acmv0921@gmail.com — Gestión de usuarios habilitada</div></div>
+         <button onclick="cerrarSesionAdmin();renderVendedores();" style="margin-left:auto;background:none;border:1px solid var(--verde);border-radius:6px;padding:4px 8px;font-size:.7rem;color:var(--verde);cursor:pointer;">Salir</button>
+       </div>`
+    : `<div style="background:#fff3cd;border-radius:10px;padding:10px 14px;margin-bottom:1rem;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="abrirLoginAdmin()">
+         <span style="font-size:1.1rem;">🔒</span>
+         <div><div style="font-size:.78rem;font-weight:700;color:var(--amarillo);">Gestión restringida</div>
+         <div style="font-size:.7rem;color:#555;">Solo el Administrador puede agregar o desactivar usuarios. Toca para ingresar.</div></div>
+       </div>`;
+
+  const botonNuevo = _esAdmin
+    ? `<button class="btn btn-primary btn-sm" style="margin-bottom:1rem;" onclick="abrirModalVendedor()">➕ Nuevo vendedor</button>`
+    : '';
+
+  cont.innerHTML = bannerAdmin + botonNuevo + G.vendedores.map(v => {
     const aps = G.aps.filter(a=>String(a.vendedor_id)===String(v.id_vendedor));
+    const botonesAdmin = _esAdmin ? `
+      <button class="btn btn-outline btn-sm" onclick="editarVendedor(${JSON.stringify(v).replace(/"/g,"'")})">✏️</button>
+      <button class="btn btn-sm" style="background:${v.estado==='Activo'?'#ffe4e4':'#d1f5e0'};color:${v.estado==='Activo'?'var(--rojo)':'var(--verde)'};"
+              onclick="toggleVendedor('${v.id_vendedor}','${v.estado==='Activo'?'Inactivo':'Activo'}')">
+        ${v.estado==='Activo'?'Desactivar':'Activar'}
+      </button>` : '';
     return `
     <div class="vend-row">
       <div class="vend-avatar">${(v.nombre_vendedor||'?').charAt(0)}</div>
@@ -974,17 +1052,14 @@ function renderVendedores() {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <span class="badge ${v.estado==='Activo'?'badge-activo':'badge-inactivo'}">${v.estado}</span>
-        <button class="btn btn-outline btn-sm" onclick="editarVendedor(${JSON.stringify(v).replace(/"/g,"'")})">✏️</button>
-        <button class="btn btn-sm" style="background:${v.estado==='Activo'?'#ffe4e4':'#d1f5e0'};color:${v.estado==='Activo'?'var(--rojo)':'var(--verde)'};"
-                onclick="toggleVendedor('${v.id_vendedor}','${v.estado==='Activo'?'Inactivo':'Activo'}')">
-          ${v.estado==='Activo'?'Desactivar':'Activar'}
-        </button>
+        ${botonesAdmin}
       </div>
     </div>`;
   }).join('');
 }
 
 function abrirModalVendedor(vend=null) {
+  if (!_esAdmin) { abrirLoginAdmin(); return; }
   document.getElementById('vendId').value     = vend?.id_vendedor||'';
   document.getElementById('vendNombre').value = vend?.nombre_vendedor||'';
   document.getElementById('vendCorreo').value = vend?.correo_usuario||'';
@@ -1001,6 +1076,7 @@ function editarVendedor(v) {
 }
 
 async function guardarVendedor() {
+  if (!_esAdmin) { toast("⛔ Solo el Administrador puede gestionar usuarios"); return; }
   const id     = document.getElementById('vendId').value.trim();
   const nombre = document.getElementById('vendNombre').value.trim();
   const correo = document.getElementById('vendCorreo').value.trim().toLowerCase();
@@ -1021,6 +1097,7 @@ async function guardarVendedor() {
 }
 
 async function toggleVendedor(id, nuevoEstado) {
+  if (!_esAdmin) { abrirLoginAdmin(); return; }
   const v = G.vendedores.find(x=>String(x.id_vendedor)===String(id));
   if (!v||!confirm(`¿${nuevoEstado==='Inactivo'?'Desactivar':'Activar'} a ${v.nombre_vendedor}?`)) return;
   await escribirGAS({accion:'actualizarVendedor',id_vendedor:id,estado:nuevoEstado});
@@ -1039,6 +1116,38 @@ function parseFecha(val) {
   const d=new Date(val); return isNaN(d)?null:d;
 }
 function fmt(n){ return '$'+Math.round(n||0).toLocaleString('es-CO'); }
+
+
+function abrirLoginAdmin() {
+  document.getElementById('adminCorreo').value = '';
+  document.getElementById('adminPin').value    = '';
+  document.getElementById('adminErr').textContent = '';
+  document.getElementById('modalLoginAdmin').classList.add('show');
+  setTimeout(() => document.getElementById('adminCorreo').focus(), 300);
+}
+
+function toggleAdminPin() {
+  const inp = document.getElementById('adminPin');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function submitLoginAdmin() {
+  const correo = document.getElementById('adminCorreo').value.trim().toLowerCase();
+  const pin    = document.getElementById('adminPin').value.trim();
+  const err    = document.getElementById('adminErr');
+
+  if (!correo || !pin) { err.textContent = "Ingresa correo y PIN"; return; }
+
+  if (loginComoAdmin(correo, pin)) {
+    cerrarModal('modalLoginAdmin');
+    toast("✅ Acceso de Administrador concedido");
+    irA('screenUsuarios');
+    renderVendedores();
+  } else {
+    err.textContent = "❌ Credenciales incorrectas";
+    document.getElementById('adminPin').value = '';
+  }
+}
 
 function irA(screenId) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
