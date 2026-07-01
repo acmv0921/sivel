@@ -157,6 +157,9 @@ function doPost(e) {
       case "liberarCurado":
         resultado = liberarCurado(body);
         break;
+      case "generarInformeDespacho":
+        resultado = generarInformeDespachoDesdeBody(body);
+        break;
 
       // --- PRODUCTOS ---
       case "actualizarStock":
@@ -181,6 +184,22 @@ function doPost(e) {
   return ContentService
     .createTextOutput(JSON.stringify(resultado))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// =============================================================================
+// INFORME DE DESPACHO — dispara la generación de PDF+Excel definida en el
+// script Informes.gs.gs (proyecto separado "SIVIL" bound al Sheet). Requiere
+// que la función generarInformeDespacho() de ese archivo esté disponible en
+// este MISMO proyecto (pégala aquí también si vive en otro proyecto Apps
+// Script, ya que un doPost solo puede llamar funciones de su propio proyecto).
+// =============================================================================
+function generarInformeDespachoDesdeBody(body) {
+  try {
+    const datos = JSON.parse(body.datos);
+    return generarInformeDespacho(datos);
+  } catch (err) {
+    return { ok: false, error: "Error generando informe de despacho: " + err.message };
+  }
 }
 
 // =============================================================================
