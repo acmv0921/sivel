@@ -408,6 +408,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 
     <div class="card" style="margin-top:1rem;">
       <div class="card-title">📦 Inventario Completo</div>
+      <div id="metaActualizacion" style="font-size:.72rem;color:#888;margin-bottom:.5rem;">Última actualización: —</div>
       <div id="inventarioCompleto"><div class="loading"><div class="spinner"></div></div></div>
     </div>
   </div>
@@ -830,6 +831,17 @@ async function leerGVIZ(hoja) {
   });
 }
 
+async function cargarMetaActualizacion() {
+  try {
+    const meta = await leerGVIZ("META_SISTEMA");
+    const fila = meta.find(m => m.Clave === "ULTIMA_ACTUALIZACION_INVENTARIO");
+    const el = document.getElementById('metaActualizacion');
+    if (el) el.textContent = fila ? `Última actualización: ${fila.Valor}` : "Última actualización: sin datos";
+  } catch (e) {
+    // silencioso: si no existe la hoja aún, no interrumpe la carga normal
+  }
+}
+
 async function escribirGAS(body) {
   await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
   await new Promise(r=>setTimeout(r,900));
@@ -845,6 +857,7 @@ async function cargarDatos() {
       leerGVIZ("VENDEDORES"),
       leerGVIZ("PRECIOS_GERENCIA")
     ]);
+    cargarMetaActualizacion();
     calcularInventarioDinamico();
     renderDashboard();
     renderAlertas();
