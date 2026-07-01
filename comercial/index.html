@@ -464,6 +464,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <div id="screenInventario" class="screen">
     <div class="card">
       <div class="card-title">Inventario Dinámico en Campo</div>
+      <div id="metaActualizacion" style="font-size:.72rem;color:#888;margin-bottom:.5rem;">Última actualización: —</div>
       <div class="search-box form-group">
         <span class="search-icon">🔍</span>
         <input id="buscarProd" class="form-control" placeholder="Buscar producto..." oninput="filtrarProductos()">
@@ -992,6 +993,17 @@ async function leerGVIZ(hoja) {
   });
 }
 
+async function cargarMetaActualizacion() {
+  try {
+    const meta = await leerGVIZ("META_SISTEMA");
+    const fila = meta.find(m => m.Clave === "ULTIMA_ACTUALIZACION_INVENTARIO");
+    const el = document.getElementById('metaActualizacion');
+    if (el) el.textContent = fila ? `Última actualización: ${fila.Valor}` : "Última actualización: sin datos";
+  } catch (e) {
+    // silencioso: si no existe la hoja aún, no interrumpe la carga normal
+  }
+}
+
 // =============================================================================
 // ESCRIBIR DATOS (POST no-cors)
 // =============================================================================
@@ -1013,7 +1025,8 @@ async function cargarTodo() {
   await Promise.all([
     cargarInventario(),
     cargarClientes(),
-    cargarMisAPs()
+    cargarMisAPs(),
+    cargarMetaActualizacion()
   ]);
   actualizarKPIs();
 }
