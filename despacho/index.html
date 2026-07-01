@@ -1231,6 +1231,23 @@ async function confirmarDespacho() {
   const nuevoEstado = todoCompleto ? 'Despachado Total' : 'Despachado Parcial';
   await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado });
 
+  // Generar informe individual del despacho (PDF + Excel) en Drive
+  await escribirGAS({
+    accion: 'generarInformeDespacho',
+    datos: JSON.stringify({
+      ap_id: ap.ap_id,
+      cliente: nombreCliente(ap.cliente_nit),
+      vendedor: ap.nombre_vendedor,
+      placa: placa,
+      conductor: document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '',
+      lineas: lineas.map(l => ({
+        tmcode: l.tmcode,
+        nombre: nombreProducto(l.tmcode),
+        cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0)
+      }))
+    })
+  });
+
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
 
