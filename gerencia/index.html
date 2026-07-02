@@ -448,6 +448,11 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       
     </div>
     <div id="listaVendedores"><div class="loading"><div class="spinner"></div></div></div>
+
+    <div class="card" style="margin-top:1rem;">
+      <div class="card-title">🚚 Flota de Despachos</div>
+    </div>
+    <div id="listaFlota"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
 </div><!-- /appMain -->
@@ -849,13 +854,14 @@ async function escribirGAS(body) {
 
 async function cargarDatos() {
   try {
-    [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios] = await Promise.all([
+    [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios,G.vehiculos] = await Promise.all([
       leerGVIZ("PREVENTAS_AP"),
       leerGVIZ("DETALLE_AP"),
       leerGVIZ("PRODUCTOS_MAESTRO"),
       leerGVIZ("CONTROL_PATIO_Y_LOGISTICA"),
       leerGVIZ("VENDEDORES"),
-      leerGVIZ("PRECIOS_GERENCIA")
+      leerGVIZ("PRECIOS_GERENCIA"),
+      leerGVIZ("VEHICULOS")
     ]);
     cargarMetaActualizacion();
     calcularInventarioDinamico();
@@ -864,6 +870,7 @@ async function cargarDatos() {
     renderAprobaciones();
     renderPrecios();
     renderVendedores();
+    renderFlota();
     poblarSelectProductos();
   } catch(e) { toast("Error cargando datos: "+e.message); }
 }
@@ -1243,6 +1250,25 @@ function renderVendedores() {
       </div>
     </div>`;
   }).join('');
+}
+
+function renderFlota() {
+  const cont = document.getElementById('listaFlota');
+  if (!cont) return;
+  const vehiculos = (G.vehiculos || []).filter(v => v.estado === 'Activo' || !v.estado);
+  if (!vehiculos.length) { cont.innerHTML = '<div style="padding:1rem;color:#888;font-size:.8rem;">Sin vehículos registrados.</div>'; return; }
+  cont.innerHTML = vehiculos.map(v => `
+    <div class="vend-row">
+      <div class="vend-avatar" style="background:var(--naranja,#e05c1a);">🚚</div>
+      <div class="vend-info">
+        <div class="vend-nombre">${v.placa || 'Sin placa'} — ${v.conductor_nombre || 'Sin conductor'}</div>
+        <div class="vend-meta">📱 ${v.conductor_cel || 'N/A'}</div>
+        <div class="vend-meta" style="margin-top:2px;">Tonelaje: ${v.capacidad_und || '—'} Ton</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <span class="badge ${v.estado==='Activo'?'badge-activo':'badge-inactivo'}">${v.estado || 'Activo'}</span>
+      </div>
+    </div>`).join('');
 }
 
 function abrirModalVendedor(vend=null) {
