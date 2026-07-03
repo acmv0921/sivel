@@ -151,6 +151,9 @@ function doPost(e) {
       case "registrarAveria":
         resultado = registrarAveria(body);
         break;
+      case "registrarNovedad":
+        resultado = registrarNovedad(body);
+        break;
       case "registrarCurado":
         resultado = registrarCurado(body);
         break;
@@ -252,14 +255,26 @@ function calcularDisponible(tmcode) {
   if (!prod) return null;
   const stockBruto = parseFloat(prod.tmcant) || 0;
 
-  // Cantidad en curado + averías (patio)
+  // Cantidad en curado + averías (patio) — SIEMPRE filtrado por tmcode
+  // (fix: antes el filtro de curado era un no-op "|| true" y el de averías
+  // no filtraba en absoluto, sumando TODO el patio de la empresa contra
+  // cada producto. Corregido 03/07/2026.)
   const hPatio   = getHoja(HOJAS.PATIO);
-  const patios   = hojaAObjetos(hPatio);
+  const patios   = hojaAObjetos(hPatio).filter(p => String(p.tmcode) === String(tmcode));
   const enCurado = patios
-    .filter(p => String(p.tmcode) === String(tmcode) || true) // se filtra por join con detalle
     .reduce((acc, p) => acc + (parseFloat(p.cant_en_curado) || 0), 0);
-  const averias = patios
-    .reduce((acc, p) => acc + (parseFloat(p.cant_mermas_averias) || 0), 0);
+
+  // Averías: se deducen del disponible (Cargue + Restribado + Reposiciones +
+  // el histórico cant_mermas_averias). Los Saldos de Segunda NO se deducen
+  // del disponible principal — siguen siendo stock vendible, solo que bajo
+  // otra condición de precio; se reportan aparte.
+  const averias = patios.reduce((acc, p) =>
+    acc + (parseFloat(p.cant_mermas_averias) || 0)
+        + (parseFloat(p.cant_averia_cargue) || 0)
+        + (parseFloat(p.cant_averia_restribado) || 0)
+        + (parseFloat(p.cant_reposicion) || 0), 0);
+  const saldosSegunda = patios
+    .reduce((acc, p) => acc + (parseFloat(p.cant_merma_segunda) || 0), 0);
 
   // Comprometido en APs pendientes
   const hDetalle  = getHoja(HOJAS.DETALLE);
@@ -287,6 +302,7 @@ function calcularDisponible(tmcode) {
     stock_bruto:  stockBruto,
     en_curado:    enCurado,
     averias,
+    saldos_segunda: saldosSegunda,
     comprometido,
     disponible,
     estado_semaforo: disponible > 10 ? "VERDE"
@@ -681,20 +697,57 @@ function actualizarCantDespachada(detalle_id, ap_id, cantDespachada) {
   }
 }
 
+// Mantenida por compatibilidad — usa la categoría "cargue" por defecto.
+// A partir del 03/07/2026, usar registrarNovedad(body) con body.categoria.
 function registrarAveria(body) {
+  return registrarNovedad({ ...body, categoria: "cargue" });
+}
+
+// Categorías válidas: "cargue", "restribado", "reposicion", "merma_segunda"
+// (definidas en la reunión de Gerencia del 02/07/2026). Las 3 primeras
+// descuentan del stock bruto; "merma_segunda" NO descuenta — reclasifica
+// unidades que siguen siendo vendibles a otra condición de precio.
+const COLUMNA_POR_CATEGORIA = {
+  cargue:        "cant_averia_cargue",
+  restribado:    "cant_averia_restribado",
+  reposicion:    "cant_reposicion",
+  merma_segunda: "cant_merma_segunda"
+};
+
+function registrarNovedad(body) {
+  const categoria = body.categoria || "cargue";
+  const colNombre = COLUMNA_POR_CATEGORIA[categoria];
+  if (!colNombre) return { ok: false, error: "Categoría de novedad no reconocida: " + categoria };
+
   const hoja  = getHoja(HOJAS.PATIO);
   const datos = hoja.getDataRange().getValues();
   const hdrs  = datos[0].map(h => String(h).trim());
   const colAp = hdrs.indexOf("ap_id");
-  const colAv = hdrs.indexOf("cant_mermas_averias");
+  let colCat  = hdrs.indexOf(colNombre);
+
+  // Auto-migración: si la columna de esta categoría aún no existe, se crea.
+  if (colCat === -1) {
+    colCat = hdrs.length;
+    hoja.getRange(1, colCat + 1).setValue(colNombre);
+  }
+
+  const cantidad = parseFloat(body.cantidad ?? body.cant_averias) || 0;
 
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colAp]) === String(body.ap_id)) {
-      const actual = parseFloat(datos[i][colAv]) || 0;
-      hoja.getRange(i+1, colAv+1).setValue(actual + (parseFloat(body.cant_averias) || 0));
-      // Restar también del stock bruto inmediatamente
-      actualizarStock({ tmcode: body.tmcode, tmcant: obtenerStockBruto(body.tmcode) - (parseFloat(body.cant_averias) || 0) });
-      return { ok: true, mensaje: `Avería de ${body.cant_averias} unidades registrada` };
+      const actual = parseFloat(datos[i][colCat]) || 0;
+      hoja.getRange(i + 1, colCat + 1).setValue(actual + cantidad);
+
+      // Solo las categorías que reducen stock afectan tmcant directamente.
+      if (categoria !== "merma_segunda") {
+        actualizarStock({ tmcode: body.tmcode, tmcant: obtenerStockBruto(body.tmcode) - cantidad });
+      }
+
+      const etiquetas = {
+        cargue: "Avería por cargue", restribado: "Avería por restribado",
+        reposicion: "Reposición (cortesía)", merma_segunda: "Merma / saldo de segunda"
+      };
+      return { ok: true, mensaje: `${etiquetas[categoria]}: ${cantidad} unidades registradas` };
     }
   }
   return { ok: false, error: "Despacho no encontrado para esa AP" };
@@ -822,7 +875,7 @@ function inicializarSheet() {
     [HOJAS.CLIENTES]:   ["cliente_nit","razon_social","vendedor_asignado","coordenadas_home","foto_fachada_url"],
     [HOJAS.PREVENTAS]:  ["ap_id","cliente_nit","vendedor_id","fecha_creacion","tipo_entrega","estado_ap"],
     [HOJAS.DETALLE]:    ["detalle_id","ap_id","tmcode","cantidad_solicitada","cantidad_despachada","descuento_aplicado"],
-    [HOJAS.PATIO]:      ["despacho_id","ap_id","tmcode","cant_en_curado","fecha_liberacion_curado","cant_mermas_averias","placa_vehiculo","evidencia_carga_url","fecha_registro"],
+    [HOJAS.PATIO]:      ["despacho_id","ap_id","tmcode","cant_en_curado","fecha_liberacion_curado","cant_mermas_averias","placa_vehiculo","evidencia_carga_url","fecha_registro","cant_averia_cargue","cant_averia_restribado","cant_reposicion","cant_merma_segunda"],
     [HOJAS.PRECIOS]:    ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor","costo_flete_unidad_zonaA","costo_flete_unidad_zonaB","fecha_vigencia_inicio","fecha_vigencia_fin"]
   };
 
