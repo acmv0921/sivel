@@ -1080,9 +1080,9 @@ async function cargarInventario() {
 
 async function cargarClientes() {
   try {
-    const todos = await leerGVIZ("CLIENTES");
-    const id    = String(STATE.vendedor?.id_vendedor || "");
-    STATE.clientes = todos.filter(c => String(c.vendedor_asignado) === id);
+    // Todos los vendedores consultan la base completa de clientes
+    // (decisión de negocio 03/07/2026 — ya no se filtra por vendedor_asignado).
+    STATE.clientes = await leerGVIZ("CLIENTES");
     renderClientes();
   } catch(e) { console.error("Error clientes:", e); }
 }
