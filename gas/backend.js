@@ -15,7 +15,8 @@ const HOJAS = {
   PREVENTAS:   "PREVENTAS_AP",
   DETALLE:     "DETALLE_AP",
   PATIO:       "CONTROL_PATIO_Y_LOGISTICA",
-  PRECIOS:     "PRECIOS_GERENCIA"
+  PRECIOS:     "PRECIOS_GERENCIA",
+  VEHICULOS:   "VEHICULOS"
 };
 
 // =============================================================================
@@ -153,6 +154,12 @@ function doPost(e) {
         break;
       case "registrarNovedad":
         resultado = registrarNovedad(body);
+        break;
+      case "crearVehiculo":
+        resultado = crearVehiculo(body);
+        break;
+      case "importarClientesMasivo":
+        resultado = importarClientesMasivo(body);
         break;
       case "registrarCurado":
         resultado = registrarCurado(body);
@@ -460,6 +467,34 @@ function actualizarCliente(body) {
   return { ok: false, error: "Cliente no encontrado" };
 }
 
+// Importación masiva desde DATAX. Se llama en lotes (batches) desde el
+// cliente para no exceder límites de payload. body.limpiar=true SOLO en el
+// primer lote, para borrar los clientes de prueba antes de cargar los reales.
+// Todos los vendedores pueden ver todos los clientes (decisión 03/07/2026);
+// vendedor_datax se guarda solo como referencia histórica del ERP, no se usa
+// para filtrar.
+function importarClientesMasivo(body) {
+  const hoja = getHoja(HOJAS.CLIENTES);
+  const hdrs = ["cliente_nit","razon_social","vendedor_asignado","coordenadas_home","foto_fachada_url","telefono","ciudad","vendedor_datax"];
+
+  if (body.limpiar) {
+    hoja.clearContents();
+    hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
+    hoja.getRange(1,1,1,hdrs.length).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
+  }
+
+  const filas = (body.clientes || []).map(c => [
+    c.nit, c.nombre, "", "", "", c.telefono || "", c.ciudad || "", c.vendedor_datax || ""
+  ]);
+  if (filas.length > 0) {
+    const inicio = hoja.getLastRow() + 1;
+    hoja.getRange(inicio, 1, filas.length, hdrs.length).setValues(filas);
+  }
+
+  return { ok: true, mensaje: `${filas.length} clientes importados`, total_en_hoja: hoja.getLastRow() - 1 };
+}
+
 // =============================================================================
 // MÓDULO: PREVENTAS (AP)
 // =============================================================================
@@ -751,6 +786,42 @@ function registrarNovedad(body) {
     }
   }
   return { ok: false, error: "Despacho no encontrado para esa AP" };
+}
+
+// Crea un vehículo nuevo en la biblioteca compartida VEHICULOS, o lo
+// actualiza si la placa ya existe (upsert por placa — nunca borra flota
+// existente). Conectado al botón "Agregar vehículo" de la app Despacho,
+// que ya existía en el frontend pero no tenía backend (corregido 03/07/2026).
+function crearVehiculo(body) {
+  const hoja = getHoja(HOJAS.VEHICULOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colPlaca = hdrs.indexOf("placa");
+  const placa = String(body.placa || "").trim().toUpperCase();
+  if (!placa) return { ok: false, error: "Placa requerida" };
+
+  const fila = [
+    body.vehiculo_id || Date.now(),
+    placa,
+    body.marca || "",
+    body.modelo || "",
+    body.color || "",
+    body.capacidad_und || "",
+    body.conductor_nombre || "",
+    body.conductor_cel || "",
+    body.conductor_cc || "",
+    body.estado || "Activo",
+    body.notas || ""
+  ];
+
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colPlaca]).trim().toUpperCase() === placa) {
+      hoja.getRange(i + 1, 1, 1, fila.length).setValues([fila]);
+      return { ok: true, mensaje: `Vehículo ${placa} actualizado` };
+    }
+  }
+  hoja.appendRow(fila);
+  return { ok: true, mensaje: `Vehículo ${placa} agregado a la biblioteca` };
 }
 
 function registrarCurado(body) {
