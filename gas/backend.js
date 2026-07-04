@@ -152,6 +152,9 @@ function doPost(e) {
       case "registrarAveria":
         resultado = registrarAveria(body);
         break;
+      case "registrarNovedadDespacho":
+        resultado = registrarNovedadDespacho(body);
+        break;
       case "registrarNovedad":
         resultado = registrarNovedad(body);
         break;
@@ -739,6 +742,39 @@ function actualizarCantDespachada(detalle_id, ap_id, cantDespachada) {
 
 // Mantenida por compatibilidad — usa la categoría "cargue" por defecto.
 // A partir del 03/07/2026, usar registrarNovedad(body) con body.categoria.
+// Guarda una novedad de despacho (varado, reprogramado, etc.) en una
+// hoja dedicada NOVEDADES_DESPACHO para trazabilidad y auditoría.
+// El WhatsApp lo gestiona el frontend; aquí solo persistimos el registro.
+function registrarNovedadDespacho(body) {
+  const ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+  let hoja   = ss.getSheetByName("NOVEDADES_DESPACHO");
+  if (!hoja) {
+    hoja = ss.insertSheet("NOVEDADES_DESPACHO");
+    hoja.getRange(1, 1, 1, 7).setValues([["id","ap_id","tipo_novedad","detalle","nueva_fecha","resumen","fecha_registro"]]);
+    hoja.getRange(1, 1, 1, 7).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
+  }
+  const id = hoja.getLastRow();  // ID simple = número de fila
+  hoja.appendRow([
+    id,
+    body.ap_id        || "",
+    body.tipo_novedad || "",
+    body.detalle_novedad || "",
+    body.nueva_fecha  || "",
+    body.resumen      || "",
+    new Date()
+  ]);
+
+  // También actualizar el estado de la AP si aplica
+  if (body.tipo_novedad && body.tipo_novedad.includes("Cancelada")) {
+    actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Cancelado" });
+  } else if (body.tipo_novedad && body.tipo_novedad.includes("Reprogramada")) {
+    actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Pendiente" });
+  }
+
+  return { ok: true, mensaje: "Novedad registrada: " + (body.tipo_novedad || ""), id };
+}
+
 function registrarAveria(body) {
   return registrarNovedad({ ...body, categoria: "cargue" });
 }

@@ -608,6 +608,59 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   </div>
 </div>
 
+<!-- MODAL NOVEDAD DE DESPACHO -->
+<div id="modalNovedad" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalNovedad')">✕</button>
+    <div class="modal-title">⚠️ Registrar Novedad de Despacho</div>
+    <p style="font-size:0.78rem;color:#666;margin-bottom:1rem;">
+      Esta novedad le llegará por WhatsApp al vendedor responsable de la AP.
+    </p>
+    <input type="hidden" id="novedadApId">
+
+    <div class="form-group">
+      <label class="form-label">Tipo de novedad *</label>
+      <select id="tipoNovedad" class="form-control" onchange="toggleNuevafecha()">
+        <option value="">— Seleccionar —</option>
+        <option value="🚛 Transporte varado">🚛 Transporte varado</option>
+        <option value="📅 Reprogramada por cliente">📅 Reprogramada por cliente</option>
+        <option value="📅 Reprogramada por logística">📅 Reprogramada por logística</option>
+        <option value="❌ Cancelada por el cliente">❌ Cancelada por el cliente</option>
+        <option value="📦 Entrega parcial ejecutada">📦 Entrega parcial ejecutada</option>
+        <option value="🔄 En tránsito">🔄 En tránsito — salió del patio</option>
+        <option value="✅ Entregada y confirmada">✅ Entregada y confirmada por el cliente</option>
+        <option value="⚠️ Incidencia en entrega">⚠️ Incidencia en entrega</option>
+      </select>
+    </div>
+
+    <div id="grupaNuevaFecha" style="display:none;">
+      <div class="form-group">
+        <label class="form-label">Nueva fecha de entrega</label>
+        <input id="novedadNuevaFecha" class="form-control" type="date">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Detalle de la novedad *</label>
+      <textarea id="detalleNovedad" class="form-control" rows="3"
+        placeholder="Ej: Guillermo se varó en la vía Cali-Yumbo, se reprograma para el lunes..."
+        style="resize:none;"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notificar a (vendedor de la AP)</label>
+      <div id="novedadDestinatarios" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <div id="previewNovedad" class="card" style="background:var(--gris);display:none;margin-top:0.75rem;">
+      <div class="card-title" style="font-size:0.8rem;">Vista previa WhatsApp</div>
+      <div id="novedadPreviewTexto" style="font-size:0.74rem;white-space:pre-wrap;color:#333;line-height:1.6;"></div>
+    </div>
+
+    <div id="botonesNovedad" style="margin-top:1rem;display:flex;flex-direction:column;gap:0.5rem;"></div>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav class="nav-bottom" id="navBottom" style="display:none;">
   <button class="nav-btn active" onclick="irA('screenHome')"        id="navHome">        <span class="icon">🏠</span>Inicio</button>
@@ -1085,8 +1138,8 @@ function renderAPs() {
       ? '<span class="estado-badge est-parcial">Saldo Pendiente</span>'
       : '<span class="estado-badge est-pendiente">Pendiente</span>';
     return `
-    <div class="ap-card ${est}" onclick="abrirDespacho('${ap.ap_id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div class="ap-card ${est}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;" onclick="abrirDespacho('${ap.ap_id}')">
         <div>
           <div class="ap-id">AP #${ap.ap_id}</div>
           <div class="ap-cliente">${nombreCliente(ap.cliente_nit)}</div>
@@ -1100,6 +1153,17 @@ function renderAPs() {
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
         </div>
         ${badge}
+      </div>
+      ${ap.ultima_novedad
+        ? `<div style="font-size:0.70rem;color:#c67c00;margin-top:6px;padding-top:6px;border-top:1px solid #f0e0cc;">
+             ⚠️ ${ap.ultima_novedad}
+           </div>`
+        : ''}
+      <div style="margin-top:8px;text-align:right;">
+        <button class="btn btn-outline btn-sm" style="font-size:0.72rem;padding:4px 10px;"
+          onclick="event.stopPropagation();abrirModalNovedad('${ap.ap_id}')">
+          ⚠️ Registrar Novedad
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -1714,6 +1778,143 @@ function enviarWA(numero, msgEncoded) {
   if (!numero) { toast("Este funcionario no tiene número WhatsApp"); return; }
   const url = `https://wa.me/${numero}?text=${msgEncoded}`;
   window.open(url, '_blank');
+}
+
+// =============================================================================
+// NOVEDADES DE DESPACHO
+// =============================================================================
+
+function toggleNuevafecha() {
+  const tipo = document.getElementById('tipoNovedad')?.value || '';
+  const mostrar = tipo.includes('Reprogramada');
+  const grp = document.getElementById('grupaNuevaFecha');
+  if (grp) grp.style.display = mostrar ? 'block' : 'none';
+  generarPreviewNovedad();
+}
+
+function abrirModalNovedad(ap_id) {
+  const ap = S.aps.find(a => String(a.ap_id) === String(ap_id));
+  if (!ap) { toast('AP no encontrada'); return; }
+
+  document.getElementById('novedadApId').value    = ap_id;
+  document.getElementById('tipoNovedad').value    = '';
+  document.getElementById('detalleNovedad').value = '';
+  document.getElementById('novedadNuevaFecha').value = '';
+  document.getElementById('grupaNuevaFecha').style.display = 'none';
+  document.getElementById('previewNovedad').style.display  = 'none';
+  document.getElementById('botonesNovedad').innerHTML = '';
+
+  // Identificar el vendedor responsable de esta AP para notificarle
+  const vendedorId   = String(ap.vendedor_id || '');
+  const vendedores   = S.clientes_config || [];        // Se cargará si no existe
+  const funcionarios = S.funcionarios || [];
+
+  // Construir lista de destinatarios: funcionarios activos + vendedor si tiene WA
+  const destHtml = funcionarios.filter(f => f.activo && f.wa).map(f => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;">
+      <input type="checkbox" value="${f.wa}" data-nombre="${f.nombre}"
+        ${f.recibe ? 'checked' : ''} style="width:16px;height:16px;">
+      <div>
+        <div style="font-size:0.82rem;font-weight:700;">${f.nombre}</div>
+        <div style="font-size:0.70rem;color:#888;">${f.cargo}</div>
+      </div>
+    </label>
+  `).join('');
+
+  document.getElementById('novedadDestinatarios').innerHTML =
+    destHtml || '<div style="font-size:0.78rem;color:#888;">Sin funcionarios con WhatsApp registrados.<br>Agrégalos en "👥 Personal".</div>';
+
+  // Actualizar preview al cambiar campos
+  ['tipoNovedad','detalleNovedad','novedadNuevaFecha'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.oninput = el.onchange = generarPreviewNovedad;
+  });
+  document.querySelectorAll('#novedadDestinatarios input[type=checkbox]')
+    .forEach(cb => { cb.onchange = generarPreviewNovedad; });
+
+  document.getElementById('modalNovedad').classList.add('show');
+}
+
+function generarPreviewNovedad() {
+  const ap_id   = document.getElementById('novedadApId')?.value;
+  const tipo    = document.getElementById('tipoNovedad')?.value || '';
+  const detalle = document.getElementById('detalleNovedad')?.value || '';
+  const fecha   = document.getElementById('novedadNuevaFecha')?.value || '';
+  const ap      = S.aps.find(a => String(a.ap_id) === String(ap_id));
+  if (!tipo || !detalle || !ap) {
+    document.getElementById('previewNovedad').style.display = 'none';
+    document.getElementById('botonesNovedad').innerHTML = '';
+    return;
+  }
+
+  const cliente = nombreCliente(ap.cliente_nit);
+  const ahora   = new Date();
+  const hora    = ahora.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+  const fechaHoy = ahora.toLocaleDateString('es-CO');
+
+  let msg = `⚠️ *NOVEDAD DE DESPACHO — POSTEC*
+`;
+  msg += `━━━━━━━━━━━━━━━━━━━━
+`;
+  msg += `📋 *AP #${ap_id}* — ${cliente}
+`;
+  msg += `🚚 ${ap.tipo_entrega || ''}
+`;
+  msg += `📅 ${fechaHoy} a las ${hora}
+`;
+  msg += `━━━━━━━━━━━━━━━━━━━━
+`;
+  msg += `*Novedad:* ${tipo}
+`;
+  if (fecha) msg += `📆 *Nueva fecha:* ${fecha}
+`;
+  msg += `
+*Detalle:*
+${detalle}
+`;
+  msg += `━━━━━━━━━━━━━━━━━━━━
+`;
+  msg += `_Reportado por: Valentina García — Despacho POSTEC_`;
+
+  document.getElementById('novedadPreviewTexto').textContent = msg;
+  document.getElementById('previewNovedad').style.display = 'block';
+
+  // Botones para cada destinatario seleccionado
+  const checks = Array.from(document.querySelectorAll('#novedadDestinatarios input[type=checkbox]:checked'));
+  const encoded = encodeURIComponent(msg);
+  document.getElementById('botonesNovedad').innerHTML = checks.length
+    ? checks.map(cb => `
+        <button class="btn btn-success" onclick="enviarNovedadWA('${cb.value}','${encoded}','${ap_id}','${encodeURIComponent(tipo)}','${encodeURIComponent(detalle)}')">
+          📲 Enviar a ${cb.dataset.nombre?.split(' ')[0] || cb.value}
+        </button>`).join('')
+    : '<p style="font-size:0.78rem;color:#888;text-align:center;">Selecciona al menos un destinatario arriba</p>';
+}
+
+async function enviarNovedadWA(numero, msgEncoded, ap_id, tipoEnc, detalleEnc) {
+  const tipo    = decodeURIComponent(tipoEnc);
+  const detalle = decodeURIComponent(detalleEnc);
+  const fecha   = document.getElementById('novedadNuevaFecha')?.value || '';
+
+  // Guardar la novedad en el backend
+  const resumen = `${tipo}${fecha ? ' | Nueva fecha: '+fecha : ''} — ${detalle.slice(0,80)}${detalle.length>80?'...':''}`;
+  await escribirGAS({
+    accion:       'registrarNovedadDespacho',
+    ap_id,
+    tipo_novedad: tipo,
+    detalle_novedad: detalle,
+    nueva_fecha:  fecha,
+    resumen
+  });
+
+  // Marcar la novedad en la AP local para que aparezca en la tarjeta
+  const apIdx = S.aps.findIndex(a => String(a.ap_id) === String(ap_id));
+  if (apIdx >= 0) S.aps[apIdx].ultima_novedad = resumen;
+  renderAPs();
+
+  // Abrir WhatsApp
+  window.open(`https://wa.me/${numero}?text=${msgEncoded}`, '_blank');
+  cerrarModal('modalNovedad');
+  toast('✅ Novedad registrada y WhatsApp enviado');
 }
 
 // =============================================================================
