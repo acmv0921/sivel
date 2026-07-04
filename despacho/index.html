@@ -1094,6 +1094,10 @@ function renderAPs() {
             <span>📅 ${fmtFecha(ap.fecha_creacion)}</span>
             <span>${ap.tipo_entrega||''}</span>
           </div>
+          ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:3px;">🗓️ Entrega: ${ap.fecha_entrega}</div>` : ''}
+          ${ap.obs_entrega ? `<div style="font-size:0.70rem;color:#555;margin-top:2px;">💬 ${ap.obs_entrega}</div>` : ''}
+          ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
+          ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
         </div>
         ${badge}
       </div>
@@ -1134,6 +1138,10 @@ function abrirDespacho(ap_id) {
     <div style="background:var(--gris);border-radius:8px;padding:10px 12px;margin-bottom:1rem;">
       <div style="font-weight:700;">${nombreCliente(ap.cliente_nit)}</div>
       <div style="font-size:0.75rem;color:#666;">${ap.tipo_entrega} · ${ap.estado_ap}</div>
+      ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:4px;">🗓️ Entrega solicitada: <b>${ap.fecha_entrega}</b></div>` : ''}
+      ${ap.obs_entrega ? `<div style="font-size:0.71rem;color:#555;margin-top:3px;">💬 ${ap.obs_entrega}</div>` : ''}
+      ${ap.direccion_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:3px;">📍 Obra: ${ap.direccion_obra}</div>` : ''}
+      ${ap.contacto_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">👤 Contacto: ${ap.contacto_obra}${ap.cel_contacto ? ' — <a href="tel:'+ap.cel_contacto+'" style="color:var(--verde);">'+ap.cel_contacto+'</a>' : ''}</div>` : ''}
     </div>
 
     <!-- VEHÍCULO -->

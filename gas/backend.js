@@ -523,8 +523,13 @@ function crearPreventa(body) {
     body.cliente_nit,
     body.vendedor_id,
     new Date(),
-    body.tipo_entrega || "Venta en Planta",
-    "Pendiente"
+    body.tipo_entrega      || "Venta en Planta",
+    "Pendiente",
+    body.fecha_entrega     || "",   // Fecha de entrega solicitada
+    body.obs_entrega       || "",   // Observaciones de entrega
+    body.direccion_obra    || "",   // Dirección de la obra
+    body.contacto_obra     || "",   // Nombre contacto en obra
+    body.cel_contacto      || ""    // Celular contacto en obra
   ]);
 
   // Agregar líneas de detalle si vienen incluidas

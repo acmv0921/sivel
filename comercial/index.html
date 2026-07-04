@@ -467,7 +467,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div id="metaActualizacion" style="font-size:.72rem;color:#888;margin-bottom:.5rem;">Última actualización: —</div>
       <div class="search-box form-group">
         <span class="search-icon">🔍</span>
-        <input id="buscarProd" class="form-control" placeholder="Buscar producto..." oninput="filtrarProductos()">
+        <input id="buscarProd" class="form-control" placeholder="Buscar por nombre o código (ej: 3302)..." oninput="filtrarProductos()">
       </div>
     </div>
     <div id="listaInventario">
@@ -527,11 +527,36 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <!-- PASO 2: Tipo entrega -->
         <div class="form-group">
           <label class="form-label">Tipo de entrega</label>
-          <select id="tipoEntrega" class="form-control" onchange="calcularTotales()">
+          <select id="tipoEntrega" class="form-control" onchange="calcularTotales(); toggleDatosEntrega();">
             <option value="Venta en Planta">🏭 Venta en Planta</option>
             <option value="Con Transporte - Zona A">🚛 Con Transporte — Zona A (Cali / Andenes)</option>
             <option value="Con Transporte - Zona B">🚛 Con Transporte — Zona B (Yumbo / CENCAR)</option>
           </select>
+        </div>
+
+        <!-- PASO 2b: Datos de entrega (campo) -->
+        <div id="datosEntregaExtra" style="display:none;">
+          <div class="form-group" style="margin-top:0.75rem;">
+            <label class="form-label">📍 Dirección de entrega / obra</label>
+            <input id="direccionObra" class="form-control" placeholder="Ej: Cra 5 # 23-10, Urbanización Los Pinos...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">👤 Contacto en obra (nombre)</label>
+            <input id="contactoObra" class="form-control" placeholder="Nombre del almacenista o encargado">
+          </div>
+          <div class="form-group">
+            <label class="form-label">📱 Celular contacto en obra</label>
+            <input id="celContactoObra" class="form-control" type="tel" placeholder="3001234567">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:0.5rem;">
+          <label class="form-label">📅 Fecha de entrega solicitada</label>
+          <input id="fechaEntregaSolicitada" class="form-control" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🕐 Observaciones de entrega</label>
+          <input id="obsEntrega" class="form-control" placeholder="Ej: Solo antes de las 9AM, llamar antes de llegar...">
         </div>
 
         <!-- PASO 3: Agregar productos -->
@@ -639,7 +664,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     <div class="modal-title">Agregar Producto</div>
     <div class="search-box form-group">
       <span class="search-icon">🔍</span>
-      <input id="buscarProdModal" class="form-control" placeholder="Buscar..." oninput="filtrarProdModal()">
+      <input id="buscarProdModal" class="form-control" placeholder="Nombre o código del producto..." oninput="filtrarProdModal()">
     </div>
     <div id="listaProdModal"></div>
   </div>
@@ -1302,7 +1327,11 @@ function limpiarCliente() {
 }
 
 function limpiarPedido() {
-  STATE.pedido = { cliente:null, tipo_entrega:"Venta en Planta", lineas:[] };
+  STATE.pedido = { cliente:null, tipo_entrega:"Venta en Planta", lineas:[],
+    fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'' };
+  ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  toggleDatosEntrega();
   limpiarCliente();
   renderLineasAP();
   calcularTotales();
@@ -1435,10 +1464,21 @@ function eliminarLinea(i) {
 // =============================================================================
 // CÁLCULO FINANCIERO
 // =============================================================================
+function toggleDatosEntrega() {
+  const tipo = document.getElementById('tipoEntrega')?.value || '';
+  const extra = document.getElementById('datosEntregaExtra');
+  if (extra) extra.style.display = tipo.includes('Transporte') ? 'block' : 'none';
+}
+
 function calcularTotales() {
   const lineas = STATE.pedido.lineas;
   const tipo   = document.getElementById('tipoEntrega')?.value || "Venta en Planta";
-  STATE.pedido.tipo_entrega = tipo;
+  STATE.pedido.tipo_entrega     = tipo;
+  STATE.pedido.fecha_entrega    = document.getElementById('fechaEntregaSolicitada')?.value || '';
+  STATE.pedido.obs_entrega      = document.getElementById('obsEntrega')?.value || '';
+  STATE.pedido.direccion_obra   = document.getElementById('direccionObra')?.value || '';
+  STATE.pedido.contacto_obra    = document.getElementById('contactoObra')?.value || '';
+  STATE.pedido.cel_contacto     = document.getElementById('celContactoObra')?.value || '';
 
   if (!lineas.length) {
     document.getElementById('resumenAP').style.display = 'none';
@@ -1482,7 +1522,12 @@ async function guardarAP() {
     accion:       'crearPreventa',
     cliente_nit:  STATE.pedido.cliente.cliente_nit,
     vendedor_id:  STATE.vendedor.id_vendedor,
-    tipo_entrega: STATE.pedido.tipo_entrega,
+    tipo_entrega:      STATE.pedido.tipo_entrega,
+    fecha_entrega:     STATE.pedido.fecha_entrega     || '',
+    obs_entrega:       STATE.pedido.obs_entrega       || '',
+    direccion_obra:    STATE.pedido.direccion_obra    || '',
+    contacto_obra:     STATE.pedido.contacto_obra     || '',
+    cel_contacto:      STATE.pedido.cel_contacto      || '',
     detalle:      STATE.pedido.lineas.map(l => ({
       tmcode:              l.tmcode,
       cantidad_solicitada: l.cantidad_solicitada,
