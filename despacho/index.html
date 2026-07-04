@@ -1228,7 +1228,25 @@ function abrirDespacho(ap_id) {
     html2 += `
     <div class="linea-desp">
       <div class="linea-desp-title">${nombreProducto(l.tmcode)}</div>
-      <div class="linea-desp-meta">Solicitado: ${sol} ${und} · Despachado: ${desp} · <strong>Pendiente: ${pend} ${und}</strong></div>
+      <div class="linea-desp-meta">
+        Solicitado: ${sol} ${und} · Despachado: ${desp} · <strong>Pendiente: ${pend} ${und}</strong>
+      </div>
+      <div style="margin:4px 0;">
+        <label style="font-size:0.75rem;font-weight:700;display:block;margin-bottom:3px;">🏷️ Tipo de producto</label>
+        <div style="display:flex;gap:6px;">
+          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id} active"
+            data-tipo="A" onclick="seleccionarTipo(this,${l.detalle_id})"
+            style="flex:1;font-size:0.75rem;background:var(--verde);color:#fff;border-color:var(--verde);">
+            ✅ Tipo A — Primera
+          </button>
+          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id}"
+            data-tipo="B" onclick="seleccionarTipo(this,${l.detalle_id})"
+            style="flex:1;font-size:0.75rem;">
+            ⚠️ Tipo B — Segunda
+          </button>
+        </div>
+        <input type="hidden" id="tipoProd_${l.detalle_id}" value="A">
+      </div>
       <input class="input-cant" id="carga_${l.detalle_id}"
              type="number" min="0" max="${pend}" value="${pend}"
              oninput="verificarSaldo(${l.detalle_id},${pend},'${und}')">
@@ -1237,6 +1255,23 @@ function abrirDespacho(ap_id) {
   });
 
   html2 += `
+    <!-- ALERTA DE CARGUE MANUAL -->
+    <div class="form-group" style="margin-top:0.75rem;padding:0.75rem;background:#fff8e6;border-radius:10px;border:1px solid #f0d080;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="cargueManualCheck" style="width:18px;height:18px;" onchange="toggleCargueManual()">
+        <span style="font-size:0.82rem;font-weight:700;">🏗️ ¿Requiere cargue manual?</span>
+      </label>
+      <div id="cargueManualDetalles" style="display:none;margin-top:8px;">
+        <div style="font-size:0.75rem;color:#666;margin-bottom:6px;">
+          Avisa a producción para disponer personal (Fernando / Ascisa)
+        </div>
+        <input id="cargueManualFecha" class="form-control" type="datetime-local"
+          placeholder="Fecha y hora estimada del cargue">
+        <input id="cargueManualNota" class="form-control" type="text"
+          placeholder="Observaciones del cargue manual..." style="margin-top:6px;">
+      </div>
+    </div>
+
     <!-- FOTOS — MÍNIMO 3 -->
     <div class="form-group" style="margin-top:1rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1295,6 +1330,7 @@ async function confirmarDespacho() {
     const desp  = parseFloat(l.cantidad_despachada) || 0;
     const pend  = sol - desp;
     const carga = parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || pend;
+          const tipo  = document.getElementById(`tipoProd_${l.detalle_id}`)?.value || 'A';
     if (carga < pend) todoCompleto = false;
 
     await escribirGAS({
@@ -1302,6 +1338,7 @@ async function confirmarDespacho() {
       ap_id:              ap.ap_id,
       detalle_id:         l.detalle_id,
       tmcode:             l.tmcode,
+            tipo_producto:      tipo,
       tmund:              undProducto(l.tmcode),
       cant_real_cargada:  carga,
       cantidad_solicitada: pend,
@@ -1915,6 +1952,49 @@ async function enviarNovedadWA(numero, msgEncoded, ap_id, tipoEnc, detalleEnc) {
   window.open(`https://wa.me/${numero}?text=${msgEncoded}`, '_blank');
   cerrarModal('modalNovedad');
   toast('✅ Novedad registrada y WhatsApp enviado');
+}
+
+// =============================================================================
+// TIPO A/B y CARGUE MANUAL
+// =============================================================================
+
+function seleccionarTipo(btn, detalle_id) {
+  document.querySelectorAll(`.tipo-btn-${detalle_id}`).forEach(b => {
+    b.style.background = ''; b.style.color = ''; b.style.borderColor = '';
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  const esA = btn.dataset.tipo === 'A';
+  btn.style.background   = esA ? 'var(--verde)' : 'var(--naranja)';
+  btn.style.color        = '#fff';
+  btn.style.borderColor  = esA ? 'var(--verde)' : 'var(--naranja)';
+  const hidden = document.getElementById(`tipoProd_${detalle_id}`);
+  if (hidden) hidden.value = btn.dataset.tipo;
+}
+
+function toggleCargueManual() {
+  const checked = document.getElementById('cargueManualCheck')?.checked;
+  const det     = document.getElementById('cargueManualDetalles');
+  if (det) det.style.display = checked ? 'block' : 'none';
+}
+
+function getTiposProducto() {
+  // Retorna objeto { detalle_id: 'A'|'B' } para incluir en el payload
+  const tipos = {};
+  document.querySelectorAll('[id^="tipoProd_"]').forEach(el => {
+    const id = el.id.replace('tipoProd_', '');
+    tipos[id] = el.value || 'A';
+  });
+  return tipos;
+}
+
+function getCargueManual() {
+  if (!document.getElementById('cargueManualCheck')?.checked) return null;
+  return {
+    requiere: true,
+    fecha:    document.getElementById('cargueManualFecha')?.value || '',
+    nota:     document.getElementById('cargueManualNota')?.value  || ''
+  };
 }
 
 // =============================================================================

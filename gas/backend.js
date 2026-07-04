@@ -1,5 +1,5 @@
 // =============================================================================
-// SIVEL - Sistema Integrado de Ventas, Inventario y Logística
+// SIVIL - Sistema Integrado de Ventas, Inventario y Logística
 // POSTEC DE OCCIDENTE S.A.S.
 // Backend: Google Apps Script (GAS) v1.0
 // Arquitectura: GET público para lectura | POST no-cors para escritura
@@ -96,7 +96,7 @@ function doGet(e) {
         break;
 
       default:
-        resultado = { ok: true, mensaje: "SIVEL API v1.0 activa", timestamp: new Date().toISOString() };
+        resultado = { ok: true, mensaje: "SIVIL API v1.0 activa", timestamp: new Date().toISOString() };
     }
   } catch (err) {
     resultado = { ok: false, error: err.message };
@@ -684,6 +684,28 @@ function actualizarPrecio(body) {
 // MÓDULO: PATIO Y LOGÍSTICA
 // =============================================================================
 function registrarDespacho(body) {
+  // Registrar alerta de cargue manual si aplica
+  if (body.cargue_manual && body.cargue_manual.requiere) {
+    try {
+      const ss    = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+      let hCM     = ss.getSheetByName("ALERTAS_CARGUE_MANUAL");
+      if (!hCM) {
+        hCM = ss.insertSheet("ALERTAS_CARGUE_MANUAL");
+        hCM.getRange(1,1,1,5).setValues([["ap_id","fecha_cargue","nota","estado","fecha_registro"]]);
+        hCM.getRange(1,1,1,5).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
+        hCM.setFrozenRows(1);
+      }
+      hCM.appendRow([
+        body.ap_id||"",
+        body.cargue_manual.fecha||"",
+        body.cargue_manual.nota||"",
+        "Pendiente",
+        new Date()
+      ]);
+    } catch(e) { Logger.log("Alerta cargue manual: " + e.message); }
+  }
+
+
   const hoja       = getHoja(HOJAS.PATIO);
   const despacho_id = siguienteId(hoja, 0);
   const cantReal   = parseFloat(body.cant_real_cargada) || 0;

@@ -501,7 +501,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div id="paso1">
         <div class="form-group">
           <label class="form-label">🔍 Buscar cliente (NIT o nombre)</label>
-          <input id="buscarCliente" class="form-control" placeholder="Ej: 900123 o Constructora..." oninput="buscarClienteAP()">
+          <input id="buscarCliente" class="form-control" placeholder="NIT o nombre del cliente..." oninput="buscarClienteAP()">
         </div>
         <div id="resultadosCliente"></div>
 
@@ -629,6 +629,22 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <input id="visitaDireccion" class="form-control" placeholder="Ej: Cra 5 #23-45, Yumbo, Valle del Cauca">
     </div>
     <div class="form-group">
+      <label class="form-label">📞 Canal de contacto *</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;" id="canalBtns">
+        <button type="button" class="btn btn-outline btn-sm canal-btn active" data-canal="Visita presencial"
+          onclick="seleccionarCanal(this)" style="font-size:0.78rem;">🤝 Visita presencial</button>
+        <button type="button" class="btn btn-outline btn-sm canal-btn" data-canal="Llamada telefónica"
+          onclick="seleccionarCanal(this)" style="font-size:0.78rem;">📞 Llamada telefónica</button>
+        <button type="button" class="btn btn-outline btn-sm canal-btn" data-canal="WhatsApp"
+          onclick="seleccionarCanal(this)" style="font-size:0.78rem;">💬 WhatsApp</button>
+        <button type="button" class="btn btn-outline btn-sm canal-btn" data-canal="Correo electrónico"
+          onclick="seleccionarCanal(this)" style="font-size:0.78rem;">📧 Correo electrónico</button>
+      </div>
+      <input type="hidden" id="visitaCanal" value="Visita presencial">
+    </div>
+
+    <div id="seccionFotos">
+    <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <label class="form-label" style="margin:0;">📷 Fotos de la visita</label>
         <span id="visitaCnt" class="foto-cnt err">⚠️ 0/3</span>
@@ -642,6 +658,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
              multiple style="display:none;" onchange="agregarFotoVisita(this)">
       <div id="visitaFotos" class="thumb-grid"></div>
     </div>
+    </div><!-- /seccionFotos -->
     <div class="contacto-box">
       <div class="contacto-title">👥 CONTACTO VISITADO</div>
       <div class="form-group" style="margin-bottom:.5rem;"><label class="form-label">Nombre</label><input id="visitaContNombre" class="form-control" placeholder="Nombre del contacto"></div>
@@ -1141,7 +1158,7 @@ function renderInventario(filtro="") {
         <div style="flex:1;min-width:0;">
           <div style="font-size:0.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
           <div style="font-weight:700;font-size:0.9rem;margin:2px 0;">${p.tmdescrip}</div>
-          <div style="font-size:0.75rem;color:#666;">${p.tmund}</div>
+          <div style="font-size:0.75rem;color:#666;">${p.tmund}${p.precio_base ? ' · <b style="color:var(--azul2);">'+fmt(p.precio_base)+'/und</b>' : ''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div class="semaforo sem-${p.semaforo.toLowerCase()}">${p.semaforo === 'VERDE' ? '🟢' : p.semaforo === 'AMARILLO' ? '🟡' : '🔴'} ${p.disponible}</div>
@@ -1288,7 +1305,7 @@ function filtrarClientes() {
 function buscarClienteAP() {
   const q    = document.getElementById('buscarCliente').value.toLowerCase();
   const cont = document.getElementById('resultadosCliente');
-  if (q.length < 2) { cont.innerHTML = ''; return; }
+  if (q.length < 2) { cont.innerHTML = q.length === 1 ? '<div style="text-align:center;color:#888;font-size:0.78rem;padding:8px;">Escribe al menos 2 caracteres...</div>' : ''; return; }
 
   const res = STATE.clientes.filter(c =>
     String(c.razon_social).toLowerCase().includes(q) ||
@@ -1789,11 +1806,30 @@ function verFotoGrande(src) {
   document.body.appendChild(overlay);
 }
 
+function seleccionarCanal(btn) {
+  document.querySelectorAll('.canal-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
+    b.style.borderColor = '';
+  });
+  btn.classList.add('active');
+  btn.style.background = 'var(--azul)';
+  btn.style.color = '#fff';
+  document.getElementById('visitaCanal').value = btn.dataset.canal;
+  const presencial = btn.dataset.canal === 'Visita presencial';
+  const sf = document.getElementById('seccionFotos');
+  const gd = document.querySelector('#modalVisita .gps-pill')?.closest('div');
+  if (sf) sf.style.display = presencial ? 'block' : 'none';
+  if (gd) gd.style.display = presencial ? 'flex'  : 'none';
+}
+
 async function guardarVisita(){
-  if(_VFOTOS.length<3){toast('⚠️ Mínimo 3 fotos requeridas');return;}
+  const canal = document.getElementById('visitaCanal')?.value || 'Visita presencial';
+  if(canal === 'Visita presencial' && _VFOTOS.length<3){toast('⚠️ Visita presencial: mínimo 3 fotos');return;}
   if(!_VCLI){toast('Sin cliente');return;}
   const dir=document.getElementById('visitaDireccion')?.value.trim()||'';
-  const reg={id:Date.now(),cliente:_VCLI,gps:_VGPS,direccion:dir,
+  const reg={id:Date.now(),cliente:_VCLI,gps:_VGPS,direccion:dir,canal:canal,
     contacto:{nombre:document.getElementById('visitaContNombre')?.value.trim()||'',
     cel:document.getElementById('visitaContCel')?.value.trim()||'',
     correo:document.getElementById('visitaContCorreo')?.value.trim()||''},
@@ -1822,7 +1858,8 @@ function abrirWAVisita(registro) {
 🕐 Hora: ${registro.hora}
 📍 Ubicación: ${gpsLink}
 ${registro.notas ? '📝 Notas: ' + registro.notas : ''}
-📷 Fotos: ${registro.fotos.length} foto(s) registrada(s)
+📞 Canal: ${registro.canal||'Visita presencial'}
+📷 Fotos: ${registro.fotos.length > 0 ? registro.fotos.length+' foto(s) registrada(s)' : 'Sin fotos (contacto remoto)'}
 ━━━━━━━━━━━━━━━━━━
 _SIVIL · POSTECSA v1.0_`;
 

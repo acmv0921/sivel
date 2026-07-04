@@ -390,6 +390,12 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div id="chartEstados"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
+    <!-- CURADO PRÓXIMO A LIBERAR -->
+    <div class="card">
+      <div class="card-title">⏳ En Curado — Próximo a Liberar</div>
+      <div id="resumenCurado"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
     <!-- INVENTARIO RESUMEN -->
     <div class="card">
       <div class="card-title">📦 Inventario Dinámico</div>
@@ -594,7 +600,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 <!-- NAV -->
 <nav class="nav-bottom" id="navBottom" style="display:none;">
   <button class="nav-btn active" onclick="irA('screenDashboard')"   id="navDash">   <span class="icon">📊</span>Dashboard</button>
-  <button class="nav-btn"        onclick="irA('screenAlertas')"     id="navAlertas"> <span class="icon">🚨</span>Producción</button>
+  <button class="nav-btn"        onclick="irA('screenAlertas')"     id="navAlertas"> <span class="icon">🚨</span>Producción<span id="navAlertasBadge" style="display:none;background:var(--rojo);color:#fff;border-radius:10px;font-size:.55rem;font-weight:800;padding:1px 5px;margin-left:3px;"></span></button>
   <button class="nav-btn"        onclick="irA('screenAprobaciones')" id="navAprobac"> <span class="icon">✅</span>Aprobac.</button>
   <button class="nav-btn"        onclick="irA('screenPrecios')"     id="navPrecios"> <span class="icon">💰</span>Precios</button>
   <button class="nav-btn"        onclick="irA('screenUsuarios')"    id="navUsuarios"><span class="icon">👥</span>Usuarios</button>
@@ -866,6 +872,7 @@ async function cargarDatos() {
     cargarMetaActualizacion();
     calcularInventarioDinamico();
     renderDashboard();
+    renderCuradoDashboard();
     renderAlertas();
     renderAprobaciones();
     renderPrecios();
@@ -981,28 +988,42 @@ function renderAlertas() {
     cont.innerHTML='<div class="card" style="text-align:center;color:var(--verde);font-weight:700;padding:2rem;">✅ Sin alertas de producción</div>';
   } else {
     cont.innerHTML=[...criticas,...altas].map(p=>`
-      <div class="alerta-prod ${p.disponible<-10?'':'alta'}">
+      <div class="alerta-prod ${p.disponible<=-10?'':'alta'}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
+          <div style="flex:1;">
+            <div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode} · ${p.tmund}</div>
             <div class="alerta-prod-title">${p.tmdescrip}</div>
-            <div style="font-size:.75rem;color:#666;margin-top:2px;">${p.tmund} · Stock bruto: ${p.tmcant}</div>
+            <div style="font-size:.7rem;color:#666;margin-top:3px;">
+              🔒 Comprometido: <b>${p.comprometido}</b> · ⏳ Curado: <b>${p.curado}</b> · ⚡ Averías: <b>${p.averias}</b>
+            </div>
           </div>
-          <div style="text-align:right;">
+          <div style="text-align:right;flex-shrink:0;margin-left:8px;">
             <div class="alerta-num" style="color:${p.disponible<=-10?'var(--rojo)':'var(--amarillo)'};">${p.disponible}</div>
-            <div style="font-size:.65rem;color:#888;">disponible</div>
+            <div style="font-size:.62rem;color:#888;">disponible</div>
+            <div style="font-size:.68rem;color:#888;margin-top:2px;">Bruto: ${p.tmcant}</div>
           </div>
         </div>
-        <div style="margin-top:8px;background:var(--gris);border-radius:8px;padding:8px 10px;">
-          <div style="font-size:.72rem;font-weight:700;color:${p.disponible<=-10?'var(--rojo)':'var(--amarillo)'};">
-            ${p.disponible<=-10?'🚨 URGENTE':'⚠️ ALTA'} — Producir mínimo
-            <span style="font-size:1rem;font-weight:800;"> ${Math.abs(p.disponible)+5} ${p.tmund}</span>
+        <div style="margin-top:8px;background:${p.disponible<=-10?'#fff0f0':'#fffbe6'};border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div>
+            <div style="font-size:.75rem;font-weight:800;color:${p.disponible<=-10?'var(--rojo)':'var(--amarillo)'};">
+              ${p.disponible<=-10?'🚨 URGENTE':'⚠️ ALTA'} — Producir
+              <span style="font-size:1.05rem;"> ${Math.abs(p.disponible)+5} ${p.tmund}</span>
+            </div>
           </div>
-          <div style="font-size:.68rem;color:#666;margin-top:2px;">
-            Comprometido: ${p.comprometido} · En curado: ${p.curado} · Averías: ${p.averias}
-          </div>
+          <button onclick="alertaWA('${p.tmcode}','${p.tmdescrip}',${p.disponible},${Math.abs(p.disponible)+5},'${p.tmund}')"
+            style="background:${p.disponible<=-10?'#25D366':'#f0a000'};color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.72rem;font-weight:700;cursor:pointer;flex-shrink:0;">
+            📲 WA
+          </button>
         </div>
       </div>`).join('');
+  }
+
+  // Actualizar badge de alertas en el nav
+  const totalAlertas = criticas.length + altas.length;
+  const badge = document.getElementById('navAlertasBadge');
+  if (badge) {
+    badge.textContent = totalAlertas || '';
+    badge.style.display = totalAlertas > 0 ? 'inline' : 'none';
   }
 
   // Inventario completo
@@ -1017,7 +1038,7 @@ function renderAlertas() {
             <td>${p.tmund}</td>
             <td>${p.tmcant}</td>
             <td style="font-weight:700;">${p.disponible}</td>
-            <td><span class="sem sem-${p.semaforo.toLowerCase()}">${p.semaforo==='VERDE'?'🟢':'p.semaforo'==='AMARILLO'?'🟡':'🔴'} ${p.semaforo}</span></td>
+            <td><span class="sem sem-${p.semaforo.toLowerCase()}">${p.semaforo==='VERDE'?'🟢':'p.semaforo==='AMARILLO'?'🟡':'🔴'} ${p.semaforo}</span></td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -1025,8 +1046,92 @@ function renderAlertas() {
 }
 
 // =============================================================================
+// ALERTA DE PRODUCCIÓN VÍA WHATSAPP
+// =============================================================================
+function alertaWA(tmcode, desc, disponible, aProducir, und) {
+  const urgente = disponible <= -10;
+  const fecha   = new Date().toLocaleDateString('es-CO');
+  const hora    = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
+  const msg = `${urgente?'🚨':'⚠️'} *ALERTA INVENTARIO — POSTEC*
+━━━━━━━━━━━━━━━━━━
+📦 Producto: *${desc}*
+🔢 Código: ${tmcode}
+📅 ${fecha} a las ${hora}
+━━━━━━━━━━━━━━━━━━
+📉 Disponible actual: *${disponible} ${und}*
+🏭 Se requiere producir: *${aProducir} ${und}*
+Nivel: ${urgente?'🚨 CRÍTICO — Atención inmediata':'⚠️ ALTO — Programar pronto'}
+━━━━━━━━━━━━━━━━━━
+_SIVIL · Gerencia POSTECSA_`;
+
+  // Usar los funcionarios configurados — filtrar quien recibe alertas de producción
+  const funcs = (G.funcionarios||[]).filter(f=>f.activo&&f.wa);
+  if (!funcs.length) {
+    // Si no hay funcionarios, abrir WA directo
+    const enc = encodeURIComponent(msg);
+    if (confirm('No hay funcionarios configurados. ¿Abrir WhatsApp de todas formas?')) {
+      window.open(`https://wa.me/?text=${enc}`, '_blank');
+    }
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      <div class="modal-title">${urgente?'🚨':'⚠️'} Enviar Alerta de Producción</div>
+      <div style="font-size:0.78rem;background:var(--gris);border-radius:8px;padding:10px;margin-bottom:1rem;white-space:pre-wrap;color:#333;line-height:1.5;max-height:160px;overflow-y:auto;">${msg}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${funcs.map(f=>`
+          <button class="btn btn-success" onclick="window.open('https://wa.me/${f.wa}?text=${encodeURIComponent(msg)}','_blank')">
+            📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}
+          </button>`).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+// =============================================================================
 // APROBACIONES DE DESCUENTOS
 // =============================================================================
+function renderCuradoDashboard() {
+  const cont = document.getElementById('resumenCurado');
+  if (!cont) return;
+  const hoy  = new Date();
+  const curados = G.curados || [];
+  const proximos = curados.filter(c => {
+    if (!c.fecha_liberacion_curado) return false;
+    const lib = new Date(c.fecha_liberacion_curado);
+    const dias = Math.ceil((lib - hoy) / 86400000);
+    return dias <= 7;  // próximos 7 días
+  }).sort((a,b) => new Date(a.fecha_liberacion_curado) - new Date(b.fecha_liberacion_curado));
+
+  if (!proximos.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;font-size:0.82rem;padding:1rem;">Sin lotes listos en los próximos 7 días</div>';
+    return;
+  }
+
+  cont.innerHTML = proximos.map(c => {
+    const lib  = new Date(c.fecha_liberacion_curado);
+    const dias = Math.ceil((lib - hoy) / 86400000);
+    const color = dias <= 0 ? 'var(--verde)' : dias <= 2 ? 'var(--amarillo)' : 'var(--azul2)';
+    const prod  = G.inventario?.find(p => String(p.tmcode) === String(c.tmcode));
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--borde);">
+      <div style="text-align:center;background:${color}15;border-radius:8px;padding:6px 10px;min-width:44px;">
+        <div style="font-size:1.2rem;font-weight:800;color:${color};">${dias<=0?'¡YA!':dias}</div>
+        <div style="font-size:.58rem;color:${color};font-weight:700;">${dias<=0?'LISTO':'DÍAS'}</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:.82rem;font-weight:700;">${prod ? prod.tmdescrip : 'COD '+c.tmcode}</div>
+        <div style="font-size:.70rem;color:#666;">${c.cant_en_curado} UND · Libre: ${new Date(c.fecha_liberacion_curado).toLocaleDateString('es-CO')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderAprobaciones() {
   const cont  = document.getElementById('listaPendientesAprobacion');
   const pend  = G.aprobaciones.filter(a=>a.estado==='pendiente');
