@@ -1528,6 +1528,7 @@ function renderSelectorVehiculo(contenedorId) {
       <div class="form-group"><label class="form-label">Color</label><input id="nvColor" class="form-control" placeholder="Blanco, Rojo..."></div>
       <div class="form-group"><label class="form-label">Conductor *</label><input id="nvConductor" class="form-control" placeholder="Nombre completo"></div>
       <div class="form-group"><label class="form-label">Celular conductor *</label><input id="nvCel" class="form-control" type="tel" placeholder="3001234567"></div>
+      <div><label class="form-label">Tonelaje (ton)</label><input id="nvTonelaje" class="form-control" type="number" min="1" max="40" placeholder="Ej: 12" step="0.5"></div>
       <button class="btn btn-primary btn-sm" onclick="guardarNuevoVehiculo()">💾 Guardar vehículo</button>
     </div>`;
 }
@@ -1585,6 +1586,7 @@ async function guardarNuevoVehiculo() {
     placa,
     marca:            document.getElementById('nvMarca')?.value.trim()||'',
     color:            document.getElementById('nvColor')?.value.trim()||'',
+    capacidad_und:    parseFloat(document.getElementById('nvTonelaje')?.value)||'',
     conductor_nombre: conductor,
     conductor_cel:    cel,
     estado:           'Activo'
