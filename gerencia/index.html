@@ -1096,7 +1096,7 @@ function renderAlertas() {
             <td>${p.tmund}</td>
             <td>${p.tmcant}</td>
             <td style="font-weight:700;">${p.disponible}</td>
-            <td><span class="sem sem-${p.semaforo.toLowerCase()}">${p.semaforo==='VERDE'?'🟢':'p.semaforo==='AMARILLO'?'🟡':'🔴'} ${p.semaforo}</span></td>
+            <td><span class="sem sem-${p.semaforo.toLowerCase()}">${p.semaforo==='VERDE'?'🟢':p.semaforo==='AMARILLO'?'🟡':'🔴'} ${p.semaforo}</span></td>
           </tr>`).join('')}
         </tbody>
       </table>
