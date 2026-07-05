@@ -95,6 +95,8 @@ function doGet(e) {
         resultado = getAlertasProduccion();
         break;
 
+      case "getPromociones":   resultado = getPromociones(); break;
+      case "getConsecutivoAP": resultado = getConsecutivoAP(); break;
       default:
         resultado = { ok: true, mensaje: "SIVIL API v1.0 activa", timestamp: new Date().toISOString() };
     }
@@ -519,8 +521,27 @@ function getPreventa(ap_id) {
 }
 
 function crearPreventa(body) {
-  const hoja  = getHoja(HOJAS.PREVENTAS);
-  const ap_id = siguienteId(hoja, 0);
+  const hoja = getHoja(HOJAS.PREVENTAS);
+  let ap_id;
+  if (body.ap_id_reservado) {
+    ap_id = parseInt(body.ap_id_reservado);
+    const datos = hoja.getDataRange().getValues();
+    const hdrs  = datos[0].map(h => String(h).trim());
+    const colId = hdrs.indexOf("ap_id");
+    const colEst = hdrs.indexOf("estado_ap");
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][colId]) === String(ap_id) && datos[i][colEst] === "RESERVADO") {
+        hoja.getRange(i+1,1,1,11).setValues([[ap_id,body.cliente_nit,body.vendedor_id,new Date(),
+          body.tipo_entrega||"Venta en Planta","Pendiente",
+          body.fecha_entrega||"",body.obs_entrega||"",
+          body.direccion_obra||"",body.contacto_obra||"",body.cel_contacto||""]]);
+        SpreadsheetApp.flush();
+        if (body.detalle&&Array.isArray(body.detalle)) body.detalle.forEach(d=>agregarDetalleAP({ap_id,...d}));
+        return { ok: true, mensaje: "AP confirmada", ap_id };
+      }
+    }
+  }
+  ap_id = incrementarConsecutivo();
   hoja.appendRow([
     ap_id,
     body.cliente_nit,
@@ -795,6 +816,136 @@ function registrarNovedadDespacho(body) {
   }
 
   return { ok: true, mensaje: "Novedad registrada: " + (body.tipo_novedad || ""), id };
+}
+
+// =============================================================================
+// CONSECUTIVO GLOBAL DE AP — ATÓMICO CON LOCKSERVICE
+// =============================================================================
+
+function getConfigHoja() {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+  let hoja = ss.getSheetByName(HOJAS.CONFIG);
+  if (!hoja) {
+    hoja = ss.insertSheet(HOJAS.CONFIG);
+    hoja.getRange(1,1,1,2).setValues([["clave","valor"]]);
+    hoja.getRange(1,1,1,2).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
+    hoja.appendRow(["ultimo_ap_id", 1967]);
+    hoja.appendRow(["fecha_inicio_sivil", new Date().toISOString()]);
+    hoja.setFrozenRows(1);
+  }
+  return hoja;
+}
+
+function getConsecutivoAP() {
+  const hoja  = getConfigHoja();
+  const datos = hoja.getDataRange().getValues();
+  const fila  = datos.find(r => r[0] === "ultimo_ap_id");
+  return { ok: true, ultimo_ap_id: fila ? parseInt(fila[1]) : 1967, siguiente: fila ? parseInt(fila[1])+1 : 1968 };
+}
+
+function incrementarConsecutivo() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(8000);
+    const hoja  = getConfigHoja();
+    const datos = hoja.getDataRange().getValues();
+    for (let i = 1; i < datos.length; i++) {
+      if (datos[i][0] === "ultimo_ap_id") {
+        const nuevo = parseInt(datos[i][1]) + 1;
+        hoja.getRange(i+1, 2).setValue(nuevo);
+        SpreadsheetApp.flush();
+        return nuevo;
+      }
+    }
+    hoja.appendRow(["ultimo_ap_id", 1968]);
+    SpreadsheetApp.flush();
+    return 1968;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reservarNumeroAP(body) {
+  try {
+    const ap_id = incrementarConsecutivo();
+    getHoja(HOJAS.PREVENTAS).appendRow([ap_id,body.cliente_nit||"",body.vendedor_id||"",
+      new Date(),body.tipo_entrega||"Venta en Planta","RESERVADO","","","","",""]);
+    SpreadsheetApp.flush();
+    return { ok: true, ap_id, mensaje: `AP #${ap_id} reservada` };
+  } catch(e) {
+    return { ok: false, error: "Error al reservar: " + e.message };
+  }
+}
+
+function inicializarConsecutivoAP(body) {
+  const n = parseInt(body.numero_inicial);
+  if (!n || n < 1) return { ok: false, error: "Número inválido" };
+  const hoja  = getConfigHoja();
+  const datos = hoja.getDataRange().getValues();
+  for (let i = 1; i < datos.length; i++) {
+    if (datos[i][0] === "ultimo_ap_id") {
+      hoja.getRange(i+1, 2).setValue(n);
+      SpreadsheetApp.flush();
+      return { ok: true, mensaje: `Consecutivo en ${n}. Próxima AP: #${n+1}` };
+    }
+  }
+  hoja.appendRow(["ultimo_ap_id", n]);
+  SpreadsheetApp.flush();
+  return { ok: true, mensaje: `Consecutivo en ${n}. Próxima AP: #${n+1}` };
+}
+
+// =============================================================================
+// PROMOCIONES CON VIGENCIA POR FECHAS
+// =============================================================================
+
+function getPromociones() {
+  const ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+  const hoja = ss.getSheetByName(HOJAS.PROMOCIONES);
+  if (!hoja) return { ok: true, data: [], activas: 0, promociones_activas: [] };
+  const hoy  = new Date();
+  const todas = hojaAObjetos(hoja);
+  const act  = todas.filter(p => {
+    if (String(p.activa) === "No") return false;
+    const ini = p.fecha_inicio ? new Date(p.fecha_inicio) : new Date(0);
+    const fin = p.fecha_fin    ? new Date(p.fecha_fin)    : new Date("2099-12-31");
+    fin.setHours(23,59,59);
+    return hoy >= ini && hoy <= fin;
+  });
+  return { ok: true, data: todas, activas: act.length, promociones_activas: act };
+}
+
+function crearPromocion(body) {
+  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+  let hoja  = ss.getSheetByName(HOJAS.PROMOCIONES);
+  if (!hoja) {
+    hoja = ss.insertSheet(HOJAS.PROMOCIONES);
+    const h = ["id_promo","titulo","descripcion","tmcode","descuento_pct","fecha_inicio","fecha_fin","activa","creado_por","fecha_creacion"];
+    hoja.getRange(1,1,1,h.length).setValues([h]);
+    hoja.getRange(1,1,1,h.length).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
+  }
+  const id = siguienteId(hoja, 0);
+  hoja.appendRow([id,body.titulo||"",body.descripcion||"",body.tmcode||"",
+    parseFloat(body.descuento_pct)||0,
+    body.fecha_inicio||new Date().toISOString().slice(0,10),
+    body.fecha_fin||"","Sí",body.creado_por||"Gerencia",new Date()]);
+  return { ok: true, mensaje: `Promoción "${body.titulo}" creada`, id_promo: id };
+}
+
+function desactivarPromocion(body) {
+  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
+  const h   = ss.getSheetByName(HOJAS.PROMOCIONES);
+  if (!h) return { ok: false, error: "Sin promociones" };
+  const d   = h.getDataRange().getValues();
+  const hdr = d[0].map(x => String(x).trim());
+  const ci  = hdr.indexOf("id_promo"), ca = hdr.indexOf("activa");
+  for (let i = 1; i < d.length; i++) {
+    if (String(d[i][ci]) === String(body.id_promo)) {
+      h.getRange(i+1,ca+1).setValue("No");
+      return { ok: true, mensaje: `Promoción #${body.id_promo} desactivada` };
+    }
+  }
+  return { ok: false, error: "No encontrada" };
 }
 
 function registrarAveria(body) {

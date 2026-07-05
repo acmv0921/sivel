@@ -602,9 +602,67 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <button class="nav-btn active" onclick="irA('screenDashboard')"   id="navDash">   <span class="icon">📊</span>Dashboard</button>
   <button class="nav-btn"        onclick="irA('screenAlertas')"     id="navAlertas"> <span class="icon">🚨</span>Producción<span id="navAlertasBadge" style="display:none;background:var(--rojo);color:#fff;border-radius:10px;font-size:.55rem;font-weight:800;padding:1px 5px;margin-left:3px;"></span></button>
   <button class="nav-btn"        onclick="irA('screenAprobaciones')" id="navAprobac"> <span class="icon">✅</span>Aprobac.</button>
-  <button class="nav-btn"        onclick="irA('screenPrecios')"     id="navPrecios"> <span class="icon">💰</span>Precios</button>
-  <button class="nav-btn"        onclick="irA('screenUsuarios')"    id="navUsuarios"><span class="icon">👥</span>Usuarios</button>
+  <button class="nav-btn"        onclick="irA('screenPrecios')"      id="navPrecios">    <span class="icon">💰</span>Precios</button>
+  <button class="nav-btn"        onclick="irA('screenPromociones')"  id="navPromociones"><span class="icon">🔥</span>Promos</button>
+  <button class="nav-btn"        onclick="irA('screenUsuarios')"     id="navUsuarios">   <span class="icon">👥</span>Usuarios</button>
 </nav>
+
+<!-- PANTALLA: PROMOCIONES Y CONSECUTIVO -->
+<div id="screenPromociones" class="screen">
+  <div class="card">
+    <div class="card-title">🔥 Gestión de Promociones</div>
+    <p style="font-size:.78rem;color:#666;margin-bottom:1rem;">Las promociones activas aparecen en la app de los vendedores al crear un pedido.</p>
+    <button class="btn btn-success btn-sm" onclick="abrirNuevaPromo()">➕ Nueva Promoción</button>
+  </div>
+  <div class="card" style="border-top:3px solid var(--verde);">
+    <div class="card-title" style="color:var(--verde);">✅ Activas ahora</div>
+    <div id="promoListaActiva"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid #ccc;margin-top:.5rem;">
+    <div class="card-title" style="color:#888;">📁 Historial</div>
+    <div id="promoListaHistorial"></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--azul2);margin-top:.5rem;">
+    <div class="card-title" style="color:var(--azul2);">🔢 Consecutivo Global de AP</div>
+    <div id="consecutivoInfo" style="font-size:.85rem;color:#333;margin-bottom:.75rem;">Cargando...</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input id="inputConsecutivoInicial" class="form-control" type="number"
+        placeholder="Ej: 1967 (número del libro físico)" style="max-width:220px;">
+      <button class="btn btn-outline btn-sm" onclick="inicializarConsecutivo()">📋 Sincronizar con libro</button>
+    </div>
+    <p style="font-size:.68rem;color:#888;margin-top:6px;">Solo usar al activar SIVIL. El sistema continúa desde ese número automáticamente.</p>
+  </div>
+</div>
+
+<!-- MODAL: NUEVA PROMOCIÓN -->
+<div id="modalPromo" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalPromo')">✕</button>
+    <div class="modal-title">🔥 Nueva Promoción</div>
+    <div class="form-group">
+      <label class="form-label">Título *</label>
+      <input id="promoTitulo" class="form-control" placeholder="Ej: Descuento especial julio en bloques AP">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descripción (visible a vendedores)</label>
+      <textarea id="promoDescTxt" class="form-control" rows="2"
+        placeholder="Ej: 5% en bloques AP durante julio para pedidos confirmados."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Código de producto (opcional — vacío = todos)</label>
+      <input id="promoTmcode" class="form-control" placeholder="tmcode, ej: 3302">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descuento máximo autorizado (%)</label>
+      <input id="promoDescPct" class="form-control" type="number" min="0" max="30" step="0.5" placeholder="Ej: 5">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="form-group"><label class="form-label">Fecha inicio *</label><input id="promoFechaIni" class="form-control" type="date"></div>
+      <div class="form-group"><label class="form-label">Fecha fin *</label><input id="promoFechaFin" class="form-control" type="date"></div>
+    </div>
+    <button class="btn btn-success" onclick="guardarPromo()">🔥 Activar Promoción</button>
+  </div>
+</div>
 
 <div id="toast" class="toast"></div>
 
@@ -1471,7 +1529,7 @@ function irA(screenId) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(screenId)?.classList.add('active');
-  const map={screenDashboard:'navDash',screenAlertas:'navAlertas',
+  const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   window.scrollTo(0,0);
@@ -1488,7 +1546,163 @@ function toast(msg,dur=2800){
   setTimeout(()=>t.classList.remove('show'),dur);
 }
 
-document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();});
+document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();
+
+// =============================================================================
+// PROMOCIONES
+// =============================================================================
+
+let _promosData = [];
+
+async function cargarPromociones() {
+  try {
+    const GAS = document.querySelector('script[src]')?.src || '';
+    // Reutilizar la GAS_URL ya definida en el archivo
+    const r = await leerGVIZ('PROMOCIONES').catch(() => []);
+    _promosData = r || [];
+  } catch(e) { _promosData = []; }
+  renderPromociones();
+}
+
+function renderPromociones() {
+  const hoy      = new Date();
+  const activas  = _promosData.filter(p => {
+    if (String(p.activa) === "No") return false;
+    const ini = p.fecha_inicio ? new Date(p.fecha_inicio) : new Date(0);
+    const fin = p.fecha_fin    ? new Date(p.fecha_fin)    : new Date("2099-12-31");
+    fin.setHours(23,59,59);
+    return hoy >= ini && hoy <= fin;
+  });
+  const historial = _promosData.filter(p => !activas.includes(p));
+
+  const contA = document.getElementById('promoListaActiva');
+  const contH = document.getElementById('promoListaHistorial');
+
+  if (!activas.length) {
+    if (contA) contA.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin promociones activas</div>';
+  } else {
+    if (contA) contA.innerHTML = activas.map(p => promoCard(p, true)).join('');
+  }
+
+  if (contH) contH.innerHTML = historial.length
+    ? historial.map(p => promoCard(p, false)).join('')
+    : '<div style="font-size:.78rem;color:#ccc;text-align:center;padding:.5rem;">Sin historial</div>';
+}
+
+function promoCard(p, activa) {
+  const color = activa ? 'var(--verde)' : '#aaa';
+  return `
+  <div style="border:1px solid ${color};border-radius:10px;padding:.75rem;margin-bottom:.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:.88rem;color:${color};">${p.titulo||'Sin título'}</div>
+        ${p.descripcion ? `<div style="font-size:.75rem;color:#555;margin-top:2px;">${p.descripcion}</div>` : ''}
+        <div style="font-size:.70rem;color:#888;margin-top:4px;">
+          ${p.tmcode ? `📦 Producto: ${p.tmcode} · ` : '📦 Todos los productos · '}
+          ${p.descuento_pct ? `🏷️ ${p.descuento_pct}% dto. · ` : ''}
+          📅 ${p.fecha_inicio||'—'} → ${p.fecha_fin||'Sin límite'}
+        </div>
+      </div>
+      ${activa ? `<button onclick="desactivarPromo('${p.id_promo}')"
+        style="background:none;border:1px solid #ddd;border-radius:6px;padding:3px 8px;font-size:.68rem;color:#888;cursor:pointer;margin-left:6px;">
+        Desactivar
+      </button>` : ''}
+    </div>
+  </div>`;
+}
+
+function abrirNuevaPromo() {
+  ['promoTitulo','promoDescTxt','promoTmcode','promoDescPct','promoFechaIni','promoFechaFin']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  // Fecha de hoy como default inicio
+  document.getElementById('promoFechaIni').value = new Date().toISOString().slice(0,10);
+  document.getElementById('modalPromo').classList.add('show');
+}
+
+async function guardarPromo() {
+  const titulo  = document.getElementById('promoTitulo')?.value.trim();
+  const desc    = document.getElementById('promoDescTxt')?.value.trim();
+  const tmcode  = document.getElementById('promoTmcode')?.value.trim();
+  const pct     = document.getElementById('promoDescPct')?.value;
+  const ini     = document.getElementById('promoFechaIni')?.value;
+  const fin     = document.getElementById('promoFechaFin')?.value;
+
+  if (!titulo || !ini || !fin) { toast('⚠️ Título y fechas son obligatorios'); return; }
+  if (new Date(fin) < new Date(ini)) { toast('⚠️ La fecha fin debe ser posterior al inicio'); return; }
+
+  const r = await escribirGAS({
+    accion: 'crearPromocion',
+    titulo, descripcion: desc, tmcode, descuento_pct: pct,
+    fecha_inicio: ini, fecha_fin: fin,
+    creado_por: G.usuario?.nombre_vendedor || 'Gerencia'
+  });
+
+  if (r?.ok) {
+    toast(`🔥 Promoción "${titulo}" activada`);
+    cerrarModal('modalPromo');
+    await cargarPromociones();
+  } else {
+    toast('❌ Error al crear la promoción');
+  }
+}
+
+async function desactivarPromo(id_promo) {
+  if (!confirm('¿Desactivar esta promoción?')) return;
+  const r = await escribirGAS({ accion: 'desactivarPromocion', id_promo });
+  if (r?.ok) { toast('Promoción desactivada'); await cargarPromociones(); }
+}
+
+// =============================================================================
+// CONSECUTIVO AP
+// =============================================================================
+
+async function cargarConsecutivo() {
+  try {
+    const url = GAS_URL + '?accion=getConsecutivoAP&_=' + Date.now();
+    const r   = await fetch(url);
+    const j   = await r.json();
+    const el  = document.getElementById('consecutivoInfo');
+    if (el && j.ok) {
+      el.innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <div style="text-align:center;background:#f0f8ff;border-radius:8px;padding:8px 16px;">
+            <div style="font-size:1.4rem;font-weight:800;color:var(--azul2);">${j.ultimo_ap_id}</div>
+            <div style="font-size:.65rem;color:#888;font-weight:700;">ÚLTIMO ASIGNADO</div>
+          </div>
+          <div style="text-align:center;background:#f0fff4;border-radius:8px;padding:8px 16px;">
+            <div style="font-size:1.4rem;font-weight:800;color:var(--verde);">${j.siguiente}</div>
+            <div style="font-size:.65rem;color:#888;font-weight:700;">PRÓXIMA AP</div>
+          </div>
+        </div>`;
+    }
+  } catch(e) {
+    const el = document.getElementById('consecutivoInfo');
+    if (el) el.textContent = 'No disponible — el backend no está desplegado aún.';
+  }
+}
+
+async function inicializarConsecutivo() {
+  const n = parseInt(document.getElementById('inputConsecutivoInicial')?.value);
+  if (!n || n < 1) { toast('Ingresa un número válido'); return; }
+  if (!confirm(`¿Inicializar el consecutivo en ${n}? La próxima AP será #${n+1}.
+
+Usar SOLO al activar SIVIL por primera vez.`)) return;
+  const r = await escribirGAS({ accion: 'inicializarConsecutivoAP', numero_inicial: n });
+  toast(r?.ok ? `✅ ${r.mensaje}` : '❌ Error al inicializar');
+  if (r?.ok) cargarConsecutivo();
+}
+
+// Cargar promociones y consecutivo cuando se abre esa pantalla
+const _origIrA = window.irA || function(){};
+window.irA = function(screen) {
+  _origIrA(screen);
+  if (screen === 'screenPromociones') {
+    cargarPromociones();
+    cargarConsecutivo();
+  }
+};
+
+});
 </script>
 
 <script>
