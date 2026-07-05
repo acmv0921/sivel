@@ -1556,10 +1556,8 @@ let _promosData = [];
 
 async function cargarPromociones() {
   try {
-    const GAS = document.querySelector('script[src]')?.src || '';
-    // Reutilizar la GAS_URL ya definida en el archivo
-    const r = await leerGVIZ('PROMOCIONES').catch(() => []);
-    _promosData = r || [];
+    const raw = await leerGVIZ('PROMOCIONES').catch(() => []);
+    _promosData = Array.isArray(raw) ? raw : [];
   } catch(e) { _promosData = []; }
   renderPromociones();
 }
@@ -1658,7 +1656,7 @@ async function desactivarPromo(id_promo) {
 
 async function cargarConsecutivo() {
   try {
-    const url = GAS_URL + '?accion=getConsecutivoAP&_=' + Date.now();
+    const url = (typeof GAS_URL !== 'undefined' ? GAS_URL : window.GAS_URL || '') + '?accion=getConsecutivoAP&_=' + Date.now();
     const r   = await fetch(url);
     const j   = await r.json();
     const el  = document.getElementById('consecutivoInfo');
@@ -1692,15 +1690,19 @@ Usar SOLO al activar SIVIL por primera vez.`)) return;
   if (r?.ok) cargarConsecutivo();
 }
 
-// Cargar promociones y consecutivo cuando se abre esa pantalla
-const _origIrA = window.irA || function(){};
-window.irA = function(screen) {
-  _origIrA(screen);
-  if (screen === 'screenPromociones') {
-    cargarPromociones();
-    cargarConsecutivo();
+// Hook para cargar promociones cuando se abre esa pantalla
+// Se inyecta en el onclick del botón directamente para evitar conflictos
+document.addEventListener('DOMContentLoaded', () => {
+  const btnPromos = document.getElementById('navPromociones');
+  if (btnPromos) {
+    const orig = btnPromos.getAttribute('onclick') || '';
+    btnPromos.onclick = function() {
+      irA('screenPromociones');
+      cargarPromociones();
+      cargarConsecutivo();
+    };
   }
-};
+});
 
 });
 </script>
