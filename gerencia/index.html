@@ -1037,16 +1037,38 @@ function calcularInventarioDinamico() {
   const apsPendIds = new Set(
     G.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap)).map(a=>String(a.ap_id))
   );
+
+  // Pre-calcular comprometido por (tmcode|calidad) una sola vez
+  const comprMap = {};
+  G.detalles.filter(d=>apsPendIds.has(String(d.ap_id))).forEach(d=>{
+    const cal = (d.calidad||'PRIMERA').toUpperCase();
+    const key = String(d.tmcode)+'|'+cal;
+    const pend = Math.max(0,(parseFloat(d.cantidad_solicitada)||0)-(parseFloat(d.cantidad_despachada)||0));
+    comprMap[key] = (comprMap[key]||0) + pend;
+  });
+
+  // Pre-calcular patio por tmcode
+  const patioMap = {};
+  G.patio.forEach(x=>{
+    const tc = String(x.tmcode);
+    if(!patioMap[tc]) patioMap[tc]={curado:0,averias:0};
+    patioMap[tc].curado  += parseFloat(x.cant_en_curado)||0;
+    patioMap[tc].averias += (parseFloat(x.cant_mermas_averias)||0)+(parseFloat(x.cant_averia_cargue)||0);
+  });
+
+  // Cada fila de PRODUCTOS_MAESTRO ya tiene su calidad
   _inventario = G.productos.map(p => {
-    const code    = String(p.tmcode);
-    const bruto   = parseFloat(p.tmcant)||0;
-    const curado  = G.patio.filter(x=>String(x.tmcode)===code).reduce((s,x)=>s+(parseFloat(x.cant_en_curado)||0),0);
-    const averias = G.patio.filter(x=>String(x.tmcode)===code).reduce((s,x)=>s+(parseFloat(x.cant_mermas_averias)||0),0);
-    const comprom = G.detalles
-      .filter(d=>String(d.tmcode)===code && apsPendIds.has(String(d.ap_id)))
-      .reduce((s,d)=>s+Math.max(0,(parseFloat(d.cantidad_solicitada)||0)-(parseFloat(d.cantidad_despachada)||0)),0);
-    const disp = bruto-curado-averias-comprom;
-    return { ...p, disponible:disp, curado, averias, comprometido:comprom,
+    const code   = String(p.tmcode);
+    const calidad = (p.calidad||'PRIMERA').toUpperCase();
+    const key    = code+'|'+calidad;
+    const bruto  = parseFloat(p.tmcant)||0;
+    const patio  = patioMap[code]||{curado:0,averias:0};
+    // Solo aplicar curado/averías a Primera (Segunda son unidades aparte)
+    const curado  = calidad==='PRIMERA' ? patio.curado  : 0;
+    const averias = calidad==='PRIMERA' ? patio.averias : 0;
+    const comprom = comprMap[key]||0;
+    const disp   = bruto-curado-averias-comprom;
+    return { ...p, calidad, disponible:disp, curado, averias, comprometido:comprom,
       semaforo: disp>10?'VERDE':disp>0?'AMARILLO':'ROJO' };
   });
 }
@@ -1125,25 +1147,39 @@ function renderDashboard() {
       <div class="bar-track"><div class="bar-fill" style="width:${Math.round((cnt/total)*100)}%;background:${colores[est]||'#888'}"></div></div>
     </div>`).join('');
 
-  // Inventario resumen
+  // Inventario resumen — contar por semaforo Y calidad
   const semCounts={VERDE:0,AMARILLO:0,ROJO:0};
-  _inventario.forEach(p=>semCounts[p.semaforo]++);
+  const calCounts={PRIMERA:0,SEGUNDA:0};
+  _inventario.forEach(p=>{
+    semCounts[p.semaforo]++;
+    calCounts[(p.calidad||'PRIMERA')]++;
+  });
   document.getElementById('resumenInventario').innerHTML=`
-    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem;">
-      <div style="flex:1;text-align:center;background:#d1f5e0;border-radius:10px;padding:10px;">
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;">
+      <div style="flex:1;text-align:center;background:#d1f5e0;border-radius:10px;padding:10px;min-width:70px;">
         <div style="font-size:1.4rem;font-weight:800;color:var(--verde);">${semCounts.VERDE}</div>
-        <div style="font-size:.68rem;color:var(--verde);font-weight:700;">🟢 DISPONIBLE</div>
+        <div style="font-size:.65rem;color:var(--verde);font-weight:700;">🟢 DISPONIBLE</div>
       </div>
-      <div style="flex:1;text-align:center;background:#fff3cd;border-radius:10px;padding:10px;">
+      <div style="flex:1;text-align:center;background:#fff3cd;border-radius:10px;padding:10px;min-width:70px;">
         <div style="font-size:1.4rem;font-weight:800;color:var(--amarillo);">${semCounts.AMARILLO}</div>
-        <div style="font-size:.68rem;color:var(--amarillo);font-weight:700;">🟡 STOCK BAJO</div>
+        <div style="font-size:.65rem;color:var(--amarillo);font-weight:700;">🟡 STOCK BAJO</div>
       </div>
-      <div style="flex:1;text-align:center;background:#ffe4e4;border-radius:10px;padding:10px;">
+      <div style="flex:1;text-align:center;background:#ffe4e4;border-radius:10px;padding:10px;min-width:70px;">
         <div style="font-size:1.4rem;font-weight:800;color:var(--rojo);">${semCounts.ROJO}</div>
-        <div style="font-size:.68rem;color:var(--rojo);font-weight:700;">🔴 AGOTADO</div>
+        <div style="font-size:.65rem;color:var(--rojo);font-weight:700;">🔴 AGOTADO</div>
       </div>
     </div>
-    <div style="font-size:.75rem;color:#666;text-align:center;">${_inventario.length} productos en catálogo · Toca <strong>Producción</strong> para ver el detalle</div>`;
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.5rem;">
+      <div style="flex:1;background:#f0fdf4;border-radius:8px;padding:6px 10px;border-left:3px solid #16a34a;min-width:120px;">
+        <div style="font-size:.65rem;font-weight:700;color:#14532d;">🥇 Primeras</div>
+        <div style="font-size:.85rem;font-weight:800;">${calCounts.PRIMERA||0} referencias</div>
+      </div>
+      <div style="flex:1;background:#fffbeb;border-radius:8px;padding:6px 10px;border-left:3px solid #f59e0b;min-width:120px;">
+        <div style="font-size:.65rem;font-weight:700;color:#92400e;">🥈 Segundas</div>
+        <div style="font-size:.85rem;font-weight:800;">${calCounts.SEGUNDA||0} referencias</div>
+      </div>
+    </div>
+    <div style="font-size:.68rem;color:#888;">${_inventario.length} referencias en catálogo · Toca <strong>Producción</strong> para ver el detalle</div>`;
 }
 
 // =============================================================================

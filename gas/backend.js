@@ -265,81 +265,123 @@ function formatFecha(fecha) {
 // MOTOR DE INVENTARIO DINÁMICO
 // Disponible = tmcant - cant_en_curado - cant_mermas_averias - SUM(cantidad_solicitada pendiente)
 // =============================================================================
-function calcularDisponible(tmcode) {
-  // Stock bruto
-  const hProd   = getHoja(HOJAS.PRODUCTOS);
-  const prods   = hojaAObjetos(hProd);
-  const prod    = prods.find(p => String(p.tmcode) === String(tmcode));
-  if (!prod) return null;
-  const stockBruto = parseFloat(prod.tmcant) || 0;
+// =============================================================================
+// MOTOR DE INVENTARIO — Lee TODO de una vez (1 lectura por hoja)
+// Retorna una entrada por (tmcode, calidad): PRIMERA y SEGUNDA separadas
+// =============================================================================
 
-  // Cantidad en curado + averías (patio) — SIEMPRE filtrado por tmcode
-  // (fix: antes el filtro de curado era un no-op "|| true" y el de averías
-  // no filtraba en absoluto, sumando TODO el patio de la empresa contra
-  // cada producto. Corregido 03/07/2026.)
-  const hPatio   = getHoja(HOJAS.PATIO);
-  const patios   = hojaAObjetos(hPatio).filter(p => String(p.tmcode) === String(tmcode));
-  const enCurado = patios
-    .reduce((acc, p) => acc + (parseFloat(p.cant_en_curado) || 0), 0);
+function getInventarioDinamico() {
+  // ── Lectura única de cada hoja ─────────────────────────────────────────────
+  const prods    = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
+  const patios   = hojaAObjetos(getHoja(HOJAS.PATIO));
+  const detalles = hojaAObjetos(getHoja(HOJAS.DETALLE));
+  const aps      = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
+  const precios  = hojaAObjetos(getHoja(HOJAS.PRECIOS));
 
-  // Averías: se deducen del disponible (Cargue + Restribado + Reposiciones +
-  // el histórico cant_mermas_averias). Los Saldos de Segunda NO se deducen
-  // del disponible principal — siguen siendo stock vendible, solo que bajo
-  // otra condición de precio; se reportan aparte.
-  const averias = patios.reduce((acc, p) =>
-    acc + (parseFloat(p.cant_mermas_averias) || 0)
-        + (parseFloat(p.cant_averia_cargue) || 0)
-        + (parseFloat(p.cant_averia_restribado) || 0)
-        + (parseFloat(p.cant_reposicion) || 0), 0);
-  const saldosSegunda = patios
-    .reduce((acc, p) => acc + (parseFloat(p.cant_merma_segunda) || 0), 0);
-
-  // Comprometido en APs pendientes
-  const hDetalle  = getHoja(HOJAS.DETALLE);
-  const detalles  = hojaAObjetos(hDetalle);
-  const hAP       = getHoja(HOJAS.PREVENTAS);
-  const aps       = hojaAObjetos(hAP);
-  const apsPendientes = new Set(
+  // APs con unidades pendientes de despacho
+  const apsPend = new Set(
     aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
        .map(a => String(a.ap_id))
   );
-  const comprometido = detalles
-    .filter(d => String(d.tmcode) === String(tmcode) && apsPendientes.has(String(d.ap_id)))
-    .reduce((acc, d) => {
-      const sol  = parseFloat(d.cantidad_solicitada) || 0;
-      const desp = parseFloat(d.cantidad_despachada) || 0;
-      return acc + Math.max(0, sol - desp);
-    }, 0);
 
-  const disponible = stockBruto - enCurado - averias - comprometido;
+  // ── Comprometido por (tmcode, calidad) ─────────────────────────────────────
+  const comprMap = {};  // clave: "tmcode|calidad"
+  detalles.forEach(function(d) {
+    if (!apsPend.has(String(d.ap_id))) return;
+    const pend = Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0));
+    const calidad = String(d.calidad||"PRIMERA").trim().toUpperCase();
+    const key = String(d.tmcode).trim() + "|" + calidad;
+    comprMap[key] = (comprMap[key]||0) + pend;
+  });
 
-  return {
-    tmcode,
-    tmdescrip:    prod.tmdescrip,
-    tmund:        prod.tmund,
-    stock_bruto:  stockBruto,
-    en_curado:    enCurado,
-    averias,
-    saldos_segunda: saldosSegunda,
-    comprometido,
-    disponible,
-    estado_semaforo: disponible > 10 ? "VERDE"
-                   : disponible > 0  ? "AMARILLO"
-                   : "ROJO"
+  // ── Curado y averías por tmcode (patio no distingue calidad aún) ────────────
+  const patioMap = {};  // clave: tmcode
+  patios.forEach(function(p) {
+    const tc = String(p.tmcode).trim();
+    if (!patioMap[tc]) patioMap[tc] = { curado:0, averias:0, segunda:0 };
+    patioMap[tc].curado  += parseFloat(p.cant_en_curado)||0;
+    patioMap[tc].averias += (parseFloat(p.cant_mermas_averias)||0)
+                          + (parseFloat(p.cant_averia_cargue)||0)
+                          + (parseFloat(p.cant_averia_restribado)||0)
+                          + (parseFloat(p.cant_reposicion)||0);
+    patioMap[tc].segunda += parseFloat(p.cant_merma_segunda)||0;
+  });
+
+  // ── Precios por tmcode ──────────────────────────────────────────────────────
+  const precioMap = {};
+  precios.forEach(function(p) {
+    precioMap[String(p.tmcode).trim()] = p;
+  });
+
+  // ── Construir inventario por (tmcode, calidad) ─────────────────────────────
+  const semaforo = function(disp) {
+    return disp > 10 ? "VERDE" : disp > 0 ? "AMARILLO" : "ROJO";
   };
+
+  const resultado = [];
+  prods.forEach(function(p) {
+    const tc      = String(p.tmcode).trim();
+    const calidad = String(p.calidad||"PRIMERA").trim().toUpperCase();
+    const key     = tc + "|" + calidad;
+
+    const stock   = parseFloat(p.tmcant) || 0;
+    const patio   = patioMap[tc] || { curado:0, averias:0, segunda:0 };
+    const compr   = comprMap[key] || 0;
+    const pr      = precioMap[tc] || {};
+
+    // La calidad PRIMERA se ve afectada por curado y averías
+    // La calidad SEGUNDA es independiente (es el saldo de segunda del patio)
+    const curado  = calidad === "PRIMERA" ? patio.curado  : 0;
+    const averias = calidad === "PRIMERA" ? patio.averias : 0;
+    const disp    = stock - curado - averias - compr;
+
+    resultado.push({
+      tmcode:              tc,
+      tmdescrip:           p.tmdescrip,
+      tmund:               p.tmund,
+      calidad:             calidad,
+      stock_bruto:         stock,
+      en_curado:           curado,
+      averias:             averias,
+      comprometido:        compr,
+      disponible:          disp,
+      semaforo:            semaforo(disp),
+      precio_base:         parseFloat(pr.precio_base_planta||0),
+      precio_zona_a:       parseFloat(pr.precio_zona_a||0),
+      precio_zona_b:       parseFloat(pr.precio_zona_b||0),
+      desc_max:            parseFloat(pr.desc_max||0),
+      descuento_segunda_pct: parseFloat(pr.descuento_segunda_pct||10),
+      flete_a:             parseFloat(pr.flete_zona_a||0),
+      flete_b:             parseFloat(pr.flete_zona_b||0)
+    });
+  });
+
+  return { ok: true, data: resultado };
 }
 
-function getInventarioDinamico() {
-  const hProd = getHoja(HOJAS.PRODUCTOS);
-  const prods = hojaAObjetos(hProd);
-  const inv   = prods.map(p => calcularDisponible(p.tmcode)).filter(Boolean);
-  return { ok: true, data: inv };
+// Mantener compatibilidad con código que llama calcularDisponible
+function calcularDisponible(tmcode, calidad) {
+  const inv = getInventarioDinamico();
+  const cal = String(calidad||"PRIMERA").toUpperCase();
+  const item = inv.data.find(function(x){
+    return String(x.tmcode)===String(tmcode) && x.calidad===cal;
+  });
+  return item || null;
 }
 
 function getDisponibleProducto(tmcode) {
-  const d = calcularDisponible(tmcode);
-  if (!d) return { ok: false, error: `Producto ${tmcode} no encontrado` };
-  return { ok: true, data: d };
+  const items = getInventarioDinamico().data.filter(function(x){
+    return String(x.tmcode) === String(tmcode);
+  });
+  if (!items.length) return { ok: false, error: "Producto " + tmcode + " no encontrado" };
+  return { ok: true, data: items };
+}
+
+// Alertas de producción — todos los productos en rojo o amarillo
+function getAlertasProduccion() {
+  const inv = getInventarioDinamico();
+  const alertas = inv.data.filter(function(x){ return x.semaforo !== "VERDE"; });
+  return { ok: true, data: alertas };
 }
 
 // =============================================================================

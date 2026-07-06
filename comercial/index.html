@@ -1181,29 +1181,65 @@ async function cargarMisAPs() {
 function renderInventario(filtro="") {
   const cont = document.getElementById('listaInventario');
   const fl   = filtro.toLowerCase();
-  const lista = STATE.inventario.filter(p =>
+
+  // Filtrar por texto
+  const filtrados = STATE.inventario.filter(p =>
     !fl || String(p.tmdescrip).toLowerCase().includes(fl) || String(p.tmcode).includes(fl)
   );
 
-  if (!lista.length) { cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin resultados</div>'; return; }
+  if (!filtrados.length) { cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin resultados</div>'; return; }
 
-  cont.innerHTML = lista.map(p => `
-    <div class="card" style="margin-bottom:0.6rem;padding:1rem;">
+  // Agrupar por tmcode — un producto puede tener Primera y Segunda
+  const porCodigo = {};
+  filtrados.forEach(p => {
+    const tc = String(p.tmcode);
+    if (!porCodigo[tc]) porCodigo[tc] = { base:p, primera:null, segunda:null };
+    const cal = (p.calidad||'PRIMERA').toUpperCase();
+    if (cal === 'SEGUNDA') porCodigo[tc].segunda = p;
+    else porCodigo[tc].primera = p;
+    porCodigo[tc].base = p; // usar cualquiera para datos base
+  });
+
+  const semIcon = s => s==='VERDE'?'🟢':s==='AMARILLO'?'🟡':'🔴';
+  const semColor = s => s==='VERDE'?'#14532d':s==='AMARILLO'?'#92400e':'#b91c1c';
+
+  cont.innerHTML = Object.values(porCodigo).map(({ base: p, primera, segunda }) => {
+    const precio1 = primera?.precio_base || p.precio_base || 0;
+    const dscto2  = segunda?.descuento_segunda_pct || p.descuento_segunda_pct || 10;
+    const precio2 = Math.round(precio1 * (1 - dscto2/100));
+
+    // Bloque de calidades — muestra Primera y/o Segunda según existan
+    const bloqueCalidad = `
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        ${primera ? `<div onclick="abrirDetalleProducto('${p.tmcode}')" style="cursor:pointer;flex:1;min-width:120px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:8px;padding:6px 10px;">
+          <div style="font-size:.65rem;font-weight:700;color:#14532d;">🥇 PRIMERA</div>
+          <div style="font-size:.88rem;font-weight:800;color:${semColor(primera.semaforo)};">${primera.disponible} ${p.tmund}</div>
+          <div style="font-size:.65rem;color:#555;">${semIcon(primera.semaforo)} ${primera.semaforo}${precio1?` · $${fmt(precio1)}`:''}${primera.comprometido>0?` · 🔒${primera.comprometido}`:''}</div>
+        </div>` : ''}
+        ${segunda ? `<div onclick="abrirDetalleProducto('${p.tmcode}')" style="cursor:pointer;flex:1;min-width:120px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:6px 10px;">
+          <div style="font-size:.65rem;font-weight:700;color:#92400e;">🥈 SEGUNDA</div>
+          <div style="font-size:.88rem;font-weight:800;color:${semColor(segunda.semaforo)};">${segunda.disponible} ${p.tmund}</div>
+          <div style="font-size:.65rem;color:#555;">${semIcon(segunda.semaforo)} ${segunda.semaforo}${precio2?` · $${fmt(precio2)}`:''}${segunda.comprometido>0?` · 🔒${segunda.comprometido}`:''}</div>
+        </div>` : ''}
+      </div>`;
+
+    return `<div class="card" style="margin-bottom:0.6rem;padding:.9rem;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:0.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
-          <div style="font-weight:700;font-size:0.9rem;margin:2px 0;">${p.tmdescrip}</div>
-          <div style="font-size:0.75rem;color:#666;">${p.tmund}${p.precio_base ? ' · <b style="color:var(--azul2);">'+fmt(p.precio_base)+'/und</b>' : ''}</div>
+          <div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
+          <div style="font-weight:700;font-size:.9rem;margin:2px 0;">${p.tmdescrip}</div>
+          <div style="font-size:.72rem;color:#666;">${p.tmund}${precio1 ? ' · <b style="color:var(--azul2);">$'+fmt(precio1)+'/u</b>' : ''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div class="semaforo sem-${p.semaforo.toLowerCase()}">${p.semaforo === 'VERDE' ? '🟢' : p.semaforo === 'AMARILLO' ? '🟡' : '🔴'} ${p.disponible}</div>
-          ${p.precio_base ? `<div style="font-size:0.72rem;color:var(--azul2);font-weight:700;margin-top:4px;">${fmt(p.precio_base)}</div>` : ''}
+          <button onclick="abrirDetalleProducto('${p.tmcode}')"
+            style="background:var(--azul);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:.75rem;cursor:pointer;font-weight:700;">
+            ➕ AP
+          </button>
         </div>
       </div>
-      ${p.curado > 0 ? `<div style="font-size:0.72rem;color:var(--amarillo);margin-top:6px;">⏳ ${p.curado} en curado</div>` : ''}
-      ${p.comprometido > 0 ? `<div style="font-size:0.72rem;color:#888;margin-top:2px;">🔒 ${p.comprometido} comprometido en APs</div>` : ''}
-    </div>
-  `).join('');
+      ${bloqueCalidad}
+    </div>`;
+  }).join('');
 }
 
 function filtrarProductos() {
