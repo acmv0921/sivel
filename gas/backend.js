@@ -189,6 +189,7 @@ function doPost(e) {
         resultado = actualizarPrecio(body);
         break;
 
+      case "registrarSuministro":     resultado = registrarSuministro(body); break;
       default:
         resultado = { ok: false, error: `Acción desconocida: ${accion}` };
     }
@@ -1202,4 +1203,38 @@ function inicializarSheet() {
 
   Logger.log("✅ SIVEL: Inicialización completa");
   return "Inicialización exitosa";
+}
+
+// =============================================================================
+// SUMINISTROS — Registro de notas de compra para Lorena
+// =============================================================================
+function registrarSuministro(body) {
+  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let hoja  = ss.getSheetByName("SUMINISTROS_NOTAS");
+  if (!hoja) {
+    hoja = ss.insertSheet("SUMINISTROS_NOTAS");
+    const hdrs = ["id","tmcode","tmdescrip","tmund","disponible",
+                  "estado","nota","cantidad","fecha_llegada_estimada",
+                  "registrado_por","fecha_registro"];
+    hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
+    hoja.getRange(1,1,1,hdrs.length)
+        .setBackground("#14532d").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
+  }
+  const id = siguienteId(hoja, 0);
+  hoja.appendRow([
+    id,
+    body.tmcode              || "",
+    body.tmdescrip           || "",
+    body.tmund               || "",
+    body.disponible          || 0,
+    body.estado              || "pendiente",
+    body.nota                || "",
+    body.cantidad            || 0,
+    body.fecha_llegada_estimada || "",
+    body.registrado_por      || "",
+    new Date()
+  ]);
+  SpreadsheetApp.flush();
+  return { ok: true, mensaje: "Suministro registrado #" + id, id };
 }

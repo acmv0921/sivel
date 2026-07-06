@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="theme-color" content="#14532d">
+  <title>SIVIL · Suministros</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+:root {
+  --verde:    #16a34a;
+  --verde2:   #14532d;
+  --verde3:   #dcfce7;
+  --rojo:     #b91c1c;
+  --amarillo: #92400e;
+  --azul:     #1a3a5c;
+  --gris:     #f4f6f9;
+  --borde:    #e2e8f0;
+  --texto:    #1e2b3a;
+  --sombra:   0 1px 3px rgba(0,0,0,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--texto);min-height:100vh;padding-bottom:85px;}
+.header{background:var(--verde2);color:#fff;padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.header-title{font-size:.95rem;font-weight:700;}
+.header-sub{font-size:.65rem;opacity:.75;}
+.user-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:.72rem;cursor:pointer;}
+.nav-bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--borde);display:flex;z-index:200;box-shadow:0 -2px 12px rgba(0,0,0,.08);}
+.nav-btn{flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:none;cursor:pointer;font-size:.6rem;color:#888;font-weight:600;transition:color .2s;}
+.nav-btn.active{color:var(--verde);}
+.nav-btn .icon{font-size:1.25rem;}
+.content{padding:1rem;max-width:640px;margin:0 auto;}
+.card{background:#fff;border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sombra);}
+.card-title{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--verde);margin-bottom:1rem;}
+.screen{display:none;} .screen.active{display:block;}
+
+/* Login */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde2);padding:1rem;}
+.login-box{background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,.3);}
+.login-logo{text-align:center;margin-bottom:1.5rem;}
+.login-logo img{width:120px;border-radius:8px;}
+.login-title{font-size:1.3rem;font-weight:800;color:var(--verde2);text-align:center;}
+.login-sub{font-size:.78rem;color:#666;text-align:center;margin-bottom:1.5rem;}
+.form-group{margin-bottom:1rem;}
+.form-label{display:block;font-size:.78rem;font-weight:700;color:#555;margin-bottom:4px;}
+.form-control{width:100%;padding:.65rem .9rem;border:1.5px solid var(--borde);border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s;}
+.form-control:focus{border-color:var(--verde);}
+.btn{display:block;width:100%;padding:.75rem;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s;}
+.btn-verde{background:var(--verde);color:#fff;}
+.btn-outline{background:#fff;border:1.5px solid var(--borde);color:var(--texto);width:auto;}
+.btn-sm{padding:.4rem .8rem;font-size:.75rem;}
+.btn:hover{opacity:.88;}
+.login-error{color:#dc2626;font-size:.78rem;text-align:center;margin-top:.5rem;display:none;}
+.pin-row{display:flex;gap:8px;}
+.pin-row .form-control{flex:1;}
+.ver-btn{background:none;border:1.5px solid var(--borde);border-radius:8px;padding:0 12px;cursor:pointer;font-size:.7rem;font-weight:700;color:#888;}
+
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem;}
+.kpi-box{background:#fff;border-radius:12px;padding:1rem .5rem;text-align:center;box-shadow:var(--sombra);}
+.kpi-val{font-size:1.6rem;font-weight:800;}
+.kpi-sub{font-size:.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-top:2px;}
+.kpi-box.rojo .kpi-val{color:var(--rojo);}
+.kpi-box.amarillo .kpi-val{color:var(--amarillo);}
+.kpi-box.verde .kpi-val{color:var(--verde);}
+
+/* Tarjetas de producto */
+.prod-alert{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.75rem;box-shadow:var(--sombra);border-left:4px solid var(--rojo);}
+.prod-alert.amarillo{border-left-color:#f59e0b;}
+.prod-alert.verde{border-left-color:var(--verde);}
+.prod-nombre{font-weight:700;font-size:.88rem;margin-bottom:3px;}
+.prod-code{font-size:.68rem;color:#888;}
+.prod-num{font-size:1.2rem;font-weight:800;}
+.badge-urgente{background:var(--rojo);color:#fff;border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;}
+.badge-alta{background:#f59e0b;color:#fff;border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;}
+.nota-area{background:var(--gris);border-radius:8px;padding:.5rem .75rem;font-size:.75rem;color:#555;margin-top:.5rem;border-left:3px solid #ccc;cursor:pointer;}
+.nota-area.con-nota{border-left-color:var(--verde);color:var(--texto);}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;padding:1rem;align-items:flex-end;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:20px 20px 12px 12px;padding:1.5rem;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:1rem;font-weight:800;margin-bottom:1rem;}
+.modal-close{position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;}
+
+/* Tabla */
+.tabla{width:100%;border-collapse:collapse;font-size:.75rem;}
+.tabla th{background:var(--verde2);color:#fff;padding:6px 8px;text-align:left;font-size:.65rem;}
+.tabla td{padding:6px 8px;border-bottom:1px solid var(--borde);}
+.tabla tr:hover td{background:#f0fdf4;}
+
+/* Loading */
+.loading{display:flex;justify-content:center;padding:2rem;}
+.spinner{width:32px;height:32px;border:3px solid var(--borde);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Toast */
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1e2b3a;color:#fff;padding:.6rem 1.2rem;border-radius:20px;font-size:.82rem;z-index:600;display:none;white-space:nowrap;}
+
+/* Filtros */
+.filtro-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;}
+.chip{padding:4px 12px;border-radius:20px;font-size:.72rem;font-weight:700;border:1.5px solid var(--borde);background:#fff;cursor:pointer;}
+.chip.active{background:var(--verde2);color:#fff;border-color:var(--verde2);}
+.chip.rojo.active{background:var(--rojo);border-color:var(--rojo);}
+.chip.amarillo.active{background:#f59e0b;border-color:#f59e0b;}
+
+@media(min-width:540px){.content{padding:1.5rem;}}
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="../assets/logo-postecsa.png" alt="POSTECSA" onerror="this.style.display='none'">
+      <div class="login-title" style="margin-top:8px;">SIVIL Suministros</div>
+      <div class="login-sub">Control de Inventario y Compras</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo corporativo</label>
+      <input id="loginCorreo" class="form-control" type="email" placeholder="usuario@postecsa.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">PIN de acceso</label>
+      <div class="pin-row">
+        <input id="loginPin" class="form-control" type="password" placeholder="••••••••" autocomplete="current-password">
+        <button class="ver-btn" onclick="togglePin()">VER</button>
+      </div>
+    </div>
+    <button class="btn btn-verde" onclick="hacerLogin()">🔐 Ingresar</button>
+    <div id="loginError" class="login-error">❌ Correo o PIN incorrecto</div>
+  </div>
+</div>
+
+<!-- APP PRINCIPAL -->
+<div id="mainApp" style="display:none;">
+  <div class="header">
+    <div>
+      <div class="header-title">📦 SIVIL Suministros</div>
+      <div class="header-sub" id="headerSub">Cargando...</div>
+    </div>
+    <div class="user-chip" onclick="cerrarSesion()"><span id="userChip">—</span> · Salir</div>
+  </div>
+
+  <!-- PANTALLA: DASHBOARD -->
+  <div id="screenDashboard" class="screen active">
+    <div class="content">
+      <div class="kpi-grid">
+        <div class="kpi-box rojo"><div class="kpi-val" id="kpiAgotados">—</div><div class="kpi-sub">🔴 Agotados</div></div>
+        <div class="kpi-box amarillo"><div class="kpi-val" id="kpiBajos">—</div><div class="kpi-sub">🟡 Stock Bajo</div></div>
+        <div class="kpi-box verde"><div class="kpi-val" id="kpiOK">—</div><div class="kpi-sub">🟢 OK</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🚨 Requieren atención inmediata</div>
+        <div id="listaUrgentes"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📝 Mis notas de compra activas</div>
+        <div id="listaMisNotas"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: INVENTARIO COMPLETO -->
+  <div id="screenInventario" class="screen">
+    <div class="content">
+      <div class="filtro-chips">
+        <div class="chip rojo active" onclick="filtrarInv('ROJO',this)">🔴 Agotado</div>
+        <div class="chip amarillo" onclick="filtrarInv('AMARILLO',this)">🟡 Stock bajo</div>
+        <div class="chip active" onclick="filtrarInv('TODOS',this)">📦 Todos</div>
+      </div>
+      <div id="listaInventario"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: NOTAS DE COMPRA -->
+  <div id="screenNotas" class="screen">
+    <div class="content">
+      <div class="card" style="background:var(--verde3);border:1.5px solid var(--verde);">
+        <div style="font-size:.78rem;color:var(--verde2);">
+          💡 Registra aquí el estado de cada compra: proveedor contactado, fecha de entrega, cantidades pedidas. Las notas quedan guardadas para todo el equipo.
+        </div>
+      </div>
+      <div id="listaNotas"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <!-- PANTALLA: HISTORIAL -->
+  <div id="screenHistorial" class="screen">
+    <div class="content">
+      <div class="card">
+        <div class="card-title">📋 Historial de Solicitudes</div>
+        <div id="listaHistorial"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav-bottom">
+    <button class="nav-btn active" id="navDash"    onclick="irA('screenDashboard')">  <span class="icon">🏠</span>Inicio</button>
+    <button class="nav-btn"        id="navInv"     onclick="irA('screenInventario')"> <span class="icon">📦</span>Inventario</button>
+    <button class="nav-btn"        id="navNotas"   onclick="irA('screenNotas')">      <span class="icon">📝</span>Notas</button>
+    <button class="nav-btn"        id="navHist"    onclick="irA('screenHistorial')">  <span class="icon">📋</span>Historial</button>
+  </nav>
+</div>
+
+<!-- MODAL NOTA -->
+<div id="modalNota" class="modal-overlay">
+  <div class="modal-box" style="position:relative;">
+    <button class="modal-close" onclick="cerrarModal()">✕</button>
+    <div class="modal-title" id="modalNotaTitulo">Nota de compra</div>
+    <input type="hidden" id="notaTmcode">
+    <div class="form-group">
+      <label class="form-label">Estado del pedido</label>
+      <select id="notaEstado" class="form-control">
+        <option value="pendiente">⏳ Pendiente — sin gestionar</option>
+        <option value="contactado">📞 Proveedor contactado</option>
+        <option value="pedido">📋 Pedido realizado</option>
+        <option value="en_transito">🚛 En tránsito</option>
+        <option value="recibido">✅ Recibido en planta</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Proveedor / observaciones</label>
+      <textarea id="notaTexto" class="form-control" rows="3" placeholder="Ej: Contacté a Argos el 04/07, cotizaron X ton de cemento a $XXX, entregan el viernes..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cantidad solicitada</label>
+      <input id="notaCantidad" class="form-control" type="number" placeholder="Cantidad en UND">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha estimada de llegada</label>
+      <input id="notaFecha" class="form-control" type="date">
+    </div>
+    <button class="btn btn-verde" onclick="guardarNota()">💾 Guardar nota</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// SIVIL SUMINISTROS v1.0 — Lorena / Control de Compras
+// ─────────────────────────────────────────────────────────────
+
+const GAS_URL  = 'https://script.google.com/macros/s/AKfycbyokqX6vLzefzVVOhnETZa6zPHo8DJj6-0mJuMZ1JjPsFNACib_WFeLqgg2Cs_ibp2gzQ/exec';
+const SHEET_ID = '1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI';
+const GVIZ     = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
+
+const ROL_PERMITIDOS = ['ADMIN', 'SUMINISTROS', 'GERENTE'];
+
+var S = {
+  usuario: null,
+  inventario: [],
+  notas: {},      // tmcode → nota local + guardada
+  historial: [],
+  filtroInv: 'ROJO'
+};
+
+// ─── UTILIDADES ─────────────────────────────────────────────
+function toast(msg, ms=3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', ms);
+}
+
+function fmt(n) {
+  const num = parseFloat(n) || 0;
+  return num.toLocaleString('es-CO');
+}
+
+function fmtFecha(s) {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleDateString('es-CO'); } catch { return s; }
+}
+
+function irA(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(screenId)?.classList.add('active');
+  const map = {
+    screenDashboard:'navDash', screenInventario:'navInv',
+    screenNotas:'navNotas', screenHistorial:'navHist'
+  };
+  if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
+  if (screenId === 'screenInventario') renderInventario();
+  if (screenId === 'screenNotas')      renderTodasNotas();
+  if (screenId === 'screenHistorial')  renderHistorial();
+}
+
+function cerrarModal() {
+  document.getElementById('modalNota').classList.remove('show');
+}
+
+function togglePin() {
+  const el = document.getElementById('loginPin');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// ─── AUTENTICACIÓN ──────────────────────────────────────────
+async function hacerLogin() {
+  const correo = document.getElementById('loginCorreo').value.trim();
+  const pin    = document.getElementById('loginPin').value.trim();
+  document.getElementById('loginError').style.display = 'none';
+
+  if (!correo || !pin) { toast('Completa correo y PIN'); return; }
+
+  try {
+    const resp = await fetch(`${GAS_URL}?accion=getVendedores`);
+    const data = await resp.json();
+    const todos = data.data || [];
+
+    // También buscar en todos los usuarios (incluyendo Suministros)
+    const respU = await fetch(GVIZ + 'USUARIOS_MAESTRO');
+    const txtU  = await respU.text();
+    const jU    = JSON.parse(txtU.slice(txtU.indexOf('(')+1, txtU.lastIndexOf(')')));
+    const usuarios = (jU.table?.rows || []).map(row => {
+      const vals = (jU.table?.cols || []).map((c,i) => [c.label, row.c?.[i]?.v ?? '']);
+      return Object.fromEntries(vals);
+    });
+
+    const usuario = usuarios.find(u =>
+      u.correo?.toLowerCase() === correo.toLowerCase() &&
+      u.pin_individual === pin &&
+      u.estado === 'ACTIVO'
+    );
+
+    if (!usuario) {
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+
+    // Verificar rol permitido
+    if (!ROL_PERMITIDOS.includes(usuario.rol)) {
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('loginError').textContent = '❌ Sin acceso a esta app';
+      return;
+    }
+
+    S.usuario = usuario;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('userChip').textContent = usuario.nombre_completo?.split(' ')[0] || correo;
+    document.getElementById('headerSub').textContent = usuario.cargo || 'Suministros';
+    cargarTodo();
+  } catch(e) {
+    toast('Error de conexión: ' + e.message);
+  }
+}
+
+function cerrarSesion() {
+  S = { usuario:null, inventario:[], notas:{}, historial:[], filtroInv:'ROJO' };
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPin').value = '';
+}
+
+// ─── CARGA DE DATOS ─────────────────────────────────────────
+async function cargarTodo() {
+  toast('⏳ Cargando inventario...');
+  try {
+    const r = await fetch(`${GAS_URL}?accion=getInventarioDinamico`);
+    const j = await r.json();
+    S.inventario = j.data || [];
+
+    // Cargar notas guardadas desde el Sheet
+    await cargarNotas();
+
+    renderDashboard();
+    toast('✅ Datos actualizados');
+  } catch(e) {
+    toast('Error al cargar: ' + e.message);
+  }
+}
+
+async function cargarNotas() {
+  try {
+    const r = await fetch(GVIZ + 'SUMINISTROS_NOTAS');
+    const txt = await r.text();
+    const j = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
+    const cols = (j.table?.cols || []).map(c => c.label);
+    const rows = (j.table?.rows || []).map(row => {
+      const obj = {};
+      cols.forEach((h,i) => obj[h] = row.c?.[i]?.v ?? '');
+      return obj;
+    });
+    S.historial = rows;
+    // Mapear la nota más reciente por tmcode
+    S.notas = {};
+    rows.forEach(n => {
+      if (!S.notas[n.tmcode] || n.fecha_registro > S.notas[n.tmcode].fecha_registro) {
+        S.notas[n.tmcode] = n;
+      }
+    });
+  } catch(e) {
+    S.notas = {};
+    S.historial = [];
+  }
+}
+
+// ─── DASHBOARD ──────────────────────────────────────────────
+function renderDashboard() {
+  const inv = S.inventario;
+  const rojos    = inv.filter(p => p.semaforo === 'ROJO');
+  const amarillos = inv.filter(p => p.semaforo === 'AMARILLO');
+  const verdes   = inv.filter(p => p.semaforo === 'VERDE');
+
+  document.getElementById('kpiAgotados').textContent = rojos.length;
+  document.getElementById('kpiBajos').textContent    = amarillos.length;
+  document.getElementById('kpiOK').textContent       = verdes.length;
+
+  // Urgentes: primeros 5 rojos
+  const contU = document.getElementById('listaUrgentes');
+  if (!rojos.length) {
+    contU.innerHTML = '<div style="text-align:center;color:#888;padding:1rem;">✅ Sin productos agotados</div>';
+  } else {
+    contU.innerHTML = rojos.slice(0,5).map(p => tarjetaProducto(p, true)).join('');
+    if (rojos.length > 5) {
+      contU.innerHTML += `<div style="text-align:center;font-size:.78rem;color:#888;margin-top:.5rem;">
+        +${rojos.length-5} productos más en <a href="#" onclick="irA('screenInventario');return false;" style="color:var(--verde);font-weight:700;">Inventario</a></div>`;
+    }
+  }
+
+  // Notas activas
+  const contN = document.getElementById('listaMisNotas');
+  const notasActivas = Object.values(S.notas).filter(n => n.estado && n.estado !== 'recibido');
+  if (!notasActivas.length) {
+    contN.innerHTML = '<div style="font-size:.78rem;color:#aaa;text-align:center;">Sin notas activas — abre Inventario para gestionar una compra</div>';
+  } else {
+    contN.innerHTML = notasActivas.slice(0,3).map(n => `
+      <div style="padding:.5rem 0;border-bottom:1px solid var(--borde);" onclick="abrirNota('${n.tmcode}','${(n.tmdescrip||'').replace(/'/g,'&apos;')}')">
+        <div style="font-size:.8rem;font-weight:700;">${n.tmdescrip || 'COD '+n.tmcode}</div>
+        <div style="font-size:.72rem;color:#555;margin-top:2px;">${estadoLabel(n.estado)} · ${fmtFecha(n.fecha_llegada_estimada)}</div>
+        ${n.nota ? `<div style="font-size:.70rem;color:#888;margin-top:2px;">${n.nota.slice(0,60)}${n.nota.length>60?'...':''}</div>` : ''}
+      </div>`).join('');
+  }
+}
+
+function estadoLabel(estado) {
+  const labels = {
+    pendiente:'⏳ Pendiente', contactado:'📞 Proveedor contactado',
+    pedido:'📋 Pedido', en_transito:'🚛 En tránsito', recibido:'✅ Recibido'
+  };
+  return labels[estado] || estado;
+}
+
+// ─── INVENTARIO ─────────────────────────────────────────────
+function filtrarInv(filtro, chip) {
+  S.filtroInv = filtro;
+  document.querySelectorAll('.filtro-chips .chip').forEach(c => c.classList.remove('active'));
+  chip?.classList.add('active');
+  renderInventario();
+}
+
+function renderInventario() {
+  const inv = S.inventario;
+  let lista = filtro => {
+    if (filtro === 'ROJO')     return inv.filter(p => p.semaforo === 'ROJO');
+    if (filtro === 'AMARILLO') return inv.filter(p => p.semaforo === 'AMARILLO');
+    return inv.filter(p => ['ROJO','AMARILLO'].includes(p.semaforo));
+  };
+  const filtrados = lista(S.filtroInv);
+  const cont = document.getElementById('listaInventario');
+
+  if (!filtrados.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;">Sin productos en esta categoría 🎉</div>';
+    return;
+  }
+  cont.innerHTML = filtrados.map(p => tarjetaProducto(p, false)).join('');
+}
+
+function tarjetaProducto(p, compacto) {
+  const urgente  = p.semaforo === 'ROJO';
+  const nota     = S.notas[String(p.tmcode)];
+  const aProd    = Math.abs(p.disponible || 0) + (p.comprometido || 0) + 10;
+  const cls      = urgente ? '' : 'amarillo';
+
+  return `<div class="prod-alert ${cls}" onclick="abrirNota('${p.tmcode}','${(p.tmdescrip||'').replace(/'/g,"\\'")}')">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="flex:1;">
+        <div class="prod-code">COD ${p.tmcode} · ${p.tmund || 'UND'}</div>
+        <div class="prod-nombre">${p.tmdescrip || '—'}</div>
+        ${!compacto ? `<div style="font-size:.70rem;color:#666;margin-top:3px;">
+          🔒 Comprometido: ${fmt(p.comprometido)} · ⏳ Curado: ${fmt(p.curado||0)} · 📦 Stock: ${fmt(p.stock_bruto||0)}
+        </div>` : ''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:8px;">
+        <div class="prod-num" style="color:${urgente?'var(--rojo)':'#92400e'};">${fmt(p.disponible)}</div>
+        <div style="font-size:.62rem;color:#888;">disponible</div>
+        <div style="margin-top:4px;">${urgente ? '<span class="badge-urgente">URGENTE</span>' : '<span class="badge-alta">STOCK BAJO</span>'}</div>
+      </div>
+    </div>
+    ${!compacto ? `<div style="margin-top:.5rem;background:var(--gris);border-radius:6px;padding:4px 8px;font-size:.70rem;">
+      💡 Producir aprox. <b>${fmt(aProd)}</b> ${p.tmund||'UND'} para normalizar stock
+    </div>` : ''}
+    <div class="nota-area ${nota && nota.estado !== 'pendiente' ? 'con-nota' : ''}">
+      ${nota && nota.estado !== 'pendiente'
+        ? `${estadoLabel(nota.estado)} — ${nota.nota ? nota.nota.slice(0,50)+'...' : 'sin detalle'}`
+        : '📝 Toca para registrar gestión de compra'}
+    </div>
+  </div>`;
+}
+
+// ─── NOTAS DE COMPRA ────────────────────────────────────────
+function abrirNota(tmcode, tmdescrip) {
+  const nota = S.notas[String(tmcode)] || {};
+  document.getElementById('notaTmcode').value        = tmcode;
+  document.getElementById('modalNotaTitulo').textContent = `📝 ${tmdescrip || 'COD '+tmcode}`;
+  document.getElementById('notaEstado').value        = nota.estado || 'pendiente';
+  document.getElementById('notaTexto').value         = nota.nota   || '';
+  document.getElementById('notaCantidad').value      = nota.cantidad || '';
+  document.getElementById('notaFecha').value         = nota.fecha_llegada_estimada || '';
+  document.getElementById('modalNota').classList.add('show');
+}
+
+async function guardarNota() {
+  const tmcode   = document.getElementById('notaTmcode').value;
+  const estado   = document.getElementById('notaEstado').value;
+  const nota     = document.getElementById('notaTexto').value.trim();
+  const cantidad = document.getElementById('notaCantidad').value;
+  const fecha    = document.getElementById('notaFecha').value;
+
+  if (!nota && estado === 'pendiente') { toast('Agrega un texto o cambia el estado'); return; }
+
+  const prod = S.inventario.find(p => String(p.tmcode) === String(tmcode));
+
+  const payload = {
+    accion:    'registrarSuministro',
+    tmcode,
+    tmdescrip: prod?.tmdescrip || '',
+    tmund:     prod?.tmund || '',
+    disponible: prod?.disponible || 0,
+    estado,
+    nota,
+    cantidad:  cantidad || 0,
+    fecha_llegada_estimada: fecha,
+    registrado_por: S.usuario?.nombre_completo || 'Suministros',
+    fecha_registro: new Date().toISOString()
+  };
+
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(payload)
+    });
+
+    // Actualizar estado local
+    S.notas[String(tmcode)] = {
+      tmcode, tmdescrip: prod?.tmdescrip || '',
+      estado, nota, cantidad, fecha_llegada_estimada: fecha,
+      registrado_por: S.usuario?.nombre_completo
+    };
+    S.historial.unshift({...S.notas[String(tmcode)], fecha_registro: new Date().toISOString()});
+
+    cerrarModal();
+    toast('✅ Nota guardada correctamente');
+    renderDashboard();
+    if (document.getElementById('screenInventario').classList.contains('active')) renderInventario();
+    if (document.getElementById('screenNotas').classList.contains('active')) renderTodasNotas();
+  } catch(e) {
+    toast('Error al guardar: ' + e.message);
+  }
+}
+
+function renderTodasNotas() {
+  const cont = document.getElementById('listaNotas');
+  const inv  = S.inventario.filter(p => ['ROJO','AMARILLO'].includes(p.semaforo));
+
+  if (!inv.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;">Sin productos con alerta de inventario</div>';
+    return;
+  }
+
+  cont.innerHTML = inv.map(p => {
+    const nota = S.notas[String(p.tmcode)] || {};
+    const estadoClass = nota.estado === 'recibido' ? 'verde' : nota.estado && nota.estado !== 'pendiente' ? 'amarillo' : '';
+    return `
+    <div class="prod-alert ${p.semaforo === 'ROJO' ? '' : 'amarillo'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="prod-code">COD ${p.tmcode}</div>
+          <div class="prod-nombre">${p.tmdescrip}</div>
+          <div style="font-size:.70rem;color:${p.disponible<0?'var(--rojo)':'#92400e'};font-weight:700;">Disponible: ${fmt(p.disponible)} ${p.tmund}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="abrirNota('${p.tmcode}','${(p.tmdescrip||'').replace(/'/g,"\\'")}')">
+          ${nota.estado && nota.estado !== 'pendiente' ? '✏️ Editar' : '➕ Gestionar'}
+        </button>
+      </div>
+      ${nota.estado && nota.estado !== 'pendiente' ? `
+      <div style="margin-top:.5rem;padding:.5rem;background:var(--gris);border-radius:8px;font-size:.72rem;">
+        <div>${estadoLabel(nota.estado)} ${nota.fecha_llegada_estimada ? '· Llega: '+fmtFecha(nota.fecha_llegada_estimada) : ''}</div>
+        ${nota.nota ? `<div style="color:#555;margin-top:2px;">${nota.nota.slice(0,80)}</div>` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderHistorial() {
+  const cont = document.getElementById('listaHistorial');
+  if (!S.historial.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;padding:1rem;">Sin registros aún</div>';
+    return;
+  }
+  cont.innerHTML = `<table class="tabla">
+    <thead><tr><th>Producto</th><th>Estado</th><th>Cant.</th><th>Registrado</th></tr></thead>
+    <tbody>
+    ${S.historial.slice(0,30).map(n => `<tr>
+      <td><div style="font-weight:700;font-size:.72rem;">${n.tmdescrip||'COD '+n.tmcode}</div></td>
+      <td>${estadoLabel(n.estado)}</td>
+      <td>${fmt(n.cantidad)} ${n.tmund||''}</td>
+      <td style="font-size:.65rem;">${fmtFecha(n.fecha_registro)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ─── CIERRE MODAL CON CLICK FUERA ───────────────────────────
+document.getElementById('modalNota').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
+});
+
+// ─── AUTO-LOGIN SANDBOX ─────────────────────────────────────
+// Solo si viene de acmv0921@gmail.com
+</script>
+</body>
+</html>
