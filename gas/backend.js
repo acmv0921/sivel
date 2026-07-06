@@ -190,7 +190,11 @@ function doPost(e) {
         break;
 
       case "registrarSuministro":     resultado = registrarSuministro(body); break;
+      case "importarExistenciasDrive":   resultado = importarExistenciasDrive(body); break;
+      case "actualizarDescuentoSegunda":  resultado = actualizarDescuentoSegunda(body); break;
+      case "resetSistema":              resultado = resetSistema(body); break;
       case "resetSistema":             resultado = resetSistema(body); break;
+      case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(e.parameter); break;
       default:
         resultado = { ok: false, error: `Acción desconocida: ${accion}` };
     }
@@ -607,7 +611,9 @@ function agregarDetalleAP(body) {
     body.tmcode,
     body.cantidad_solicitada,
     body.cantidad_despachada || 0,
-    body.descuento_aplicado  || 0
+    body.descuento_aplicado  || 0,
+    body.calidad             || "PRIMERA",
+    body.precio_base         || 0
   ]);
   return { ok: true, mensaje: "Línea agregada", detalle_id };
 }
@@ -1277,4 +1283,314 @@ function resetSistema(body) {
   SpreadsheetApp.flush();
   Logger.log("RESET COMPLETADO: " + resumen.join(" | "));
   return { ok: true, mensaje: "Reset completado", resumen: resumen };
+}
+
+// =============================================================================
+// IMPORTAR EXISTENCIAS DESDE GOOGLE DRIVE
+// Carpeta: 1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk
+// Detecta automáticamente BOD_03 (PRIMERAS) y BOD_04 (SEGUNDA)
+// =============================================================================
+var INVENTARIO_FOLDER_ID = "1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk";
+
+function importarExistenciasDrive(body) {
+  try {
+    var folder;
+    try { folder = DriveApp.getFolderById(INVENTARIO_FOLDER_ID); }
+    catch(e) { return { ok: false, error: "No se puede acceder a la carpeta de Drive: " + e.message }; }
+
+    var files = folder.getFiles();
+    var archPrimeras = null, archSegunda = null;
+    var fechaP = null, fechaS = null;
+
+    while (files.hasNext()) {
+      var f = files.next();
+      var name = f.getName().toUpperCase();
+      var mime = f.getMimeType();
+      // Ignorar carpetas y archivos temporales
+      if (mime === "application/vnd.google-apps.folder") continue;
+      if (name.startsWith("_TEMP_")) continue;
+
+      var fecha = f.getLastUpdated();
+      if ((name.indexOf("BOD_03") >= 0 || name.indexOf("PRIMER") >= 0)) {
+        if (!fechaP || fecha > fechaP) { archPrimeras = f; fechaP = fecha; }
+      }
+      if ((name.indexOf("BOD_04") >= 0 || name.indexOf("SEGUND") >= 0)) {
+        if (!fechaS || fecha > fechaS) { archSegunda = f; fechaS = fecha; }
+      }
+    }
+
+    if (!archPrimeras) return { ok: false, error: "No se encontró archivo BOD_03/PRIMERAS en la carpeta" };
+    if (!archSegunda)  return { ok: false, error: "No se encontró archivo BOD_04/SEGUNDA en la carpeta" };
+
+    var datosPrimeras = leerArchivoInventario(archPrimeras);
+    var datosSegunda  = leerArchivoInventario(archSegunda);
+
+    var resumen = actualizarProductosMaestroConCalidad(datosPrimeras, datosSegunda);
+
+    return {
+      ok: true,
+      mensaje: "Importación completada",
+      fecha_archivo_primeras: archPrimeras.getName(),
+      fecha_archivo_segunda:  archSegunda.getName(),
+      primeras: datosPrimeras.length,
+      segunda:  datosSegunda.length,
+      resumen:  resumen
+    };
+  } catch(e) {
+    return { ok: false, error: "Error en importación: " + e.message };
+  }
+}
+
+function leerArchivoInventario(file) {
+  var mime = file.getMimeType();
+  var rows = [];
+
+  if (mime === "application/vnd.google-apps.spreadsheet") {
+    // Ya es Google Sheets — leer directo
+    var ss = SpreadsheetApp.openById(file.getId());
+    rows = ss.getSheets()[0].getDataRange().getValues();
+  } else {
+    // XLS / XLSX: convertir a Sheets temporalmente
+    var tempId = null;
+    try {
+      var resource = {
+        title: "_TEMP_INV_" + Date.now(),
+        mimeType: "application/vnd.google-apps.spreadsheet"
+      };
+      var converted = Drive.Files.copy(resource, file.getId());
+      tempId = converted.id;
+      var ss = SpreadsheetApp.openById(tempId);
+      rows = ss.getSheets()[0].getDataRange().getValues();
+    } catch(e2) {
+      // Fallback: leer como texto CSV (si el ERP exporta CSV con extensión .xls)
+      try {
+        var txt = file.getBlob().getDataAsString("ISO-8859-1");
+        var lineas = txt.split("\n").filter(function(l){ return l.trim(); });
+        rows = lineas.map(function(l){ return l.split("\t"); });
+        if (rows[0].length < 3) rows = lineas.map(function(l){ return l.split(";"); });
+        if (rows[0].length < 3) rows = lineas.map(function(l){ return l.split(","); });
+      } catch(e3) {
+        throw new Error("No se pudo leer el archivo: " + file.getName());
+      }
+    } finally {
+      if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch(e){} }
+    }
+  }
+
+  if (!rows.length) return [];
+
+  // Mapear columnas por header
+  var hdr = rows[0].map(function(h){ return String(h||"").toLowerCase().trim(); });
+  var iCode  = hdr.indexOf("tmcode");
+  var iDesc  = hdr.indexOf("tmdescrip");
+  var iUnd   = hdr.indexOf("tmund");
+  var iCant  = hdr.indexOf("tmcant");
+  var iGrupo = hdr.indexOf("tmgrupo");
+  var iLinea = hdr.indexOf("tmlinea");
+  var iRef   = hdr.indexOf("tmref");
+
+  if (iCode < 0 || iCant < 0) {
+    throw new Error("El archivo no tiene columnas tmcode/tmcant: " + hdr.join("|"));
+  }
+
+  return rows.slice(1).map(function(r) {
+    var code = String(r[iCode] || "").trim();
+    var cant = parseFloat(r[iCant]) || 0;
+    if (!code) return null;
+    return {
+      tmcode:   code,
+      tmref:    iRef   >= 0 ? String(r[iRef]   || code).trim() : code,
+      tmdescrip: iDesc >= 0 ? String(r[iDesc]  || "").trim()   : "",
+      tmund:    iUnd   >= 0 ? String(r[iUnd]   || "UND").trim(): "UND",
+      tmcant:   cant,
+      tmgrupo:  iGrupo >= 0 ? String(r[iGrupo] || "").trim()   : "",
+      tmlinea:  iLinea >= 0 ? String(r[iLinea] || "").trim()   : ""
+    };
+  }).filter(function(r){ return r !== null && r.tmcode !== ""; });
+}
+
+function actualizarProductosMaestroConCalidad(primeras, segunda) {
+  var ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  var hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
+  if (!hoja) throw new Error("Hoja PRODUCTOS_MAESTRO no encontrada");
+
+  var lastCol  = hoja.getLastColumn();
+  var hdrs     = hoja.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  var iCalidad = hdrs.indexOf("calidad");
+
+  // Agregar columna calidad si no existe (después de tmref, posición 3)
+  if (iCalidad === -1) {
+    hoja.insertColumnAfter(2);
+    hoja.getRange(1, 3).setValue("calidad").setFontWeight("bold").setBackground("#1a3a5c").setFontColor("#fff");
+    hdrs     = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(String);
+    iCalidad = hdrs.indexOf("calidad");
+    // Marcar todos los registros existentes como PRIMERA
+    var lastRow = hoja.getLastRow();
+    if (lastRow > 1) {
+      hoja.getRange(2, iCalidad + 1, lastRow - 1, 1).setValue("PRIMERA");
+    }
+  }
+
+  // Re-leer headers
+  lastCol  = hoja.getLastColumn();
+  hdrs     = hoja.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  iCalidad = hdrs.indexOf("calidad");
+  var iCode  = hdrs.indexOf("tmcode");
+  var iCant  = hdrs.indexOf("tmcant");
+  var iDesc  = hdrs.indexOf("tmdescrip");
+  var iUnd   = hdrs.indexOf("tmund");
+  var iRef   = hdrs.indexOf("tmref");
+  var iGrupo = hdrs.indexOf("tmgrupo");
+  var iLinea = hdrs.indexOf("tmlinea");
+
+  // Construir mapa por "tmcode|calidad" → número de fila
+  var lastRow = hoja.getLastRow();
+  var mapa = {};
+  if (lastRow > 1) {
+    var datos = hoja.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    datos.forEach(function(r, i) {
+      var key = String(r[iCode]).trim() + "|" + String(r[iCalidad] || "PRIMERA").trim().toUpperCase();
+      mapa[key] = i + 2; // fila real (1-indexed + header)
+    });
+  }
+
+  var actualizados = 0, nuevos = 0;
+  var rowsNuevas = [];
+
+  function procesarLote(lista, calidad) {
+    lista.forEach(function(p) {
+      var key = p.tmcode + "|" + calidad;
+      if (mapa[key]) {
+        // Actualizar solo tmcant
+        hoja.getRange(mapa[key], iCant + 1).setValue(p.tmcant);
+        actualizados++;
+      } else {
+        // Fila nueva
+        var nr = new Array(lastCol).fill("");
+        if (iCode  >= 0) nr[iCode]  = p.tmcode;
+        if (iRef   >= 0) nr[iRef]   = p.tmref || p.tmcode;
+        if (iCalidad>=0) nr[iCalidad]= calidad;
+        if (iDesc  >= 0) nr[iDesc]  = p.tmdescrip;
+        if (iUnd   >= 0) nr[iUnd]   = p.tmund;
+        if (iCant  >= 0) nr[iCant]  = p.tmcant;
+        if (iGrupo >= 0) nr[iGrupo] = p.tmgrupo;
+        if (iLinea >= 0) nr[iLinea] = p.tmlinea;
+        rowsNuevas.push(nr);
+        nuevos++;
+      }
+    });
+  }
+
+  procesarLote(primeras, "PRIMERA");
+  procesarLote(segunda,  "SEGUNDA");
+
+  // Agregar nuevas filas en lote (más eficiente)
+  if (rowsNuevas.length > 0) {
+    hoja.getRange(hoja.getLastRow() + 1, 1, rowsNuevas.length, lastCol).setValues(rowsNuevas);
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log("Importación: " + actualizados + " actualizados, " + nuevos + " nuevos");
+  return { actualizados: actualizados, nuevos: nuevos };
+}
+
+// ── Consultar qué archivos hay en la carpeta (para mostrar en Gerencia) ──────
+function getArchivosDriveInventario(body) {
+  try {
+    var folder = DriveApp.getFolderById(INVENTARIO_FOLDER_ID);
+    var files   = folder.getFiles();
+    var lista   = [];
+    while (files.hasNext()) {
+      var f = files.next();
+      var mime = f.getMimeType();
+      if (mime === "application/vnd.google-apps.folder") continue;
+      if (f.getName().toUpperCase().indexOf("_TEMP_") >= 0) continue;
+      lista.push({
+        id:     f.getId(),
+        nombre: f.getName(),
+        fecha:  f.getLastUpdated().toISOString(),
+        mime:   mime,
+        esPrimeras: /BOD_03|PRIMER/i.test(f.getName()),
+        esSegunda:  /BOD_04|SEGUND/i.test(f.getName())
+      });
+    }
+    lista.sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+    return { ok: true, data: lista };
+  } catch(e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// =============================================================================
+// RESET DEL SISTEMA — Solo ADMIN
+// =============================================================================
+function resetSistema(body) {
+  if (!body || body.confirmacion !== "RESET_CONFIRMADO") {
+    return { ok: false, error: "Confirmacion incorrecta" };
+  }
+  var ss      = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  var aLimpiar = ["PREVENTAS_AP","DETALLE_AP","NOVEDADES_DESPACHO",
+                  "SUMINISTROS_NOTAS","ALERTAS_CARGUE_MANUAL"];
+  var res = [];
+  aLimpiar.forEach(function(nombre) {
+    var h = ss.getSheetByName(nombre);
+    if (!h) { res.push(nombre+":no-existe"); return; }
+    var last = h.getLastRow();
+    if (last > 1) {
+      h.getRange(2,1,last-1,h.getLastColumn()).clearContent();
+      res.push(nombre+":"+(last-1)+"f-borradas");
+    } else { res.push(nombre+":vacia"); }
+  });
+  var cfg = ss.getSheetByName("CONFIG_SIVIL");
+  if (cfg) {
+    var d = cfg.getDataRange().getValues();
+    for (var i=1;i<d.length;i++) {
+      if (d[i][0]==="ultimo_ap_id") {
+        cfg.getRange(i+1,2).setValue(1967);
+        res.push("consecutivo:1967");
+        break;
+      }
+    }
+  }
+  SpreadsheetApp.flush();
+  return { ok: true, mensaje: "Reset completado", resumen: res };
+}
+
+// =============================================================================
+// ACTUALIZAR DESCUENTO DE SEGUNDA CALIDAD EN PRECIOS_GERENCIA
+// =============================================================================
+function actualizarDescuentoSegunda(body) {
+  var ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  var hoja = ss.getSheetByName("PRECIOS_GERENCIA");
+  if (!hoja) return { ok: false, error: "Hoja PRECIOS_GERENCIA no encontrada" };
+
+  var hdrs = hoja.getRange(1,1,1,hoja.getLastColumn()).getValues()[0].map(String);
+  var iTmcode = hdrs.indexOf("tmcode");
+  var iPrecio = hdrs.indexOf("precio_base_planta");
+
+  // Asegurar que existe la columna descuento_segunda_pct
+  var iDscto = hdrs.indexOf("descuento_segunda_pct");
+  if (iDscto === -1) {
+    hoja.getRange(1, hoja.getLastColumn()+1).setValue("descuento_segunda_pct")
+        .setFontWeight("bold").setBackground("#f59e0b").setFontColor("#fff");
+    iDscto = hoja.getLastColumn() - 1;
+    hdrs.push("descuento_segunda_pct");
+  }
+
+  var lastRow = hoja.getLastRow();
+  var datos   = lastRow > 1 ? hoja.getRange(2,1,lastRow-1,hoja.getLastColumn()).getValues() : [];
+
+  var fila = -1;
+  for (var i=0;i<datos.length;i++) {
+    if (String(datos[i][iTmcode]).trim() === String(body.tmcode).trim()) { fila = i+2; break; }
+  }
+  if (fila < 0) return { ok: false, error: "Producto " + body.tmcode + " no encontrado en PRECIOS_GERENCIA" };
+
+  var pct     = parseFloat(body.pct) || 0;
+  var precio1 = parseFloat(datos[fila-2][iPrecio]) || 0;
+  var precio2 = Math.round(precio1 * (1 - pct/100));
+
+  hoja.getRange(fila, iDscto+1).setValue(pct);
+  SpreadsheetApp.flush();
+  return { ok: true, tmcode: body.tmcode, pct: pct, precio_primera: precio1, precio_segunda: precio2 };
 }

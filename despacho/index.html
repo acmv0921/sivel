@@ -1232,20 +1232,25 @@ function abrirDespacho(ap_id) {
         Solicitado: ${sol} ${und} · Despachado: ${desp} · <strong>Pendiente: ${pend} ${und}</strong>
       </div>
       <div style="margin:4px 0;">
-        <label style="font-size:0.75rem;font-weight:700;display:block;margin-bottom:3px;">🏷️ Tipo de producto</label>
+        <label style="font-size:0.75rem;font-weight:700;display:block;margin-bottom:3px;">
+          🏷️ Calidad a despachar
+          ${(l.calidad||'PRIMERA')==='SEGUNDA'
+            ? '<span style="background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 6px;font-size:.65rem;margin-left:4px;">Pedido en 🥈 SEGUNDA</span>'
+            : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 6px;font-size:.65rem;margin-left:4px;">Pedido en 🥇 PRIMERA</span>'}
+        </label>
         <div style="display:flex;gap:6px;">
-          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id} active"
+          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id} ${(l.calidad||'PRIMERA')!=='SEGUNDA'?'active':''}"
             data-tipo="A" onclick="seleccionarTipo(this,${l.detalle_id})"
-            style="flex:1;font-size:0.75rem;background:var(--verde);color:#fff;border-color:var(--verde);">
-            ✅ Tipo A — Primera
+            style="flex:1;font-size:0.75rem;${(l.calidad||'PRIMERA')!=='SEGUNDA'?'background:var(--verde);color:#fff;border-color:var(--verde);':''}">
+            🥇 Tipo A — Primera
           </button>
-          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id}"
+          <button type="button" class="btn btn-outline btn-sm tipo-btn tipo-btn-${l.detalle_id} ${(l.calidad||'PRIMERA')==='SEGUNDA'?'active':''}"
             data-tipo="B" onclick="seleccionarTipo(this,${l.detalle_id})"
-            style="flex:1;font-size:0.75rem;">
-            ⚠️ Tipo B — Segunda
+            style="flex:1;font-size:0.75rem;${(l.calidad||'PRIMERA')==='SEGUNDA'?'background:#f59e0b;color:#fff;border-color:#f59e0b;':''}">
+            🥈 Tipo B — Segunda
           </button>
         </div>
-        <input type="hidden" id="tipoProd_${l.detalle_id}" value="A">
+        <input type="hidden" id="tipoProd_${l.detalle_id}" value="${(l.calidad||'PRIMERA')==='SEGUNDA'?'B':'A'}">
       </div>
       <input class="input-cant" id="carga_${l.detalle_id}"
              type="number" min="0" max="${pend}" value="${pend}"

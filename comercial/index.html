@@ -708,8 +708,26 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <div class="modal-box">
     <button class="modal-close" onclick="cerrarModal('modalDetalle')">✕</button>
     <div class="modal-title" id="modalDetalleTitle">Configurar Línea</div>
+
+    <!-- SELECTOR DE CALIDAD — Primera o Segunda -->
+    <div class="form-group" id="grupoCalidad">
+      <label class="form-label">Calidad del producto</label>
+      <div style="display:flex;gap:8px;" id="botonesCalidad">
+        <button id="btnCalidadPrimera" onclick="seleccionarCalidad('PRIMERA')"
+          style="flex:1;padding:.6rem;border:2px solid #16a34a;background:#f0fdf4;border-radius:10px;cursor:pointer;font-weight:700;font-size:.82rem;color:#14532d;">
+          🥇 PRIMERA<div id="stockPrimera" style="font-size:.68rem;font-weight:400;color:#888;"></div>
+        </button>
+        <button id="btnCalidadSegunda" onclick="seleccionarCalidad('SEGUNDA')"
+          style="flex:1;padding:.6rem;border:2px solid #e2e8f0;background:#fff;border-radius:10px;cursor:pointer;font-weight:700;font-size:.82rem;color:#888;"
+          id="btnCalidad2">
+          🥈 SEGUNDA<div id="stockSegunda" style="font-size:.68rem;font-weight:400;color:#888;"></div>
+        </button>
+      </div>
+      <input type="hidden" id="detalleCalidad" value="PRIMERA">
+    </div>
+
     <div class="form-group">
-      <label class="form-label">Disponible</label>
+      <label class="form-label">Stock disponible</label>
       <div id="detalleSemaforo" style="margin-bottom:8px;"></div>
     </div>
     <div class="form-group">
@@ -717,13 +735,14 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <input id="detalleCant" class="form-control" type="number" min="1" placeholder="0" oninput="calcularLineaModal()">
     </div>
     <div class="form-group">
-      <label class="form-label">Descuento (%)</label>
+      <label class="form-label">Descuento adicional (%)</label>
       <input id="detalleDesc" class="form-control" type="number" min="0" max="100" step="0.5" placeholder="0" oninput="calcularLineaModal()">
       <div id="detalleDescAlert" style="font-size:0.72rem;color:var(--rojo);margin-top:4px;"></div>
     </div>
     <div class="form-group">
-      <label class="form-label">Precio unitario (base)</label>
+      <label class="form-label">Precio unitario</label>
       <input id="detallePrecio" class="form-control" type="text" disabled>
+      <div id="detallePrecioInfo" style="font-size:.68rem;color:#888;margin-top:3px;"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Total línea</label>
@@ -1402,29 +1421,89 @@ function filtrarProdModal(filtro="") {
 }
 
 function abrirDetalleProducto(tmcode) {
-  const p = STATE.inventario.find(x => String(x.tmcode) === String(tmcode));
+  // Buscar existencias de PRIMERA y SEGUNDA para este tmcode
+  const pPrimera = STATE.inventario.find(x => String(x.tmcode)===String(tmcode) && (x.calidad||'PRIMERA').toUpperCase()==='PRIMERA');
+  const pSegunda = STATE.inventario.find(x => String(x.tmcode)===String(tmcode) && (x.calidad||'').toUpperCase()==='SEGUNDA');
+  const p = pPrimera || pSegunda; // El producto base
   if (!p) return;
+
   STATE.prodSeleccionado = p;
+  STATE.prodSeleccionadoPrimera = pPrimera || null;
+  STATE.prodSeleccionadoSegunda = pSegunda || null;
 
   document.getElementById('modalDetalleTitle').textContent = p.tmdescrip;
-  document.getElementById('detalleSemaforo').innerHTML =
-    `<span class="semaforo sem-${p.semaforo.toLowerCase()}">${p.semaforo === 'VERDE' ? '🟢' : p.semaforo === 'AMARILLO' ? '🟡' : '🔴'} ${p.disponible} ${p.tmund} disponibles</span>`;
-  document.getElementById('detallePrecio').value = fmt(p.precio_base);
   document.getElementById('detalleCant').value = '';
   document.getElementById('detalleDesc').value = '';
   document.getElementById('detalleTotal').value = '';
   document.getElementById('detalleDescAlert').textContent = '';
+  document.getElementById('detallePrecioInfo').textContent = '';
+
+  // Configurar botones de calidad
+  const semFmt = (prod, badge) => {
+    if (!prod) return `<span style="color:#aaa;font-size:.7rem;">Sin stock</span>`;
+    const sem = prod.semaforo||'ROJO';
+    const icon = sem==='VERDE'?'🟢':sem==='AMARILLO'?'🟡':'🔴';
+    return `<span style="font-size:.72rem;color:${sem==='VERDE'?'#14532d':sem==='AMARILLO'?'#92400e':'#b91c1c'};">${icon} ${prod.disponible} ${prod.tmund}</span>`;
+  };
+  document.getElementById('stockPrimera').innerHTML = pPrimera ? semFmt(pPrimera) : '<span style="color:#aaa;font-size:.7rem;">Sin stock</span>';
+  document.getElementById('stockSegunda').innerHTML  = pSegunda ? semFmt(pSegunda) : '<span style="color:#aaa;font-size:.7rem;">Sin stock</span>';
+
+  // Deshabilitar el botón si no hay stock
+  document.getElementById('btnCalidadPrimera').disabled = !pPrimera;
+  document.getElementById('btnCalidadSegunda').disabled  = !pSegunda;
+
+  // Seleccionar calidad inicial (PRIMERA si hay, sino SEGUNDA)
+  seleccionarCalidad(pPrimera ? 'PRIMERA' : 'SEGUNDA');
 
   cerrarModal('modalProducto');
   document.getElementById('modalDetalle').classList.add('show');
 }
 
+function seleccionarCalidad(calidad) {
+  document.getElementById('detalleCalidad').value = calidad;
+  const btnP = document.getElementById('btnCalidadPrimera');
+  const btnS = document.getElementById('btnCalidadSegunda');
+  if (calidad === 'PRIMERA') {
+    btnP.style.borderColor = '#16a34a'; btnP.style.background = '#f0fdf4'; btnP.style.color = '#14532d';
+    btnS.style.borderColor = '#e2e8f0'; btnS.style.background = '#fff'; btnS.style.color = '#888';
+    STATE.prodSeleccionado = STATE.prodSeleccionadoPrimera || STATE.prodSeleccionado;
+  } else {
+    btnS.style.borderColor = '#f59e0b'; btnS.style.background = '#fffbeb'; btnS.style.color = '#92400e';
+    btnP.style.borderColor = '#e2e8f0'; btnP.style.background = '#fff'; btnP.style.color = '#888';
+    STATE.prodSeleccionado = STATE.prodSeleccionadoSegunda || STATE.prodSeleccionado;
+  }
+  const p = STATE.prodSeleccionado;
+  const sem = p.semaforo||'ROJO';
+  const icon = sem==='VERDE'?'🟢':sem==='AMARILLO'?'🟡':'🔴';
+  document.getElementById('detalleSemaforo').innerHTML =
+    `<span class="semaforo sem-${sem.toLowerCase()}">${icon} ${p.disponible} ${p.tmund} disponibles</span>`;
+
+  // Precio según calidad
+  const dscto = parseFloat(p.descuento_segunda_pct||0);
+  const precio1 = p.precio_base || 0;
+  const precio2 = Math.round(precio1 * (1 - dscto/100));
+  const precioActual = calidad==='SEGUNDA' ? precio2 : precio1;
+  document.getElementById('detallePrecio').value = fmt(precioActual);
+  if (calidad==='SEGUNDA' && dscto>0) {
+    document.getElementById('detallePrecioInfo').textContent = `Precio primera: $${fmt(precio1)} · Descuento: ${dscto}%`;
+  } else {
+    document.getElementById('detallePrecioInfo').textContent = '';
+  }
+  calcularLineaModal();
+}
+
 function calcularLineaModal() {
-  const p    = STATE.prodSeleccionado;
+  const p       = STATE.prodSeleccionado;
   if (!p) return;
-  const cant = parseFloat(document.getElementById('detalleCant').value) || 0;
-  const desc = parseFloat(document.getElementById('detalleDesc').value) / 100 || 0;
-  const alert= document.getElementById('detalleDescAlert');
+  const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
+  const cant    = parseFloat(document.getElementById('detalleCant').value) || 0;
+  const desc    = parseFloat(document.getElementById('detalleDesc').value) / 100 || 0;
+  const alert   = document.getElementById('detalleDescAlert');
+
+  const dsctoSeg  = parseFloat(p.descuento_segunda_pct||0);
+  const precioBase = calidad==='SEGUNDA'
+    ? Math.round(p.precio_base*(1-dsctoSeg/100))
+    : p.precio_base;
 
   if (desc > p.desc_max && p.desc_max > 0) {
     alert.textContent = `⚠️ Máximo permitido: ${(p.desc_max*100).toFixed(0)}%. Requiere aprobación de gerencia.`;
@@ -1432,7 +1511,8 @@ function calcularLineaModal() {
     alert.textContent = '';
   }
 
-  const total = cant * p.precio_base * (1 - desc);
+  document.getElementById('detallePrecio').value = fmt(precioBase);
+  const total = cant * precioBase * (1 - desc);
   document.getElementById('detalleTotal').value = fmt(total);
 }
 
@@ -1447,15 +1527,21 @@ function confirmarLinea() {
     if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de todas formas? Se generará alerta de producción.`)) return;
   }
 
+  const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
+  const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
+  const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
   STATE.pedido.lineas.push({
-    tmcode:             p.tmcode,
-    tmdescrip:          p.tmdescrip,
-    tmund:              p.tmund,
+    tmcode:              p.tmcode,
+    tmdescrip:           p.tmdescrip,
+    tmund:               p.tmund,
+    calidad:             calidad,
     cantidad_solicitada: cant,
     descuento_aplicado:  desc,
-    precio_base:        p.precio_base,
-    flete_a:            p.flete_a,
-    flete_b:            p.flete_b
+    descuento_segunda_pct: dsctoSeg,
+    precio_base:         precioFinal,
+    precio_base_primera: p.precio_base,
+    flete_a:             p.flete_a,
+    flete_b:             p.flete_b
   });
 
   cerrarModal('modalDetalle');
@@ -1477,19 +1563,22 @@ function renderLineasAP() {
     cont.innerHTML = '<div style="text-align:center;color:#aaa;padding:1rem;font-size:0.82rem;">Sin productos agregados</div>';
     return;
   }
-  cont.innerHTML = STATE.pedido.lineas.map((l,i) => `
-    <div class="linea-item">
+  cont.innerHTML = STATE.pedido.lineas.map((l,i) => {
+    const calidadBadge = (l.calidad||'PRIMERA')==='SEGUNDA'
+      ? '<span style="background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥈 2a</span>'
+      : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 1a</span>';
+    return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
       <div class="linea-info">
-        <div class="linea-prod">${l.tmdescrip}</div>
-        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · Desc ${(l.descuento_aplicado*100).toFixed(0)}%</div>
+        <div class="linea-prod">${l.tmdescrip} ${calidadBadge}</div>
+        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
         <div class="linea-precio">${fmt(l.cantidad_solicitada * l.precio_base * (1-l.descuento_aplicado))}</div>
         <button class="linea-del" onclick="eliminarLinea(${i})">✕</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function eliminarLinea(i) {

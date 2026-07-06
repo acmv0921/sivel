@@ -609,7 +609,60 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <button class="nav-btn"        onclick="irA('screenPrecios')"      id="navPrecios">    <span class="icon">💰</span>Precios</button>
   <button class="nav-btn"        onclick="irA('screenPromociones')"  id="navPromociones"><span class="icon">🔥</span>Promos</button>
   <button class="nav-btn"        onclick="irA('screenUsuarios')"     id="navUsuarios">   <span class="icon">👥</span>Usuarios</button>
+    <button class="nav-btn" id="navInventDrive" onclick="irA('screenInventDrive')"><span class="icon">📥</span>Inventario</button>
 </nav>
+
+<!-- PANTALLA: IMPORTAR INVENTARIO DRIVE -->
+<div id="screenInventDrive" class="screen">
+  <div class="content">
+
+    <div class="card" id="cardArchivosDrive">
+      <div class="card-title">📁 Carpeta de Inventario en Drive</div>
+      <div id="driveFilesStatus" style="font-size:.78rem;color:#888;">Cargando archivos...</div>
+      <div id="driveFilesList" style="margin-top:.75rem;"></div>
+      <div style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="cargarArchivosDrive()">🔄 Actualizar</button>
+        <a href="https://drive.google.com/drive/folders/1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk"
+           target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">📂 Abrir Drive</a>
+      </div>
+    </div>
+
+    <div class="card" style="border-top:3px solid var(--verde);">
+      <div class="card-title">⬇️ Importar Existencias al SIVIL</div>
+      <p style="font-size:.78rem;color:#555;margin-bottom:1rem;">
+        Lee los archivos <b>BOD_03 (Primeras)</b> y <b>BOD_04 (Segundas)</b> más recientes
+        de la carpeta Drive y actualiza el inventario diferenciado por calidad.
+      </p>
+      <div style="background:#f0fdf4;border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.75rem;color:#14532d;">
+        ℹ️ Actualiza solo los stocks (tmcant). No modifica precios ni descuentos.
+      </div>
+      <div id="importResult" style="display:none;margin-bottom:1rem;"></div>
+      <button class="btn btn-verde" id="btnImportar" onclick="ejecutarImportacion()">📥 Importar desde Drive</button>
+    </div>
+
+    <div class="card" style="border-top:3px solid #f59e0b;">
+      <div class="card-title" style="color:#92400e;">🥈 Descuentos para Segunda Calidad</div>
+      <p style="font-size:.78rem;color:#555;margin-bottom:1rem;">
+        Precio de segunda = Precio base × (1 − % descuento). Edita el % y presiona Tab para guardar.
+      </p>
+      <div id="listaDescuentosSegunda"><button class="btn btn-outline btn-sm" onclick="cargarDescuentosSegunda()">📋 Cargar precios y descuentos</button></div>
+    </div>
+
+    <div class="card" style="background:#f8fafc;">
+      <div class="card-title" style="color:#64748b;">📋 Flujo de actualización diaria</div>
+      <div style="font-size:.75rem;color:#555;line-height:1.8;">
+        <b>1.</b> El ERP genera los archivos XLS de existencias<br>
+        <b>2.</b> Administración los sube a la carpeta Drive<br>
+        <b>3.</b> Gerencia hace clic en <b>"Importar desde Drive"</b><br>
+        <b>4.</b> SIVIL actualiza stocks de 🥇 Primera y 🥈 Segunda<br><br>
+        <b>Nombres esperados:</b><br>
+        <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:.7rem;">..._BOD_03_PRIMERAS.xls</code> y
+        <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:.7rem;">..._BOD_04_SEGUNDA.xls</code>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- PANTALLA: PROMOCIONES Y CONSECUTIVO -->
 <div id="screenPromociones" class="screen">
@@ -650,6 +703,19 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     <button class="btn" style="background:var(--rojo);color:#fff;" onclick="ejecutarResetAdmin()">
       🗑️ Resetear datos de prueba y comenzar en cero
     </button>
+  </div>
+
+  <!-- Sandbox / Modo Prueba (opcional) -->
+  <div id="seccionSandboxAdmin" class="card" style="border-top:3px solid #f59e0b;margin-top:.5rem;display:none;">
+    <div class="card-title" style="color:#92400e;">🟠 Modo Prueba (Sandbox)</div>
+    <p style="font-size:.78rem;color:#555;margin-bottom:.75rem;">
+      Activa el modo de prueba para simular operaciones sin afectar datos reales. 
+      Útil para probar funcionalidades antes de usarlas en producción.
+    </p>
+    <div style="display:flex;gap:.5rem;">
+      <button class="btn btn-outline btn-sm" onclick="activarSandbox();toast('🟠 Modo Prueba activado');">🟠 Activar modo prueba</button>
+      <button class="btn btn-outline btn-sm" onclick="desactivarSandbox();">✅ Salir del modo prueba</button>
+    </div>
   </div>
 </div>
 
@@ -850,9 +916,10 @@ async function hacerLogin() {
       err.textContent = '❌ Sin acceso a esta app (' + rol + ')'; return;
     }
     
-    // Normalizar nombre
-    const nombre = usuario.nombre_vendedor || usuario.nombre_completo || usuario.nombre || correo;
+    // Normalizar nombre — para ADMIN usar nombre_completo de USUARIOS_MAESTRO
+    const nombre = usuario.nombre_completo || usuario.nombre_vendedor || usuario.nombre || correo;
     usuario.nombre_vendedor = nombre;
+    usuario.nombre_completo = nombre;
     
     // Asignar estado global
     G.usuario  = correo;
@@ -868,9 +935,11 @@ async function hacerLogin() {
       card.style.display = 'block';
     }
     
-    // Activar sandbox si es admin
-    if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
-      activarSandbox();
+    // ADMIN entra en modo NORMAL (no sandbox)
+    // El sandbox está disponible solo si lo activa manualmente
+    if (correo === 'acmv0921@gmail.com') {
+      // No activar sandbox por defecto — el admin trabaja con datos reales
+      console.log('ADMIN logueado — modo producción normal');
     }
     
     // Entrar a la app — sin setTimeout para no cambiar comportamiento
@@ -1001,25 +1070,49 @@ function renderDashboard() {
     navAprobac.insertAdjacentHTML('beforeend','<span class="notif-dot"></span>');
   }
 
-  // Chart vendedores
-  const vByVend = {};
-  G.aps.forEach(ap=>{
-    const id=String(ap.vendedor_id);
-    if(!vByVend[id]) vByVend[id]={count:0,id};
-    vByVend[id].count++;
+  // Chart vendedores — Solo rol VENDEDOR (excluir JEFE_VENTAS)
+  // Mostrar TODOS los vendedores (incluso con 0 APs) para visibilidad completa
+  const vendedoresSoloVNT = G.vendedores.filter(v=>{
+    const rol = (v.rol||v.cargo||'').toUpperCase();
+    return rol==='VENDEDOR' || rol==='VNT' || rol.includes('VEND');
   });
-  const maxV=Math.max(1,...Object.values(vByVend).map(v=>v.count));
-  const chartVend=document.getElementById('chartVendedores');
-  if(Object.keys(vByVend).length===0){chartVend.innerHTML='<p style="color:#888;font-size:.82rem;">Sin datos</p>';return;}
-  chartVend.innerHTML=Object.values(vByVend).sort((a,b)=>b.count-a.count).map(v=>{
-    const vend=G.vendedores.find(x=>String(x.id_vendedor)===v.id);
-    const nombre=vend?vend.nombre_vendedor:'Vendedor '+v.id;
-    const pct=Math.round((v.count/maxV)*100);
-    return `<div class="bar-item">
-      <div class="bar-label"><span>${nombre.split(' ').slice(0,2).join(' ')}</span><span style="font-weight:700;">${v.count} APs</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-    </div>`;
-  }).join('');
+  const vByVend = {};
+  // Inicializar todos los vendedores en 0
+  vendedoresSoloVNT.forEach(v=>{
+    vByVend[String(v.id_vendedor)] = { count:0, id:String(v.id_vendedor), nombre:v.nombre_vendedor };
+  });
+  // Contar APs por vendedor
+  G.aps.forEach(ap=>{
+    const id = String(ap.vendedor_id||ap.vendedor_nombre||'');
+    if(vByVend[id]) {
+      vByVend[id].count++;
+    } else {
+      // Si no está en la lista por id, buscar por nombre
+      const vMatch = vendedoresSoloVNT.find(v=>
+        v.nombre_vendedor && ap.vendedor_nombre &&
+        v.nombre_vendedor.toLowerCase().includes(ap.vendedor_nombre.toLowerCase().split(' ')[0])
+      );
+      if(vMatch) vByVend[String(vMatch.id_vendedor)].count++;
+    }
+  });
+  const maxV = Math.max(1,...Object.values(vByVend).map(v=>v.count));
+  const chartVend = document.getElementById('chartVendedores');
+  if(!vendedoresSoloVNT.length){
+    chartVend.innerHTML='<p style="color:#888;font-size:.82rem;">Sin vendedores configurados</p>';
+  } else {
+    chartVend.innerHTML = Object.values(vByVend).sort((a,b)=>b.count-a.count).map(v=>{
+      const nombre1 = v.nombre ? v.nombre.split(' ').slice(0,2).join(' ') : 'Vendedor '+v.id;
+      const pct = Math.round((v.count/maxV)*100);
+      const color = v.count===0 ? '#e2e8f0' : (v.count===maxV?'var(--verde)':'#64b5a0');
+      return `<div class="bar-item">
+        <div class="bar-label">
+          <span>${nombre1}</span>
+          <span style="font-weight:700;color:${v.count===0?'#aaa':'inherit'}">${v.count} AP${v.count!==1?'s':''}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      </div>`;
+    }).join('');
+  }
 
   // Chart estados
   const porEstado={};
@@ -1676,9 +1769,20 @@ async function desactivarPromo(id_promo) {
 // Mostrar reset solo a ADMIN
 function verificarPermisoReset() {
   const seccion = document.getElementById('seccionResetAdmin');
-  if (!seccion) return;
-  const rol = G?.usuario?.rol || '';
-  seccion.style.display = (rol === 'ADMIN') ? 'block' : 'none';
+  const seccionSb = document.getElementById('seccionSandboxAdmin');
+  const correo = String(G?.usuario || '').toLowerCase();
+  const rol = String(G?.vendedor?.rol || G?.vendedor?.cargo || '').toUpperCase();
+  const esAdmin = rol === 'ADMIN' || correo === 'acmv0921@gmail.com';
+  if (seccion)   seccion.style.display   = esAdmin ? 'block' : 'none';
+  if (seccionSb) seccionSb.style.display = esAdmin ? 'block' : 'none';
+}
+
+function desactivarSandbox() {
+  _SANDBOX = false;
+  document.body.classList.remove('sandbox-active');
+  const banner = document.getElementById('sandboxBanner');
+  if (banner) banner.remove();
+  toast('✅ Modo prueba desactivado — los cambios ahora se guardan en el sistema real');
 }
 
 async function ejecutarResetAdmin() {
@@ -1753,9 +1857,132 @@ document.addEventListener('DOMContentLoaded', () => {
       cargarConsecutivo();
     };
   }
+  // Inventario Drive: cargar cuando se abre la tab
+  const btnInvDrive = document.getElementById('navInventDrive');
+  if (btnInvDrive) {
+    btnInvDrive.onclick = function() {
+      irA('screenInventDrive');
+      cargarArchivosDrive();
+    };
+  }
 });
 
 });
+
+// ═══════════════════════════════════════════════════════════
+// IMPORTAR INVENTARIO DESDE GOOGLE DRIVE
+// ═══════════════════════════════════════════════════════════
+async function cargarArchivosDrive() {
+  const cont = document.getElementById('driveFilesList');
+  const status = document.getElementById('driveFilesStatus');
+  if (!status) return;
+  status.textContent = '⏳ Consultando Drive...';
+  try {
+    const r = await fetch(`${GAS_URL}?accion=getArchivosDriveInventario`);
+    const j = await r.json();
+    if (!j.ok) { status.textContent = '❌ ' + j.error; return; }
+    const archivos = j.data || [];
+    const primeras = archivos.filter(f => f.esPrimeras);
+    const segunda  = archivos.filter(f => f.esSegunda);
+    const fmtF = iso => new Date(iso).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    status.textContent = archivos.length + ' archivo(s) en la carpeta de Drive';
+    cont.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
+        <div style="background:#f0fdf4;border-radius:8px;padding:.75rem;border-left:3px solid #16a34a;">
+          <div style="font-size:.65rem;font-weight:700;color:#14532d;text-transform:uppercase;">🥇 Primeras (BOD 03)</div>
+          ${primeras.length ? primeras.slice(0,1).map(f=>`
+            <div style="margin-top:.4rem;font-size:.72rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.nombre}">${f.nombre}</div>
+            <div style="font-size:.65rem;color:#666;">${fmtF(f.fecha)}</div>`).join('') :
+            '<div style="font-size:.72rem;color:#888;margin-top:.4rem;">⚠️ Sin archivo — sube BOD_03</div>'}
+        </div>
+        <div style="background:#fefce8;border-radius:8px;padding:.75rem;border-left:3px solid #f59e0b;">
+          <div style="font-size:.65rem;font-weight:700;color:#92400e;text-transform:uppercase;">🥈 Segunda (BOD 04)</div>
+          ${segunda.length ? segunda.slice(0,1).map(f=>`
+            <div style="margin-top:.4rem;font-size:.72rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${f.nombre}">${f.nombre}</div>
+            <div style="font-size:.65rem;color:#666;">${fmtF(f.fecha)}</div>`).join('') :
+            '<div style="font-size:.72rem;color:#888;margin-top:.4rem;">⚠️ Sin archivo — sube BOD_04</div>'}
+        </div>
+      </div>
+      <div style="margin-top:.5rem;font-size:.72rem;font-weight:700;color:${primeras.length&&segunda.length?'#16a34a':'#dc2626'};">
+        ${primeras.length&&segunda.length ? '✅ Ambos archivos detectados — listo para importar' : '⚠️ Falta algún archivo — sube ambos antes de importar'}
+      </div>`;
+  } catch(e) { status.textContent = '❌ Error: ' + e.message; }
+}
+
+async function ejecutarImportacion() {
+  const btn = document.getElementById('btnImportar');
+  const res = document.getElementById('importResult');
+  if (!confirm('¿Importar existencias desde Drive?\n\nSe actualizarán los stocks de 🥇 Primera y 🥈 Segunda en PRODUCTOS_MAESTRO.')) return;
+  btn.textContent = '⏳ Importando...'; btn.disabled = true; res.style.display = 'none';
+  try {
+    const r = await fetch(GAS_URL, {method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({accion:'importarExistenciasDrive',usuario:G.usuario?.nombre_completo})});
+    const j = await r.json();
+    res.style.display = 'block';
+    if (j.ok) {
+      res.innerHTML = `<div style="background:#f0fdf4;border-radius:8px;padding:1rem;font-size:.78rem;">
+        <div style="font-weight:700;color:#14532d;margin-bottom:.4rem;">✅ Importación completada</div>
+        <div>🥇 Primeras: <b>${j.primeras}</b> productos procesados</div>
+        <div>🥈 Segundas: <b>${j.segunda}</b> productos procesados</div>
+        <div style="color:#555;margin-top:.3rem;">Actualizados: ${j.resumen?.actualizados} · Nuevos: ${j.resumen?.nuevos}</div>
+      </div>`;
+      toast('✅ Inventario actualizado desde Drive');
+    } else {
+      res.innerHTML = `<div style="background:#fef2f2;border-radius:8px;padding:.75rem;color:#dc2626;font-size:.78rem;">❌ ${j.error}</div>`;
+    }
+  } catch(e) {
+    res.style.display='block';
+    res.innerHTML=`<div style="background:#fef2f2;border-radius:8px;padding:.75rem;color:#dc2626;font-size:.78rem;">❌ ${e.message}</div>`;
+  } finally { btn.textContent='📥 Importar desde Drive'; btn.disabled=false; }
+}
+
+async function cargarDescuentosSegunda() {
+  const cont = document.getElementById('listaDescuentosSegunda');
+  cont.innerHTML = '<div style="font-size:.75rem;color:#888;">⏳ Cargando precios...</div>';
+  try {
+    const r = await fetch(`${GAS_URL}?accion=getPrecios`);
+    const j = await r.json();
+    const precios = (j.data||[]).filter(p=>Number(p.precio_base_planta)>0).slice(0,15);
+    if (!precios.length) { cont.innerHTML='<div style="font-size:.75rem;color:#888;">Sin precios configurados</div>'; return; }
+    cont.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.72rem;">
+      <thead><tr>
+        <th style="background:#1a3a5c;color:#fff;padding:5px 8px;text-align:left;">Código</th>
+        <th style="background:#1a3a5c;color:#fff;padding:5px 8px;">Descripción</th>
+        <th style="background:#1a3a5c;color:#fff;padding:5px 8px;text-align:right;">Precio 🥇</th>
+        <th style="background:#f59e0b;color:#fff;padding:5px 8px;text-align:center;">% Dscto 🥈</th>
+        <th style="background:#f59e0b;color:#fff;padding:5px 8px;text-align:right;">Precio 🥈</th>
+      </tr></thead>
+      <tbody>${precios.map((p,i)=>`<tr style="background:${i%2===0?'#fffbeb':'#fff'}">
+        <td style="padding:4px 8px;">${p.tmcode}</td>
+        <td style="padding:4px 8px;">${(p.tmdescrip||'').slice(0,25)}</td>
+        <td style="padding:4px 8px;text-align:right;">$${Number(p.precio_base_planta||0).toLocaleString('es-CO')}</td>
+        <td style="padding:4px 8px;text-align:center;">
+          <input type="number" min="0" max="80" step="1" value="${p.descuento_segunda_pct||10}"
+            style="width:50px;text-align:center;border:1.5px solid #f59e0b;border-radius:4px;padding:2px;font-size:.75rem;"
+            data-tmcode="${p.tmcode}"
+            onchange="actualizarDescuento('${p.tmcode}',this.value);this.style.background='#fef9c3'">%
+        </td>
+        <td style="padding:4px 8px;text-align:right;color:#92400e;font-weight:700;" id="precio2a_${p.tmcode}">
+          $${Math.round(Number(p.precio_base_planta||0)*(1-(Number(p.descuento_segunda_pct)||10)/100)).toLocaleString('es-CO')}
+        </td>
+      </tr>`).join('')}</tbody></table>
+    <div style="font-size:.65rem;color:#888;margin-top:.4rem;">Mostrando ${precios.length} de ${j.data?.length||0} productos con precio. Constanza define los %.</div></div>`;
+  } catch(e) { cont.innerHTML='<div style="color:#dc2626;font-size:.75rem;">Error: '+e.message+'</div>'; }
+}
+
+async function actualizarDescuento(tmcode, pct) {
+  const celPrecio = document.getElementById('precio2a_' + tmcode);
+  try {
+    const r = await fetch(GAS_URL, {method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({accion:'actualizarDescuentoSegunda',tmcode,pct:parseFloat(pct)})});
+    const j = await r.json();
+    if (j.ok && celPrecio && j.precio_segunda) {
+      celPrecio.textContent = '$' + Number(j.precio_segunda).toLocaleString('es-CO');
+    }
+    toast('💾 Descuento ' + pct + '% guardado para ' + tmcode);
+  } catch(e) { toast('Error al guardar: ' + e.message); }
+}
+
 </script>
 
 <script>
