@@ -361,19 +361,51 @@ function cerrarSesion() {
 
 // ─── CARGA DE DATOS ─────────────────────────────────────────
 async function cargarTodo() {
-  toast('⏳ Cargando inventario...');
+  toast('⏳ Cargando...');
   try {
-    const r = await fetch(`${GAS_URL}?accion=getInventarioDinamico`);
-    const j = await r.json();
-    S.inventario = j.data || [];
+    // Cargar alertas de producción (ya tiene semáforo calculado — más rápido)
+    const [rAlertas, rProductos] = await Promise.all([
+      fetch(`${GAS_URL}?accion=getAlertasProduccion`).then(r=>r.json()).catch(()=>({data:[]})),
+      fetch(`${GAS_URL}?accion=getProductos`).then(r=>r.json()).catch(()=>({data:[]}))
+    ]);
 
-    // Cargar notas guardadas desde el Sheet
+    const alertas   = rAlertas.data  || [];
+    const productos = rProductos.data || [];
+
+    // Crear un mapa de tmcode → stock_bruto desde productos
+    const stockMap = {};
+    productos.forEach(p => { stockMap[String(p.tmcode)] = parseFloat(p.tmcant)||0; });
+
+    // Combinar alertas con datos de stock
+    // Alertas ya tiene semaforo, disponible, comprometido, curado
+    S.inventario = alertas.map(a => ({
+      ...a,
+      stock_bruto: stockMap[String(a.tmcode)] || a.tmcant || 0
+    }));
+
+    // Para productos SIN alerta (stock verde), agregarlos con semáforo VERDE
+    const enAlertas = new Set(alertas.map(a=>String(a.tmcode)));
+    productos.forEach(p => {
+      if (!enAlertas.has(String(p.tmcode))) {
+        const disp = parseFloat(p.tmcant)||0;
+        S.inventario.push({
+          tmcode: p.tmcode,
+          tmdescrip: p.tmdescrip,
+          tmund: p.tmund,
+          disponible: disp,
+          stock_bruto: disp,
+          comprometido: 0,
+          curado: 0,
+          semaforo: disp > 10 ? 'VERDE' : disp > 0 ? 'AMARILLO' : 'ROJO'
+        });
+      }
+    });
+
     await cargarNotas();
-
     renderDashboard();
-    toast('✅ Datos actualizados');
+    toast(`✅ ${S.inventario.length} productos cargados`);
   } catch(e) {
-    toast('Error al cargar: ' + e.message);
+    toast('Error: ' + e.message);
   }
 }
 
