@@ -190,6 +190,7 @@ function doPost(e) {
         break;
 
       case "registrarSuministro":     resultado = registrarSuministro(body); break;
+      case "resetSistema":             resultado = resetSistema(body); break;
       default:
         resultado = { ok: false, error: `Acción desconocida: ${accion}` };
     }
@@ -1237,4 +1238,43 @@ function registrarSuministro(body) {
   ]);
   SpreadsheetApp.flush();
   return { ok: true, mensaje: "Suministro registrado #" + id, id };
+}
+
+// =============================================================================
+// RESET DEL SISTEMA — Solo para ADMIN antes de salir a producción
+// =============================================================================
+function resetSistema(body) {
+  if (body.confirmacion !== "RESET_CONFIRMADO") {
+    return { ok: false, error: "Confirmación incorrecta" };
+  }
+  const ss      = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  const aLimpiar = ["PREVENTAS_AP","DETALLE_AP","NOVEDADES_DESPACHO",
+                    "SUMINISTROS_NOTAS","ALERTAS_CARGUE_MANUAL"];
+  const resumen = [];
+  aLimpiar.forEach(function(nombre) {
+    var h = ss.getSheetByName(nombre);
+    if (!h) { resumen.push(nombre+":no-existe"); return; }
+    var last = h.getLastRow();
+    if (last > 1) {
+      h.getRange(2,1,last-1,h.getLastColumn()).clearContent();
+      resumen.push(nombre+":"+(last-1)+"f-borradas");
+    } else {
+      resumen.push(nombre+":vacia");
+    }
+  });
+  // Reiniciar consecutivo AP
+  var cfg = ss.getSheetByName("CONFIG_SIVIL");
+  if (cfg) {
+    var d = cfg.getDataRange().getValues();
+    for (var i=1;i<d.length;i++) {
+      if (d[i][0]==="ultimo_ap_id") {
+        cfg.getRange(i+1,2).setValue(1967);
+        resumen.push("consecutivo:1967");
+        break;
+      }
+    }
+  }
+  SpreadsheetApp.flush();
+  Logger.log("RESET COMPLETADO: " + resumen.join(" | "));
+  return { ok: true, mensaje: "Reset completado", resumen: resumen };
 }

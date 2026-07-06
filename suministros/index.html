@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta name="theme-color" content="#14532d">
+  <meta name="theme-color" content="#4c1d95">
   <title>SIVIL · Suministros</title>
   <link rel="manifest" href="manifest.json">
   <style>
 :root {
-  --verde:    #16a34a;
-  --verde2:   #14532d;
-  --verde3:   #dcfce7;
+  --morado:   #7c3aed;
+  --morado2:  #4c1d95;
+  --morado3:  #ede9fe;
   --rojo:     #b91c1c;
   --amarillo: #92400e;
   --azul:     #1a3a5c;
@@ -22,32 +22,32 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--texto);min-height:100vh;padding-bottom:85px;}
-.header{background:var(--verde2);color:#fff;padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.header{background:var(--morado2);color:#fff;padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
 .header-title{font-size:.95rem;font-weight:700;}
 .header-sub{font-size:.65rem;opacity:.75;}
 .user-chip{background:rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:.72rem;cursor:pointer;}
 .nav-bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--borde);display:flex;z-index:200;box-shadow:0 -2px 12px rgba(0,0,0,.08);}
 .nav-btn{flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:none;cursor:pointer;font-size:.6rem;color:#888;font-weight:600;transition:color .2s;}
-.nav-btn.active{color:var(--verde);}
+.nav-btn.active{color:var(--morado);}
 .nav-btn .icon{font-size:1.25rem;}
 .content{padding:1rem;max-width:640px;margin:0 auto;}
 .card{background:#fff;border-radius:12px;padding:1.25rem;margin-bottom:1rem;box-shadow:var(--sombra);}
-.card-title{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--verde);margin-bottom:1rem;}
+.card-title{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--morado);margin-bottom:1rem;}
 .screen{display:none;} .screen.active{display:block;}
 
 /* Login */
-#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--verde2);padding:1rem;}
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--morado2);padding:1rem;}
 .login-box{background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,.3);}
 .login-logo{text-align:center;margin-bottom:1.5rem;}
 .login-logo img{width:120px;border-radius:8px;}
-.login-title{font-size:1.3rem;font-weight:800;color:var(--verde2);text-align:center;}
+.login-title{font-size:1.3rem;font-weight:800;color:var(--morado2);text-align:center;}
 .login-sub{font-size:.78rem;color:#666;text-align:center;margin-bottom:1.5rem;}
 .form-group{margin-bottom:1rem;}
 .form-label{display:block;font-size:.78rem;font-weight:700;color:#555;margin-bottom:4px;}
 .form-control{width:100%;padding:.65rem .9rem;border:1.5px solid var(--borde);border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s;}
-.form-control:focus{border-color:var(--verde);}
+.form-control:focus{border-color:var(--morado);}
 .btn{display:block;width:100%;padding:.75rem;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s;}
-.btn-verde{background:var(--verde);color:#fff;}
+.btn-verde{background:var(--morado);color:#fff;}
 .btn-outline{background:#fff;border:1.5px solid var(--borde);color:var(--texto);width:auto;}
 .btn-sm{padding:.4rem .8rem;font-size:.75rem;}
 .btn:hover{opacity:.88;}
@@ -63,19 +63,19 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
 .kpi-sub{font-size:.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#888;margin-top:2px;}
 .kpi-box.rojo .kpi-val{color:var(--rojo);}
 .kpi-box.amarillo .kpi-val{color:var(--amarillo);}
-.kpi-box.verde .kpi-val{color:var(--verde);}
+.kpi-box.verde .kpi-val{color:var(--morado);}
 
 /* Tarjetas de producto */
 .prod-alert{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.75rem;box-shadow:var(--sombra);border-left:4px solid var(--rojo);}
 .prod-alert.amarillo{border-left-color:#f59e0b;}
-.prod-alert.verde{border-left-color:var(--verde);}
+.prod-alert.verde{border-left-color:var(--morado);}
 .prod-nombre{font-weight:700;font-size:.88rem;margin-bottom:3px;}
 .prod-code{font-size:.68rem;color:#888;}
 .prod-num{font-size:1.2rem;font-weight:800;}
 .badge-urgente{background:var(--rojo);color:#fff;border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;}
 .badge-alta{background:#f59e0b;color:#fff;border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;}
 .nota-area{background:var(--gris);border-radius:8px;padding:.5rem .75rem;font-size:.75rem;color:#555;margin-top:.5rem;border-left:3px solid #ccc;cursor:pointer;}
-.nota-area.con-nota{border-left-color:var(--verde);color:var(--texto);}
+.nota-area.con-nota{border-left-color:var(--morado);color:var(--texto);}
 
 /* Modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;padding:1rem;align-items:flex-end;justify-content:center;}
@@ -86,13 +86,13 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
 
 /* Tabla */
 .tabla{width:100%;border-collapse:collapse;font-size:.75rem;}
-.tabla th{background:var(--verde2);color:#fff;padding:6px 8px;text-align:left;font-size:.65rem;}
+.tabla th{background:var(--morado2);color:#fff;padding:6px 8px;text-align:left;font-size:.65rem;}
 .tabla td{padding:6px 8px;border-bottom:1px solid var(--borde);}
 .tabla tr:hover td{background:#f0fdf4;}
 
 /* Loading */
 .loading{display:flex;justify-content:center;padding:2rem;}
-.spinner{width:32px;height:32px;border:3px solid var(--borde);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite;}
+.spinner{width:32px;height:32px;border:3px solid var(--borde);border-top-color:var(--morado);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* Toast */
@@ -101,7 +101,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
 /* Filtros */
 .filtro-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;}
 .chip{padding:4px 12px;border-radius:20px;font-size:.72rem;font-weight:700;border:1.5px solid var(--borde);background:#fff;cursor:pointer;}
-.chip.active{background:var(--verde2);color:#fff;border-color:var(--verde2);}
+.chip.active{background:var(--morado2);color:#fff;border-color:var(--morado2);}
 .chip.rojo.active{background:var(--rojo);border-color:var(--rojo);}
 .chip.amarillo.active{background:#f59e0b;border-color:#f59e0b;}
 
@@ -180,8 +180,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
   <!-- PANTALLA: NOTAS DE COMPRA -->
   <div id="screenNotas" class="screen">
     <div class="content">
-      <div class="card" style="background:var(--verde3);border:1.5px solid var(--verde);">
-        <div style="font-size:.78rem;color:var(--verde2);">
+      <div class="card" style="background:var(--morado3);border:1.5px solid var(--morado);">
+        <div style="font-size:.78rem;color:var(--morado2);">
           💡 Registra aquí el estado de cada compra: proveedor contactado, fecha de entrega, cantidades pedidas. Las notas quedan guardadas para todo el equipo.
         </div>
       </div>
@@ -435,7 +435,7 @@ function renderDashboard() {
     contU.innerHTML = rojos.slice(0,5).map(p => tarjetaProducto(p, true)).join('');
     if (rojos.length > 5) {
       contU.innerHTML += `<div style="text-align:center;font-size:.78rem;color:#888;margin-top:.5rem;">
-        +${rojos.length-5} productos más en <a href="#" onclick="irA('screenInventario');return false;" style="color:var(--verde);font-weight:700;">Inventario</a></div>`;
+        +${rojos.length-5} productos más en <a href="#" onclick="irA('screenInventario');return false;" style="color:var(--morado);font-weight:700;">Inventario</a></div>`;
     }
   }
 

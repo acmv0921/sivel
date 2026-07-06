@@ -497,6 +497,14 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     <div class="card">
       <div class="card-title">Nuevo Pedido — AP</div>
 
+      <!-- AP RESERVADA BADGE -->
+      <div id="apReservadaBadge" style="display:none;background:#e0f2fe;border:1.5px solid #0284c7;border-radius:10px;padding:.5rem 1rem;margin-bottom:.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:.85rem;font-weight:800;color:#0284c7;">📋 <span id="apBadgeTexto">AP reservada</span></div>
+          <button onclick="cancelarYSalir()" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer;padding:2px 6px;">✕ Cancelar AP</button>
+        </div>
+      </div>
+
       <!-- PASO 1: Cliente -->
       <div id="paso1">
         <div class="form-group">
@@ -1531,6 +1539,89 @@ function calcularTotales() {
 // =============================================================================
 // GUARDAR AP
 // =============================================================================
+// ═══════════════════════════════════════════════════════
+// CONSECUTIVO AP AUTOMÁTICO
+// ═══════════════════════════════════════════════════════
+
+var AP_RESERVADA = null;  // número reservado para la AP actual
+
+async function cancelarYSalir() {
+  if (!confirm('¿Cancelar esta AP? El número quedará registrado como cancelado.')) return;
+  if (AP_RESERVADA) {
+    try {
+      await fetch(GAS_URL, {
+        method:'POST', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({accion:'actualizarEstadoAP', ap_id: AP_RESERVADA, estado_ap:'Cancelado'})
+      });
+    } catch(e) {}
+    toast('AP #' + AP_RESERVADA + ' cancelada');
+  }
+  AP_RESERVADA = null;
+  STATE.pedido = {cliente:null, tipo_entrega:"Venta en Planta", lineas:[], fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:''};
+  ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const badge = document.getElementById('apReservadaBadge');
+  if (badge) badge.style.display='none';
+  irA('screenHome');
+}
+
+async function iniciarNuevaAP() {
+  // 1. Reservar número inmediatamente (atómico vía LockService)
+  try {
+    const btn = Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.includes('Nueva AP') || b.textContent.includes('Nuevo'));
+    if (btn) btn.textContent = '⏳ Reservando...';
+
+    const r = await fetch(GAS_URL, {
+      method: 'POST', headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({
+        accion: 'reservarNumeroAP',
+        vendedor_id: STATE.usuario?.id_usuario || STATE.vendedorId || '',
+        vendedor_nombre: STATE.usuario?.nombre_vendedor || STATE.usuario?.nombre_completo || ''
+      })
+    });
+    const j = await r.json();
+
+    if (j.ok) {
+      AP_RESERVADA = j.ap_id;
+      toast(`📋 AP #${j.ap_id} reservada para ti`);
+      if (btn) btn.textContent = '➕ Nueva AP';
+    } else {
+      toast('Error al reservar AP: ' + (j.error||''));
+      if (btn) btn.textContent = '➕ Nueva AP';
+      return;
+    }
+  } catch(e) {
+    // Si falla la reserva (sin internet), usar número local temporal
+    AP_RESERVADA = null;
+    toast('⚠️ Sin conexión — el número se asignará al guardar');
+  }
+
+  // 2. Ir al formulario de nuevo pedido
+  irA('screenNuevoPedido');
+
+  // 3. Mostrar el número reservado en el formulario
+  setTimeout(() => {
+    const badge = document.getElementById('apReservadaBadge');
+    const texto = document.getElementById('apBadgeTexto');
+    if (badge) {
+      if (texto) texto.textContent = AP_RESERVADA ? `AP #${AP_RESERVADA} · reservada para ti` : 'Número se asigna al guardar';
+      badge.style.display = 'block';
+    }
+  }, 300);
+}
+
+async function cancelarAPReservada(ap_id) {
+  if (!ap_id) return;
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST', headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ accion: 'actualizarEstadoAP', ap_id, estado_ap: 'Cancelado' })
+    });
+    AP_RESERVADA = null;
+    toast(`AP #${ap_id} cancelada`);
+  } catch(e) { console.warn('No se pudo cancelar la AP en el servidor'); }
+}
+
 async function guardarAP() {
   if (!STATE.pedido.cliente)          { toast("Selecciona un cliente"); return; }
   if (!STATE.pedido.lineas.length)    { toast("Agrega al menos un producto"); return; }

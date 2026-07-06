@@ -636,6 +636,21 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     </div>
     <p style="font-size:.68rem;color:#888;margin-top:6px;">Solo usar al activar SIVIL. El sistema continúa desde ese número automáticamente.</p>
   </div>
+
+  <!-- SECCIÓN ADMIN: RESET -->
+  <div id="seccionResetAdmin" class="card" style="border-top:3px solid var(--rojo);margin-top:.5rem;display:none;">
+    <div class="card-title" style="color:var(--rojo);">⚠️ Reset del Sistema — Solo Administrador</div>
+    <p style="font-size:.78rem;color:#555;margin-bottom:1rem;">
+      Borra todos los datos de prueba (APs, despachos, novedades) y reinicia el consecutivo en 1967.<br>
+      <strong>No borra:</strong> clientes, productos, precios, vehículos ni usuarios.
+    </p>
+    <div style="background:#fff0f0;border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.75rem;color:var(--rojo);">
+      ⛔ Esta acción es irreversible. Úsala solo antes de empezar a trabajar en producción.
+    </div>
+    <button class="btn" style="background:var(--rojo);color:#fff;" onclick="ejecutarResetAdmin()">
+      🗑️ Resetear datos de prueba y comenzar en cero
+    </button>
+  </div>
 </div>
 
 <!-- MODAL: NUEVA PROMOCIÓN -->
@@ -1657,6 +1672,38 @@ async function desactivarPromo(id_promo) {
 // =============================================================================
 // CONSECUTIVO AP
 // =============================================================================
+
+// Mostrar reset solo a ADMIN
+function verificarPermisoReset() {
+  const seccion = document.getElementById('seccionResetAdmin');
+  if (!seccion) return;
+  const rol = G?.usuario?.rol || '';
+  seccion.style.display = (rol === 'ADMIN') ? 'block' : 'none';
+}
+
+async function ejecutarResetAdmin() {
+  if (G?.usuario?.rol !== 'ADMIN') { toast('❌ Solo el administrador puede hacer esto'); return; }
+  if (!confirm('⚠️ ¿Seguro que quieres BORRAR todos los datos de prueba?\n\nEsto borrará:\n- Todas las APs\n- Todos los despachos\n- Novedades\n- Notas de suministros\n\nY reiniciará el consecutivo en 1967.\n\n¿Confirmar?')) return;
+  if (!confirm('Segunda confirmación — ¿Estás completamente seguro?')) return;
+
+  const GAS = GAS_URL;
+  toast('⏳ Ejecutando reset...');
+  try {
+    const r = await fetch(GAS, {
+      method: 'POST', headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ accion: 'resetSistema', confirmacion: 'RESET_CONFIRMADO' })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      toast('✅ Reset completado — ' + (j.resumen?.join(' | ') || ''));
+      await cargarConsecutivo();
+    } else {
+      toast('❌ Error: ' + (j.error || 'desconocido'));
+    }
+  } catch(e) {
+    toast('Error de conexión: ' + e.message);
+  }
+}
 
 async function cargarConsecutivo() {
   try {
