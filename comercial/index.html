@@ -416,10 +416,17 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <div class="header-sub" id="headerSub">Cargando...</div>
       </div>
     </div>
-    <div class="user-chip" onclick="cerrarSesion()">
-      <span id="userInitial">?</span>
-      <span>Salir</span>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div id="modoPruebaToggle" onclick="toggleModoPrueba()" title="Modo prueba: las AP se crean con numeracion 1-99, separada de las AP reales" style="font-size:.62rem;font-weight:700;padding:4px 8px;border-radius:12px;cursor:pointer;white-space:nowrap;background:#e5e7eb;color:#555;">🧪 Prueba: OFF</div>
+      <div class="user-chip" onclick="cerrarSesion()">
+        <span id="userInitial">?</span>
+        <span>Salir</span>
+      </div>
     </div>
+  </div>
+
+  <div id="modoPruebaBar" style="display:none;background:#f59e0b;color:#fff;text-align:center;font-size:.7rem;font-weight:700;padding:5px;">
+    🧪 MODO PRUEBA ACTIVO — las AP nuevas se crean con numeracion 1-99 (no son AP reales)
   </div>
 
   <!-- HOME -->
@@ -1761,6 +1768,7 @@ async function guardarAP() {
     accion:       'crearPreventa',
     cliente_nit:  STATE.pedido.cliente.cliente_nit,
     vendedor_id:  STATE.vendedor.id_vendedor,
+    modo_prueba:  MODO_PRUEBA,
     tipo_entrega:      STATE.pedido.tipo_entrega,
     fecha_entrega:     STATE.pedido.fecha_entrega     || '',
     obs_entrega:       STATE.pedido.obs_entrega       || '',
@@ -2137,6 +2145,26 @@ function renderVisitas() {
 document.getElementById('loginPin').addEventListener('keydown', e => {
   if (e.key === 'Enter') hacerLogin();
 });
+
+// MODO PRUEBA (numeracion corta 1-99 para pruebas de campo, separada de AP reales)
+var MODO_PRUEBA = localStorage.getItem('sivel_modo_prueba') === '1';
+function actualizarUIModoPrueba() {
+  const chip = document.getElementById('modoPruebaToggle');
+  const bar  = document.getElementById('modoPruebaBar');
+  if (chip) {
+    chip.textContent = MODO_PRUEBA ? '🧪 Prueba: ON' : '🧪 Prueba: OFF';
+    chip.style.background = MODO_PRUEBA ? '#f59e0b' : '#e5e7eb';
+    chip.style.color = MODO_PRUEBA ? '#fff' : '#555';
+  }
+  if (bar) bar.style.display = MODO_PRUEBA ? 'block' : 'none';
+}
+function toggleModoPrueba() {
+  MODO_PRUEBA = !MODO_PRUEBA;
+  localStorage.setItem('sivel_modo_prueba', MODO_PRUEBA ? '1' : '0');
+  actualizarUIModoPrueba();
+  toast(MODO_PRUEBA ? '🧪 Modo prueba ACTIVADO — las AP nuevas usaran numeracion 1-99' : 'Modo prueba desactivado');
+}
+actualizarUIModoPrueba();
 </script>
 
 <script>

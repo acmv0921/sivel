@@ -143,6 +143,9 @@ function doPost(e) {
       case "actualizarEstadoAP":
         resultado = actualizarEstadoAP(body);
         break;
+      case "anularAPPrueba":
+        resultado = anularOBorrarAPPrueba(body);
+        break;
       case "modificarDetalleAP":
         resultado = modificarDetalleAP(body);
         break;
@@ -589,7 +592,13 @@ function crearPreventa(body) {
       }
     }
   }
-  ap_id = incrementarConsecutivo();
+  if (body.modo_prueba === true) {
+    const rp = siguienteConsecutivoPrueba();
+    if (rp.error) return { ok: false, error: rp.error };
+    ap_id = rp.ap_id;
+  } else {
+    ap_id = incrementarConsecutivo();
+  }
   hoja.appendRow([
     ap_id,
     body.cliente_nit,
@@ -891,6 +900,99 @@ function getConsecutivoAP() {
   const datos = hoja.getDataRange().getValues();
   const fila  = datos.find(r => r[0] === "ultimo_ap_id");
   return { ok: true, ultimo_ap_id: fila ? parseInt(fila[1]) : 1967, siguiente: fila ? parseInt(fila[1])+1 : 1968 };
+}
+
+// =============================================================================
+// PRUEBAS DE CAMPO — AP de prueba con numeración corta (1-99, separada del
+// consecutivo real que arranca en 1968) + anular/borrar sin afectar el
+// inventario real.
+//
+// Por qué no afecta el inventario: "Disponible" (ver getInventarioDinamico)
+// SIEMPRE se calcula en vivo restando de tmcant lo comprometido en AP
+// Pendiente/Despachado Parcial y lo registrado en CONTROL_PATIO_Y_LOGISTICA.
+// tmcant nunca se descuenta directamente al crear o despachar una AP. Por
+// eso, anular = sacar la AP de esos dos cálculos (cambiar su estado y borrar
+// sus filas de patio), no hay que "devolver" stock a ningún lado.
+// =============================================================================
+
+function siguienteConsecutivoPrueba() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(8000);
+    const hoja  = getConfigHoja();
+    const datos = hoja.getDataRange().getValues();
+    for (let i = 1; i < datos.length; i++) {
+      if (datos[i][0] === "ultimo_ap_id_prueba") {
+        const nuevo = parseInt(datos[i][1]) + 1;
+        if (nuevo > 99) {
+          return { error: "Se llegó al máximo de 99 AP de prueba (rango 1-99). Anula o borra las AP de prueba anteriores desde Gerencia antes de crear más." };
+        }
+        hoja.getRange(i+1, 2).setValue(nuevo);
+        SpreadsheetApp.flush();
+        return { ap_id: nuevo };
+      }
+    }
+    hoja.appendRow(["ultimo_ap_id_prueba", 1]);
+    SpreadsheetApp.flush();
+    return { ap_id: 1 };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Borra todas las filas de una hoja cuya columna "ap_id" coincida (recorre de
+// abajo hacia arriba para que borrar una fila no desfase los índices).
+function borrarFilasPorApId(nombreHoja, ap_id) {
+  const hoja = getHoja(nombreHoja);
+  if (!hoja) return 0;
+  const datos = hoja.getDataRange().getValues();
+  const hdrs  = datos[0].map(h => String(h).trim());
+  const colApId = hdrs.indexOf("ap_id");
+  if (colApId < 0) return 0;
+  let borradas = 0;
+  for (let i = datos.length - 1; i >= 1; i--) {
+    if (String(datos[i][colApId]) === String(ap_id)) {
+      hoja.deleteRow(i + 1);
+      borradas++;
+    }
+  }
+  return borradas;
+}
+
+function anularOBorrarAPPrueba(body) {
+  const ap_id = parseInt(body.ap_id);
+  const modo  = body.modo === "borrar" ? "borrar" : "anular"; // por defecto, el modo mas seguro (no destructivo)
+
+  if (!ap_id) return { ok: false, error: "ap_id inválido" };
+  if (ap_id >= 1000 && body.confirmar_real !== true) {
+    return { ok: false, error: "Esta acción es para AP de prueba (id 1-99). La AP " + ap_id + " parece una AP real — si de verdad quieres anularla/borrarla, usa el flujo normal de novedades de despacho." };
+  }
+
+  // 1) Sacar la AP de Pendiente/Despachado Parcial -> ya no cuenta como "comprometido" en el inventario
+  const resEstado = actualizarEstadoAP({ ap_id: ap_id, estado_ap: "Cancelado" });
+
+  // 2) Borrar sus registros de CONTROL_PATIO_Y_LOGISTICA (curado/averías) -> ya no restan del disponible
+  const patioBorradas = borrarFilasPorApId(HOJAS.PATIO, ap_id);
+
+  let detalleBorradas = 0, apBorrada = false;
+  if (modo === "borrar") {
+    // 3) Borrado definitivo: también quitar DETALLE_AP y la fila de PREVENTAS_AP
+    detalleBorradas = borrarFilasPorApId(HOJAS.DETALLE, ap_id);
+    apBorrada = borrarFilasPorApId(HOJAS.PREVENTAS, ap_id) > 0;
+  }
+
+  return {
+    ok: true,
+    mensaje: modo === "borrar"
+      ? "AP " + ap_id + " borrada por completo (AP, detalle y " + patioBorradas + " registro(s) de patio). El inventario disponible ya refleja esto."
+      : "AP " + ap_id + " anulada (estado Cancelado" + (patioBorradas ? " + " + patioBorradas + " registro(s) de patio borrados" : "") + "). El inventario disponible ya refleja esto.",
+    ap_id: ap_id,
+    modo: modo,
+    estado_actualizado: resEstado.ok === true,
+    patio_filas_borradas: patioBorradas,
+    detalle_filas_borradas: detalleBorradas,
+    ap_borrada: apBorrada
+  };
 }
 
 function incrementarConsecutivo() {
