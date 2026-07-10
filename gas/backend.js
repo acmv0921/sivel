@@ -1332,7 +1332,7 @@ function resetSistema(body) {
 // Carpeta: 1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk
 // Detecta automáticamente BOD_03 (PRIMERAS) y BOD_04 (SEGUNDA)
 // =============================================================================
-var INVENTARIO_FOLDER_ID = "1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk";
+var INVENTARIO_FOLDER_ID = "1RSWLgbEfx6nMnZghVuYhn80veshiliE1"; // 01_INVENTARIO_DIARIO (confirmado con Abdiel 10/07/2026)
 
 function importarExistenciasDrive(body) {
   try {
