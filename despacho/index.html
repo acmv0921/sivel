@@ -507,7 +507,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div class="form-group">
         <label class="form-label">📷 Foto de la novedad</label>
         <label class="foto-btn" for="fotoAveria">📷 Tomar / seleccionar foto</label>
-        <input id="fotoAveria" type="file" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto('fotoAveria','previewAv')">
+        <input id="fotoAveria" type="file" accept="image/*" style="display:none;" onchange="previewFoto('fotoAveria','previewAv')">
         <img id="previewAv" class="foto-preview">
       </div>
       <button class="btn btn-danger" onclick="guardarAveria()">⚠️ Registrar Novedad</button>
@@ -1288,7 +1288,7 @@ function abrirDespacho(ap_id) {
         <p>Vehículo, plataforma, carga. Mínimo 3 fotos.</p>
         <p style="font-size:0.65rem;margin-top:2px;">Logo POSTECSA + GPS + Hora automáticos</p>
       </label>
-      <input id="fotoCargaInput" type="file" accept="image/*" capture="environment"
+      <input id="fotoCargaInput" type="file" accept="image/*"
              multiple style="display:none;" onchange="agregarFotosDespacho(this)">
       <div id="fotosDespachoPreview" class="thumb-row"></div>
     </div>
@@ -1631,7 +1631,7 @@ function renderSelectorVehiculo(contenedorId) {
       ${activos.length ? activos.map(v => `
         <div class="vehiculo-card" id="vehCard_${v.vehiculo_id}" onclick="seleccionarVehiculo(${JSON.stringify(v).replace(/"/g,"'")})">
           <div class="veh-placa">${v.placa}</div>
-          <div class="veh-info">${v.marca} ${v.modelo||''} · ${v.color} · Cap: ${v.capacidad_und||'?'} und</div>
+          <div class="veh-info">${v.marca} ${v.modelo||''} · ${v.color} · Cap: ${v.capacidad_und||'?'} Ton</div>
           <div class="veh-info">👷 ${v.conductor_nombre||'Sin conductor'} · 📱 ${v.conductor_cel||'N/A'}</div>
         </div>`).join('') : '<p style="font-size:0.78rem;color:#888;">Sin vehículos registrados. Agrega uno abajo.</p>'}
     </div>

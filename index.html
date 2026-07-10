@@ -162,6 +162,7 @@
   .btn-comercial  { background: #2563a8; color: #fff; }
   .btn-despacho   { background: #e05c1a; color: #fff; }
   .btn-gerencia   { background: #1a7a4a; color: #fff; }
+  .btn-suministros { background: #7c3aed; color: #fff; }
   .btn-disabled   { background: #e9ecef; color: #999; pointer-events: none; }
 
   /* ARQUITECTURA */
@@ -227,9 +228,11 @@
   .color-comercial { background: #dbeafe; }
   .color-despacho  { background: #fff0e8; }
   .color-gerencia  { background: #dcfce7; }
+  .color-suministros { background: #ede9fe; }
   .dot-comercial   { background: #2563a8; }
   .dot-despacho    { background: #e05c1a; }
   .dot-gerencia    { background: #1a7a4a; }
+  .dot-suministros { background: #7c3aed; }
 
   @media (max-width: 600px) {
     header { padding: 0 1rem; }
@@ -303,8 +306,8 @@
     </div>
   </div>
 
-  <!-- LAS 3 APPS -->
-  <div class="section-title">Las 3 Aplicaciones del Ecosistema</div>
+  <!-- LAS 4 APPS -->
+  <div class="section-title">Las 4 Aplicaciones del Ecosistema</div>
   <div class="apps-grid">
 
     <!-- APP COMERCIAL -->
@@ -379,6 +382,28 @@
       <div class="card-footer">
         <span class="status-badge status-activo">✅ Activo</span>
         <a href="gerencia/index.html" class="btn-app btn-gerencia">🚀 Abrir App</a>
+      </div>
+    </div>
+
+    <!-- APP SUMINISTROS -->
+    <div class="app-card">
+      <div class="card-header color-suministros">
+        <div class="card-icon" style="background:#7c3aed;color:#fff;">📦</div>
+        <div>
+          <h2>App Suministros</h2>
+          <p>Para el equipo de bodega e insumos</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li><span class="dot dot-suministros"></span>Existencias en tiempo real desde bodegas</li>
+          <li><span class="dot dot-suministros"></span>Recepción de informe ejecutivo de Comercial</li>
+          <li><span class="dot dot-suministros"></span>Recetas / materiales por producto</li>
+        </ul>
+      </div>
+      <div class="card-footer">
+        <span class="status-badge status-en-construccion">🔧 En construcción</span>
+        <a href="suministros/index.html" class="btn-app btn-suministros">🚀 Abrir App</a>
       </div>
     </div>
 
