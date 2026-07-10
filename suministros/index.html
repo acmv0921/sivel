@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#4c1d95">
   <title>SIVIL · Suministros</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
 :root {
   --morado:   #7c3aed;
@@ -105,6 +106,24 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
 .chip.rojo.active{background:var(--rojo);border-color:var(--rojo);}
 .chip.amarillo.active{background:#f59e0b;border-color:#f59e0b;}
 
+/* Recetas / BOM */
+.receta-card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:.75rem;box-shadow:var(--sombra);border-left:4px solid var(--morado);}
+.receta-nombre{font-weight:700;font-size:.9rem;}
+.receta-meta{font-size:.7rem;color:#888;margin-top:2px;}
+.receta-mat-row{display:flex;gap:8px;align-items:center;margin-bottom:.5rem;}
+.receta-mat-row .form-control{flex:2;}
+.receta-mat-row .form-control.cant{flex:1;}
+.receta-mat-row .form-control.und{flex:1;}
+.btn-quitar{background:#fef2f2;color:var(--rojo);border:1px solid #fecaca;border-radius:8px;width:32px;height:32px;flex-shrink:0;cursor:pointer;font-weight:700;}
+.upload-box{border:2px dashed var(--borde);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;margin-bottom:1rem;background:var(--gris);}
+.upload-box:hover{border-color:var(--morado);}
+.upload-box input[type=file]{display:none;}
+.link-plantilla{font-size:.75rem;color:var(--morado);font-weight:700;text-decoration:underline;cursor:pointer;}
+.tabla-mini{width:100%;border-collapse:collapse;font-size:.72rem;margin-top:.5rem;}
+.tabla-mini th{background:var(--morado3);color:var(--morado2);padding:5px 6px;text-align:left;}
+.tabla-mini td{padding:5px 6px;border-bottom:1px solid var(--borde);}
+.fab{position:fixed;right:1rem;bottom:95px;background:var(--morado);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:1.5rem;box-shadow:0 4px 12px rgba(124,58,237,.4);cursor:pointer;z-index:150;}
+
 @media(min-width:540px){.content{padding:1.5rem;}}
   </style>
 </head>
@@ -134,7 +153,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
     <div id="loginError" class="login-error">❌ Correo o PIN incorrecto</div>
     <div style="text-align:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e5e7eb;">
       <div style="font-size:.65rem;color:#9ca3af;">Desarrollado por <strong>Abdiel Cícar Moreno Velásquez</strong></div>
-      <div style="font-size:.62rem;color:#9ca3af;">POSTEC DE OCCIDENTE S.A.S. · v1.0 · 2026</div>
+      <div style="font-size:.62rem;color:#9ca3af;">POSTEC DE OCCIDENTE S.A.S. · v1.1 · 2026</div>
     </div>
   </div>
 </div>
@@ -207,11 +226,25 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
     </div>
   </div>
 
+  <!-- PANTALLA: RECETAS / BOM -->
+  <div id="screenRecetas" class="screen">
+    <div class="content">
+      <div class="card" style="background:var(--morado3);border:1.5px solid var(--morado);">
+        <div style="font-size:.78rem;color:var(--morado2);">
+          🧾 Aquí defines la "receta" de cada producto: qué materiales y en qué cantidad se necesitan para fabricarlo (ej. un poste de 8m necesita 120m de varilla corrugada 60000psi, hierro 1/4, soldadura, etc). Puedes cargar el desglose completo desde un Excel o agregarlo manualmente.
+        </div>
+      </div>
+      <div id="listaRecetas"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <button class="fab" onclick="abrirNuevaReceta()" title="Nueva receta">+</button>
+  </div>
+
   <nav class="nav-bottom">
     <button class="nav-btn active" id="navDash"    onclick="irA('screenDashboard')">  <span class="icon">🏠</span>Inicio</button>
     <button class="nav-btn"        id="navInv"     onclick="irA('screenInventario')"> <span class="icon">📦</span>Inventario</button>
     <button class="nav-btn"        id="navNotas"   onclick="irA('screenNotas')">      <span class="icon">📝</span>Notas</button>
     <button class="nav-btn"        id="navHist"    onclick="irA('screenHistorial')">  <span class="icon">📋</span>Historial</button>
+    <button class="nav-btn"        id="navRecetas" onclick="irA('screenRecetas')">    <span class="icon">🧾</span>Recetas</button>
   </nav>
 </div>
 
@@ -247,11 +280,45 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gris);color:var(--
   </div>
 </div>
 
+<!-- MODAL RECETA -->
+<div id="modalReceta" class="modal-overlay">
+  <div class="modal-box" style="position:relative;">
+    <button class="modal-close" onclick="cerrarModalReceta()">✕</button>
+    <div class="modal-title" id="modalRecetaTitulo">🧾 Nueva receta</div>
+
+    <div class="form-group">
+      <label class="form-label">Código del producto</label>
+      <input id="recetaCodigo" class="form-control" type="text" placeholder="Ej: 3101 (o un código propio)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre del producto</label>
+      <input id="recetaNombre" class="form-control" type="text" placeholder="Ej: Poste de 8m">
+    </div>
+
+    <label class="form-label">Cargar materiales desde Excel</label>
+    <label class="upload-box" for="recetaExcelInput">
+      <div style="font-size:1.5rem;">📤</div>
+      <div style="font-size:.8rem;font-weight:700;margin-top:4px;">Toca para subir un archivo .xlsx</div>
+      <div style="font-size:.68rem;color:#888;margin-top:4px;">Columnas esperadas: material, cantidad, unidad</div>
+      <input type="file" id="recetaExcelInput" accept=".xlsx,.xls" onchange="manejarExcelReceta(event)">
+    </label>
+    <div style="text-align:center;margin-bottom:1rem;">
+      <span class="link-plantilla" onclick="descargarPlantillaReceta()">⬇️ Descargar plantilla de ejemplo</span>
+    </div>
+
+    <label class="form-label">Materiales de la receta</label>
+    <div id="filasMateriales"></div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:1rem;" onclick="agregarFilaManual()">➕ Agregar material manualmente</button>
+
+    <button class="btn btn-verde" onclick="enviarReceta()">💾 Guardar receta</button>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
 // ─────────────────────────────────────────────────────────────
-// SIVIL SUMINISTROS v1.0 — Lorena / Control de Compras
+// SIVIL SUMINISTROS v1.1 — Lorena / Control de Compras + Recetas
 // ─────────────────────────────────────────────────────────────
 
 const GAS_URL  = 'https://script.google.com/macros/s/AKfycbyokqX6vLzefzVVOhnETZa6zPHo8DJj6-0mJuMZ1JjPsFNACib_WFeLqgg2Cs_ibp2gzQ/exec';
@@ -265,7 +332,9 @@ var S = {
   inventario: [],
   notas: {},      // tmcode → nota local + guardada
   historial: [],
-  filtroInv: 'ROJO'
+  filtroInv: 'ROJO',
+  recetas: null,      // { producto_codigo: {producto_nombre, materiales:[...]} }
+  filasManualesReceta: []
 };
 
 // ─── UTILIDADES ─────────────────────────────────────────────
@@ -292,12 +361,14 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map = {
     screenDashboard:'navDash', screenInventario:'navInv',
-    screenNotas:'navNotas', screenHistorial:'navHist'
+    screenNotas:'navNotas', screenHistorial:'navHist',
+    screenRecetas:'navRecetas'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInventario') renderInventario();
   if (screenId === 'screenNotas')      renderTodasNotas();
   if (screenId === 'screenHistorial')  renderHistorial();
+  if (screenId === 'screenRecetas')    renderRecetas();
 }
 
 function cerrarModal() {
@@ -361,7 +432,7 @@ async function hacerLogin() {
 }
 
 function cerrarSesion() {
-  S = { usuario:null, inventario:[], notas:{}, historial:[], filtroInv:'ROJO' };
+  S = { usuario:null, inventario:[], notas:{}, historial:[], filtroInv:'ROJO', recetas:null, filasManualesReceta:[] };
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPin').value = '';
@@ -640,9 +711,205 @@ function renderHistorial() {
     </tbody></table>`;
 }
 
+// ─── RECETAS / BOM ───────────────────────────────────────────
+async function cargarRecetas() {
+  try {
+    const r = await fetch(GVIZ + 'RECETAS&_=' + Date.now());
+    const txt = await r.text();
+    if (!txt.includes('table')) { S.recetas = {}; return; }
+    const j = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
+    const cols = (j.table?.cols||[]).map(c=>c.label);
+    if (!cols.length) { S.recetas = {}; return; }
+    const rows = (j.table?.rows||[]).map(row=>{
+      const o={}; cols.forEach((h,i)=>o[h]=row.c?.[i]?.v??''); return o;
+    }).filter(r => r.producto_codigo);
+
+    const agrupado = {};
+    rows.forEach(r => {
+      const cod = String(r.producto_codigo);
+      if (!agrupado[cod]) agrupado[cod] = { producto_codigo: cod, producto_nombre: r.producto_nombre, materiales: [] };
+      agrupado[cod].materiales.push({
+        descripcion: r.material_descripcion, cantidad: r.cantidad, unidad: r.unidad
+      });
+    });
+    S.recetas = agrupado;
+  } catch(e) {
+    S.recetas = {};
+    toast('Error al cargar recetas: ' + e.message);
+  }
+}
+
+async function renderRecetas() {
+  const cont = document.getElementById('listaRecetas');
+  if (S.recetas === null) {
+    cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    await cargarRecetas();
+  }
+  const recetas = Object.values(S.recetas || {});
+  if (!recetas.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;">Aún no hay recetas cargadas.<br>Toca el botón + para crear la primera.</div>';
+    return;
+  }
+  cont.innerHTML = recetas.map(rec => `
+    <div class="receta-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="receta-nombre">${rec.producto_nombre || '(sin nombre)'}</div>
+          <div class="receta-meta">Código ${rec.producto_codigo} · ${rec.materiales.length} material${rec.materiales.length===1?'':'es'}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="editarReceta('${rec.producto_codigo}')">✏️ Editar</button>
+      </div>
+      <table class="tabla-mini">
+        <thead><tr><th>Material</th><th>Cant.</th><th>Und</th></tr></thead>
+        <tbody>
+          ${rec.materiales.map(m => `<tr><td>${m.descripcion}</td><td>${fmt(m.cantidad)}</td><td>${m.unidad||''}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`).join('');
+}
+
+function limpiarFilasMateriales() {
+  S.filasManualesReceta = [];
+  document.getElementById('filasMateriales').innerHTML = '';
+}
+
+function abrirNuevaReceta() {
+  document.getElementById('modalRecetaTitulo').textContent = '🧾 Nueva receta';
+  document.getElementById('recetaCodigo').value = '';
+  document.getElementById('recetaCodigo').disabled = false;
+  document.getElementById('recetaNombre').value = '';
+  limpiarFilasMateriales();
+  agregarFilaManual();
+  document.getElementById('modalReceta').classList.add('show');
+}
+
+function editarReceta(codigo) {
+  const rec = (S.recetas || {})[codigo];
+  if (!rec) return;
+  document.getElementById('modalRecetaTitulo').textContent = '🧾 Editar receta';
+  document.getElementById('recetaCodigo').value = rec.producto_codigo;
+  document.getElementById('recetaCodigo').disabled = true;
+  document.getElementById('recetaNombre').value = rec.producto_nombre || '';
+  limpiarFilasMateriales();
+  rec.materiales.forEach(m => agregarFilaManual(m.descripcion, m.cantidad, m.unidad));
+  document.getElementById('modalReceta').classList.add('show');
+}
+
+function cerrarModalReceta() {
+  document.getElementById('modalReceta').classList.remove('show');
+  document.getElementById('recetaExcelInput').value = '';
+}
+
+function agregarFilaManual(desc, cant, und) {
+  const idx = S.filasManualesReceta.length;
+  S.filasManualesReceta.push({ descripcion: desc || '', cantidad: cant || '', unidad: und || '' });
+  renderFilasMateriales();
+}
+
+function quitarFilaManual(idx) {
+  S.filasManualesReceta.splice(idx, 1);
+  renderFilasMateriales();
+}
+
+function actualizarFilaManual(idx, campo, valor) {
+  if (S.filasManualesReceta[idx]) S.filasManualesReceta[idx][campo] = valor;
+}
+
+function renderFilasMateriales() {
+  const cont = document.getElementById('filasMateriales');
+  cont.innerHTML = S.filasManualesReceta.map((f, idx) => `
+    <div class="receta-mat-row">
+      <input class="form-control" placeholder="Material (ej. Varilla corrugada 60000psi)" value="${(f.descripcion||'').replace(/"/g,'&quot;')}"
+             oninput="actualizarFilaManual(${idx},'descripcion',this.value)">
+      <input class="form-control cant" type="number" placeholder="Cant." value="${f.cantidad}"
+             oninput="actualizarFilaManual(${idx},'cantidad',this.value)">
+      <input class="form-control und" placeholder="Und" value="${(f.unidad||'').replace(/"/g,'&quot;')}"
+             oninput="actualizarFilaManual(${idx},'unidad',this.value)">
+      <button class="btn-quitar" onclick="quitarFilaManual(${idx})">✕</button>
+    </div>`).join('');
+}
+
+function manejarExcelReceta(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!filas.length) { toast('El Excel está vacío'); return; }
+
+      const norm = s => String(s || '').trim().toLowerCase();
+      let agregadas = 0;
+      filas.forEach(fila => {
+        let descripcion = '', cantidad = '', unidad = '';
+        Object.keys(fila).forEach(key => {
+          const k = norm(key);
+          if (k.includes('material') || k.includes('descrip')) descripcion = fila[key];
+          else if (k.includes('cant')) cantidad = fila[key];
+          else if (k.includes('und') || k.includes('unidad')) unidad = fila[key];
+        });
+        if (descripcion) { agregarFilaManual(descripcion, cantidad, unidad); agregadas++; }
+      });
+      toast(`✅ ${agregadas} materiales cargados del Excel`);
+    } catch(err) {
+      toast('No se pudo leer el archivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function descargarPlantillaReceta() {
+  const wb = XLSX.utils.book_new();
+  const datos = [
+    { material: 'Varilla corrugada 60000psi', cantidad: 120, unidad: 'm' },
+    { material: 'Hierro 1/4', cantidad: 15, unidad: 'kg' },
+    { material: 'Soldadura', cantidad: 2, unidad: 'kg' },
+    { material: 'Cemento', cantidad: 3, unidad: 'bultos' }
+  ];
+  const ws = XLSX.utils.json_to_sheet(datos);
+  XLSX.utils.book_append_sheet(wb, ws, 'Receta');
+  XLSX.writeFile(wb, 'plantilla_receta_SIVIL.xlsx');
+}
+
+async function enviarReceta() {
+  const codigo = document.getElementById('recetaCodigo').value.trim();
+  const nombre = document.getElementById('recetaNombre').value.trim();
+
+  if (!codigo || !nombre) { toast('Completa código y nombre del producto'); return; }
+  const materiales = S.filasManualesReceta.filter(f => f.descripcion && String(f.descripcion).trim());
+  if (!materiales.length) { toast('Agrega al menos un material'); return; }
+
+  const payload = {
+    accion: 'guardarReceta',
+    producto_codigo: codigo,
+    producto_nombre: nombre,
+    materiales: materiales.map(m => ({ descripcion: m.descripcion, cantidad: m.cantidad || 0, unidad: m.unidad || '' })),
+    actualizado_por: S.usuario?.nombre_completo || 'Suministros'
+  };
+
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(payload)
+    });
+    toast('✅ Receta guardada');
+    cerrarModalReceta();
+    S.recetas = null;
+    renderRecetas();
+  } catch(e) {
+    toast('Error al guardar receta: ' + e.message);
+  }
+}
+
 // ─── CIERRE MODAL CON CLICK FUERA ───────────────────────────
 document.getElementById('modalNota').addEventListener('click', function(e) {
   if (e.target === this) cerrarModal();
+});
+document.getElementById('modalReceta').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModalReceta();
 });
 </script>
 </body>
