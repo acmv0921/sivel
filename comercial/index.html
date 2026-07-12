@@ -9,9 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SIVIL Ventas">
-<link rel="apple-touch-icon" sizes="192x192" href="../assets/icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512" href="../assets/icon-512.png">
-<link rel="icon" type="image/png" sizes="192x192" href="../assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="./icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 
 <style>
 :root {
@@ -1144,6 +1144,8 @@ async function cargarTodo() {
     cargarMetaActualizacion()
   ]);
   actualizarKPIs();
+
+restaurarBorradorPedido();
 }
 
 async function cargarInventario() {
@@ -1481,6 +1483,8 @@ toggleDatosEntrega();
 limpiarCliente();
 renderLineasAP();
 calcularTotales();
+
+borrarBorradorPedido();
 }
 
 // =============================================================================
@@ -1752,6 +1756,8 @@ document.getElementById('rFlete').textContent = fmt(flete);
 document.getElementById('rIva').textContent = fmt(iva);
 document.getElementById('rTotal').textContent = fmt(total);
 document.getElementById('resumenAP').style.display = 'block';
+
+guardarBorradorPedido();
 }
 
 // =============================================================================
@@ -1768,17 +1774,78 @@ var AP_RESERVADA = null;  // número reservado para la AP actual
 // Cuando pasen a producción: Gerencia activa el modo automático.
 
 async function cancelarYSalir() {
-  if (!confirm('¿Cancelar esta AP?')) return;
-  // Limpiar estado sin hacer llamada al servidor (era manual, no reservó nada)
-  AP_RESERVADA = null;
-  STATE.pedido = {cliente:null, tipo_entrega:"Venta en Planta", lineas:[],
-    fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:''};
-  ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-   'inputApId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const badge = document.getElementById('apReservadaBadge');
-  if (badge) badge.style.display='none';
-  irA('screenHome');
-  toast('AP cancelada');
+if (!confirm('¿Cancelar esta AP?')) return;
+AP_RESERVADA = null;
+limpiarPedido();
+const badge = document.getElementById('apReservadaBadge');
+if (badge) badge.style.display='none';
+irA('screenHome');
+toast('AP cancelada');
+}
+
+function guardarBorradorPedido() {
+try {
+const p = STATE.pedido;
+if (p && (p.cliente || (p.lineas && p.lineas.length))) {
+const apId = document.getElementById('inputApId')?.value || '';
+localStorage.setItem('sivil_comercial_borrador', JSON.stringify({ pedido: p, apId: apId, ts: Date.now() }));
+} else {
+localStorage.removeItem('sivil_comercial_borrador');
+}
+} catch(e) { /* localStorage no disponible, ignorar */ }
+}
+
+function borrarBorradorPedido() {
+try { localStorage.removeItem('sivil_comercial_borrador'); } catch(e) {}
+}
+
+function restaurarBorradorPedido() {
+try {
+const raw = localStorage.getItem('sivil_comercial_borrador');
+if (!raw) return;
+const draft = JSON.parse(raw);
+const p = draft.pedido;
+if (!p || (!p.cliente && (!p.lineas || !p.lineas.length))) { borrarBorradorPedido(); return; }
+const nombreCli = p.cliente ? p.cliente.razon_social : 'sin cliente';
+const nLineas = (p.lineas||[]).length;
+const fecha = draft.ts ? new Date(draft.ts).toLocaleString('es-CO') : '';
+if (!confirm('📝 Tienes un pedido sin terminar (' + nombreCli + ', ' + nLineas + ' producto(s), guardado ' + fecha + ').\n\n¿Deseas continuarlo?')) {
+borrarBorradorPedido();
+return;
+}
+STATE.pedido = p;
+if (draft.apId) { const elAp = document.getElementById('inputApId'); if (elAp) elAp.value = draft.apId; }
+const setVal = function(id, val) { const el = document.getElementById(id); if (el) el.value = val || ''; };
+setVal('fechaEntregaSolicitada', p.fecha_entrega);
+setVal('obsEntrega', p.obs_entrega);
+setVal('direccionObra', p.direccion_obra);
+setVal('contactoObra', p.contacto_obra);
+setVal('celContactoObra', p.cel_contacto);
+setVal('ordenCompraCliente', p.orden_compra_cliente);
+setVal('cotizacionRef', p.cotizacion_ref);
+setVal('condicionesPago', p.condiciones_pago);
+setVal('nombreObra', p.nombre_obra);
+
+const selTipo = document.getElementById('tipoEntrega');
+if (selTipo) selTipo.value = p.destino || p.tipo_entrega || 'PLANTA';
+const fleteInput = document.getElementById('fleteValorInput');
+if (fleteInput) { fleteInput.value = p.flete_valor || ''; fleteInput.dataset.autofilled = p.flete_negociado ? '0' : '1'; }
+const transEl = document.getElementById('transportistaFleteInput');
+if (transEl) transEl.value = p.transportista_flete || '';
+
+if (p.cliente) {
+document.getElementById('clienteSelNombre').textContent = p.cliente.razon_social;
+document.getElementById('clienteSelNit').textContent = 'NIT: ' + p.cliente.cliente_nit;
+document.getElementById('paso1').style.display = 'none';
+document.getElementById('clienteSeleccionado').style.display = 'block';
+}
+
+irA('screenPedido');
+toggleDatosEntrega();
+renderLineasAP();
+calcularTotales();
+toast('✅ Pedido restaurado');
+} catch(e) { console.warn('No se pudo restaurar el borrador', e); }
 }
 
 async function iniciarNuevaAP() {
