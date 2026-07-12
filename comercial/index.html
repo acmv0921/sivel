@@ -547,15 +547,41 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
           <button onclick="limpiarCliente()" style="background:none;border:none;color:#888;font-size:1.1rem;cursor:pointer;">✕</button>
         </div>
 
-        <!-- PASO 2: Tipo entrega -->
-        <div class="form-group">
-          <label class="form-label">Tipo de entrega</label>
-          <select id="tipoEntrega" class="form-control" onchange="calcularTotales(); toggleDatosEntrega();">
-            <option value="Venta en Planta">🏭 Venta en Planta</option>
-            <option value="Con Transporte - Zona A">🚛 Con Transporte — Zona A (Cali / Andenes)</option>
-            <option value="Con Transporte - Zona B">🚛 Con Transporte — Zona B (Yumbo / CENCAR)</option>
-          </select>
-        </div>
+        <!-- PASO 2a: Datos adicionales del pedido -->
+<div class="form-group">
+<label class="form-label">📄 N° Orden de Compra (cliente)</label>
+<input id="ordenCompraCliente" class="form-control" placeholder="Opcional">
+</div>
+<div class="form-group">
+<label class="form-label">📋 N° Cotización</label>
+<input id="cotizacionRef" class="form-control" placeholder="Opcional">
+</div>
+<div class="form-group">
+<label class="form-label">💳 Condiciones de pago</label>
+<input id="condicionesPago" class="form-control" placeholder="Ej: Contado, Crédito 30 días...">
+</div>
+<div class="form-group">
+<label class="form-label">🏗️ Nombre de la obra</label>
+<input id="nombreObra" class="form-control" placeholder="Ej: Conjunto Residencial Los Pinos">
+</div>
+
+<!-- PASO 2b: Destino de entrega -->
+<div class="form-group">
+<label class="form-label">Destino de entrega</label>
+<select id="tipoEntrega" class="form-control" onchange="calcularTotales(); toggleDatosEntrega();">
+<option value="PLANTA">🏭 Venta en Planta (recoge el cliente)</option>
+<option value="CALI NORTE">🚛 Cali Norte</option>
+<option value="CALI SUR">🚛 Cali Sur</option>
+<option value="YUMBO">🚛 Yumbo</option>
+<option value="JAMUNDI">🚛 Jamundí</option>
+<option value="PALMIRA">🚛 Palmira</option>
+<option value="FUERA DEL PERIMETRO (>100KM)">🚛 Fuera del perímetro (&gt;100km)</option>
+</select>
+</div>
+<div id="fleteManualGroup" class="form-group" style="display:none;">
+<label class="form-label">💰 Valor del flete (negociado con transportador)</label>
+<input id="fleteManualInput" class="form-control" type="number" min="0" placeholder="0" oninput="calcularTotales();">
+</div>
 
         <!-- PASO 2b: Datos de entrega (campo) -->
         <div id="datosEntregaExtra" style="display:none;">
@@ -593,7 +619,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
           <div class="resumen-row"><span class="resumen-label">Subtotal productos</span><span id="rSubtotal">$0</span></div>
           <div class="resumen-row"><span class="resumen-label">Descuentos</span><span id="rDescuentos" style="color:var(--verde);">-$0</span></div>
           <div class="resumen-row"><span class="resumen-label">Flete</span><span id="rFlete">$0</span></div>
-          <div class="resumen-row"><span class="resumen-label">IVA (19%)</span><span id="rIva">$0</span></div>
+          <div class="resumen-row"><span class="resumen-label">IVA</span><span id="rIva">$0</span></div>
           <div class="resumen-row total"><span>TOTAL</span><span id="rTotal">$0</span></div>
         </div>
 
@@ -1116,50 +1142,52 @@ async function cargarTodo() {
 }
 
 async function cargarInventario() {
-  try {
-    const prods = await leerGVIZ("PRODUCTOS_MAESTRO");
-    const patio = await leerGVIZ("CONTROL_PATIO_Y_LOGISTICA");
-    const dets  = await leerGVIZ("DETALLE_AP");
-    const aps   = await leerGVIZ("PREVENTAS_AP");
-    const precios = await leerGVIZ("PRECIOS_GERENCIA");
+try {
+const prods = await leerGVIZ("PRODUCTOS_MAESTRO");
+const patio = await leerGVIZ("CONTROL_PATIO_Y_LOGISTICA");
+const dets = await leerGVIZ("DETALLE_AP");
+const aps = await leerGVIZ("PREVENTAS_AP");
+const precios = await leerGVIZ("PRECIOS_GERENCIA");
+const tarifas = await leerGVIZ("TARIFAS_FLETE");
+STATE.tarifasFlete = tarifas;
 
-    const apsPendIds = new Set(
-      aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
-         .map(a => String(a.ap_id))
-    );
+const apsPendIds = new Set(
+aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
+.map(a => String(a.ap_id))
+);
 
-    STATE.inventario = prods.map(p => {
-      const code      = String(p.tmcode);
-      const bruto     = parseFloat(p.tmcant) || 0;
-      const curado    = patio.filter(x => String(x.tmcode) === code)
-                             .reduce((s,x) => s + (parseFloat(x.cant_en_curado)||0), 0);
-      const averias   = patio.filter(x => String(x.tmcode) === code)
-                             .reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
-      const comprometido = dets
-        .filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id)))
-        .reduce((s,d) => s + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
-      const disponible = bruto - curado - averias - comprometido;
+STATE.inventario = prods.map(p => {
+const code = String(p.tmcode);
+const bruto = parseFloat(p.tmcant) || 0;
+const curado = patio.filter(x => String(x.tmcode) === code)
+.reduce((s,x) => s + (parseFloat(x.cant_en_curado)||0), 0);
+const averias = patio.filter(x => String(x.tmcode) === code)
+.reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
+const comprometido = dets
+.filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id)))
+.reduce((s,d) => s + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
+const disponible = bruto - curado - averias - comprometido;
 
-      const precio = precios.find(pr => String(pr.tmcode) === code) || {};
+const precio = precios.find(pr => String(pr.tmcode) === code) || {};
 
-      return {
-        ...p,
-        disponible,
-        curado,
-        averias,
-        comprometido,
-        semaforo: disponible > 10 ? 'VERDE' : disponible > 0 ? 'AMARILLO' : 'ROJO',
-        precio_base: parseFloat(precio.precio_base_planta) || 0,
-        desc_max:    parseFloat(precio.descuento_max_vendedor) || 0,
-        flete_a:     parseFloat(precio.costo_flete_unidad_zonaA) || 0,
-        flete_b:     parseFloat(precio.costo_flete_unidad_zonaB) || 0
-      };
-    });
+return {
+...p,
+disponible,
+curado,
+averias,
+comprometido,
+semaforo: disponible > 10 ? 'VERDE' : disponible > 0 ? 'AMARILLO' : 'ROJO',
+precio_base: parseFloat(precio.precio_base_planta) || 0,
+desc_max: parseFloat(precio.descuento_max_vendedor) || 0,
+flete_a: parseFloat(precio.costo_flete_unidad_zonaA) || 0,
+flete_b: parseFloat(precio.costo_flete_unidad_zonaB) || 0
+};
+});
 
-    renderInventario();
-  } catch(e) {
-    console.error("Error inventario:", e);
-  }
+renderInventario();
+} catch(e) {
+console.error("Error inventario:", e);
+}
 }
 
 async function cargarClientes() {
@@ -1291,55 +1319,65 @@ function cardAP(ap) {
 }
 
 async function verAP(ap_id) {
-  const ap  = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
-  if (!ap) return;
-  const detalles = await leerGVIZ("DETALLE_AP");
-  const lineas   = detalles.filter(d => String(d.ap_id) === String(ap_id));
-  const cliente  = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
+const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
+if (!ap) return;
+const detalles = await leerGVIZ("DETALLE_AP");
+const lineas = detalles.filter(d => String(d.ap_id) === String(ap_id));
+const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
 
-  let html = `
-    <div class="modal-title">AP #${ap.ap_id}</div>
-    <div style="margin-bottom:1rem;">
-      <div style="font-weight:700;">${cliente ? cliente.razon_social : ap.cliente_nit}</div>
-      <div style="font-size:0.75rem;color:#666;">${ap.tipo_entrega} · ${ap.estado_ap}</div>
-      <div style="font-size:0.72rem;color:#888;">${fmtFechaHora(ap.fecha_creacion)}</div>
-    </div>
-    <div class="card-title">Productos</div>`;
+let extraInfo = '';
+if (ap.orden_compra_cliente) extraInfo += `<div style="font-size:0.72rem;color:#888;">📄 OC: ${ap.orden_compra_cliente}</div>`;
+if (ap.cotizacion_ref) extraInfo += `<div style="font-size:0.72rem;color:#888;">📋 Cotización: ${ap.cotizacion_ref}</div>`;
+if (ap.condiciones_pago) extraInfo += `<div style="font-size:0.72rem;color:#888;">💳 Pago: ${ap.condiciones_pago}</div>`;
+if (ap.nombre_obra) extraInfo += `<div style="font-size:0.72rem;color:#888;">🏗️ Obra: ${ap.nombre_obra}</div>`;
 
-  let total = 0;
-  lineas.forEach((l,i) => {
-    const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
-    const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
-    const precio = prod ? prod.precio_base : 0;
-    const desc   = parseFloat(l.descuento_aplicado) || 0;
-    const cant   = parseFloat(l.cantidad_solicitada) || 0;
-    const sub    = cant * precio * (1 - desc);
-    total += sub;
-    html += `
-      <div class="linea-item">
-        <div class="linea-num">${i+1}</div>
-        <div class="linea-info">
-          <div class="linea-prod">${nombre}</div>
-          <div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${l.cantidad_despachada||0}</div>
-        </div>
-        <div class="linea-precio">${fmt(sub)}</div>
-      </div>`;
-  });
+let html = `
+<div class="modal-title">AP #${ap.ap_id}</div>
+<div style="margin-bottom:1rem;">
+<div style="font-weight:700;">${cliente ? cliente.razon_social : ap.cliente_nit}</div>
+<div style="font-size:0.75rem;color:#666;">${ap.destino || ap.tipo_entrega} · ${ap.estado_ap}</div>
+<div style="font-size:0.72rem;color:#888;">${fmtFechaHora(ap.fecha_creacion)}</div>
+${extraInfo}
+</div>
+<div class="card-title">Productos</div>`;
 
-  const iva = total * 0.19;
-  html += `
-    <div style="margin-top:1rem;padding-top:0.75rem;border-top:2px solid var(--borde);">
-      <div class="resumen-row"><span>Subtotal</span><span>${fmt(total)}</span></div>
-      <div class="resumen-row"><span>IVA 19%</span><span>${fmt(iva)}</span></div>
-      <div class="resumen-row total"><span>TOTAL</span><span>${fmt(total+iva)}</span></div>
-    </div>`;
+let total = 0;
+let iva = 0;
+lineas.forEach((l,i) => {
+const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
+const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
+const precio = prod ? prod.precio_base : 0;
+const desc = parseFloat(l.descuento_aplicado) || 0;
+const cant = parseFloat(l.cantidad_solicitada) || 0;
+const sub = cant * precio * (1 - desc);
+total += sub;
+if (prod && prod.tipo_iva === 'G') iva += sub * 0.19;
+html += `
+<div class="linea-item">
+<div class="linea-num">${i+1}</div>
+<div class="linea-info">
+<div class="linea-prod">${nombre}</div>
+<div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${l.cantidad_despachada||0}</div>
+</div>
+<div class="linea-precio">${fmt(sub)}</div>
+</div>`;
+});
 
-  if (ap.estado_ap === "Pendiente" || ap.estado_ap === "Modificado") {
-    html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-danger btn-sm" onclick="cancelarAP('${ap_id}')">🗑️ Cancelar AP</button></div>`;
-  }
+const flete = parseFloat(ap.flete_valor) || 0;
+html += `
+<div style="margin-top:1rem;padding-top:0.75rem;border-top:2px solid var(--borde);">
+<div class="resumen-row"><span>Subtotal</span><span>${fmt(total)}</span></div>
+<div class="resumen-row"><span>Flete</span><span>${fmt(flete)}</span></div>
+<div class="resumen-row"><span>IVA</span><span>${fmt(iva)}</span></div>
+<div class="resumen-row total"><span>TOTAL</span><span>${fmt(total+flete+iva)}</span></div>
+</div>`;
 
-  document.getElementById('modalVerAPContent').innerHTML = html;
-  document.getElementById('modalVerAP').classList.add('show');
+if (ap.estado_ap === "Pendiente" || ap.estado_ap === "Modificado") {
+html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-danger btn-sm" onclick="cancelarAP('${ap_id}')">🗑️ Cancelar AP</button></div>`;
+}
+
+document.getElementById('modalVerAPContent').innerHTML = html;
+document.getElementById('modalVerAP').classList.add('show');
 }
 
 async function cancelarAP(ap_id) {
@@ -1422,14 +1460,17 @@ function limpiarCliente() {
 }
 
 function limpiarPedido() {
-  STATE.pedido = { cliente:null, tipo_entrega:"Venta en Planta", lineas:[],
-    fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'' };
-  ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra']
-    .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  toggleDatosEntrega();
-  limpiarCliente();
-  renderLineasAP();
-  calcularTotales();
+STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, lineas:[],
+fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'',
+orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
+['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteManualInput']
+.forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
+toggleDatosEntrega();
+limpiarCliente();
+renderLineasAP();
+calcularTotales();
 }
 
 // =============================================================================
@@ -1560,37 +1601,38 @@ function calcularLineaModal() {
 }
 
 function confirmarLinea() {
-  const p    = STATE.prodSeleccionado;
-  const cant = parseFloat(document.getElementById('detalleCant').value) || 0;
-  const desc = parseFloat(document.getElementById('detalleDesc').value) / 100 || 0;
+const p = STATE.prodSeleccionado;
+const cant = parseFloat(document.getElementById('detalleCant').value) || 0;
+const desc = parseFloat(document.getElementById('detalleDesc').value) / 100 || 0;
 
-  if (!cant || cant <= 0) { toast("Ingresa una cantidad válida"); return; }
+if (!cant || cant <= 0) { toast("Ingresa una cantidad válida"); return; }
 
-  if (p.disponible <= 0) {
-    if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de todas formas? Se generará alerta de producción.`)) return;
-  }
+if (p.disponible <= 0) {
+if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de todas formas? Se generará alerta de producción.`)) return;
+}
 
-  const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
-  const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
-  const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
-  STATE.pedido.lineas.push({
-    tmcode:              p.tmcode,
-    tmdescrip:           p.tmdescrip,
-    tmund:               p.tmund,
-    calidad:             calidad,
-    cantidad_solicitada: cant,
-    descuento_aplicado:  desc,
-    descuento_segunda_pct: dsctoSeg,
-    precio_base:         precioFinal,
-    precio_base_primera: p.precio_base,
-    flete_a:             p.flete_a,
-    flete_b:             p.flete_b
-  });
+const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
+const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
+const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
+STATE.pedido.lineas.push({
+tmcode: p.tmcode,
+tmdescrip: p.tmdescrip,
+tmund: p.tmund,
+calidad: calidad,
+cantidad_solicitada: cant,
+descuento_aplicado: desc,
+descuento_segunda_pct: dsctoSeg,
+precio_base: precioFinal,
+precio_base_primera: p.precio_base,
+tipo_iva: p.tipo_iva || 'E',
+flete_a: p.flete_a,
+flete_b: p.flete_b
+});
 
-  cerrarModal('modalDetalle');
-  renderLineasAP();
-  calcularTotales();
-  toast(`✅ ${p.tmdescrip.substring(0,30)} agregado`);
+cerrarModal('modalDetalle');
+renderLineasAP();
+calcularTotales();
+toast(`✅ ${p.tmdescrip.substring(0,30)} agregado`);
 }
 
 // =============================================================================
@@ -1634,50 +1676,66 @@ function eliminarLinea(i) {
 // CÁLCULO FINANCIERO
 // =============================================================================
 function toggleDatosEntrega() {
-  const tipo = document.getElementById('tipoEntrega')?.value || '';
-  const extra = document.getElementById('datosEntregaExtra');
-  if (extra) extra.style.display = tipo.includes('Transporte') ? 'block' : 'none';
+const tipo = document.getElementById('tipoEntrega')?.value || '';
+const extra = document.getElementById('datosEntregaExtra');
+if (extra) extra.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
+const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
+const esManual = tarifa ? (tarifa.manual === true || tarifa.manual === 'TRUE' || tarifa.manual === 'VERDADERO') : tipo.indexOf('FUERA DEL PERIMETRO') !== -1;
+const fleteGroup = document.getElementById('fleteManualGroup');
+if (fleteGroup) fleteGroup.style.display = esManual ? 'block' : 'none';
 }
 
 function calcularTotales() {
-  const lineas = STATE.pedido.lineas;
-  const tipo   = document.getElementById('tipoEntrega')?.value || "Venta en Planta";
-  STATE.pedido.tipo_entrega     = tipo;
-  STATE.pedido.fecha_entrega    = document.getElementById('fechaEntregaSolicitada')?.value || '';
-  STATE.pedido.obs_entrega      = document.getElementById('obsEntrega')?.value || '';
-  STATE.pedido.direccion_obra   = document.getElementById('direccionObra')?.value || '';
-  STATE.pedido.contacto_obra    = document.getElementById('contactoObra')?.value || '';
-  STATE.pedido.cel_contacto     = document.getElementById('celContactoObra')?.value || '';
+const lineas = STATE.pedido.lineas;
+const tipo = document.getElementById('tipoEntrega')?.value || "PLANTA";
+STATE.pedido.tipo_entrega = tipo;
+STATE.pedido.destino = tipo;
+STATE.pedido.fecha_entrega = document.getElementById('fechaEntregaSolicitada')?.value || '';
+STATE.pedido.obs_entrega = document.getElementById('obsEntrega')?.value || '';
+STATE.pedido.direccion_obra = document.getElementById('direccionObra')?.value || '';
+STATE.pedido.contacto_obra = document.getElementById('contactoObra')?.value || '';
+STATE.pedido.cel_contacto = document.getElementById('celContactoObra')?.value || '';
+STATE.pedido.orden_compra_cliente = document.getElementById('ordenCompraCliente')?.value || '';
+STATE.pedido.cotizacion_ref = document.getElementById('cotizacionRef')?.value || '';
+STATE.pedido.condiciones_pago = document.getElementById('condicionesPago')?.value || '';
+STATE.pedido.nombre_obra = document.getElementById('nombreObra')?.value || '';
 
-  if (!lineas.length) {
-    document.getElementById('resumenAP').style.display = 'none';
-    return;
-  }
+if (!lineas.length) {
+document.getElementById('resumenAP').style.display = 'none';
+return;
+}
 
-  let subtotal   = 0;
-  let descuentos = 0;
-  let flete      = 0;
+let subtotal = 0;
+let descuentos = 0;
+let iva = 0;
 
-  lineas.forEach(l => {
-    const base = l.cantidad_solicitada * l.precio_base;
-    const desc = base * l.descuento_aplicado;
-    subtotal   += base;
-    descuentos += desc;
+lineas.forEach(l => {
+const base = l.cantidad_solicitada * l.precio_base;
+const desc = base * l.descuento_aplicado;
+const neto = base - desc;
+subtotal += base;
+descuentos += desc;
+if ((l.tipo_iva || 'E') === 'G') iva += neto * 0.19;
+});
 
-    if (tipo.includes("Zona A")) flete += l.cantidad_solicitada * l.flete_a;
-    if (tipo.includes("Zona B")) flete += l.cantidad_solicitada * l.flete_b;
-  });
+const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
+const esManual = tarifa ? (tarifa.manual === true || tarifa.manual === 'TRUE' || tarifa.manual === 'VERDADERO') : tipo.indexOf('FUERA DEL PERIMETRO') !== -1;
+let flete = 0;
+if (esManual) {
+flete = parseFloat(document.getElementById('fleteManualInput')?.value) || 0;
+} else if (tarifa) {
+flete = parseFloat(tarifa.valor_lista) || 0;
+}
+STATE.pedido.flete_valor = flete;
 
-  const neto = subtotal - descuentos + flete;
-  const iva  = neto * 0.19;
-  const total = neto + iva;
+const total = subtotal - descuentos + flete + iva;
 
-  document.getElementById('rSubtotal').textContent  = fmt(subtotal);
-  document.getElementById('rDescuentos').textContent = '-' + fmt(descuentos);
-  document.getElementById('rFlete').textContent      = fmt(flete);
-  document.getElementById('rIva').textContent        = fmt(iva);
-  document.getElementById('rTotal').textContent      = fmt(total);
-  document.getElementById('resumenAP').style.display = 'block';
+document.getElementById('rSubtotal').textContent = fmt(subtotal);
+document.getElementById('rDescuentos').textContent = '-' + fmt(descuentos);
+document.getElementById('rFlete').textContent = fmt(flete);
+document.getElementById('rIva').textContent = fmt(iva);
+document.getElementById('rTotal').textContent = fmt(total);
+document.getElementById('resumenAP').style.display = 'block';
 }
 
 // =============================================================================
@@ -1761,36 +1819,42 @@ async function cancelarAPReservada(ap_id) {
 }
 
 async function guardarAP() {
-  if (!STATE.pedido.cliente)          { toast("Selecciona un cliente"); return; }
-  if (!STATE.pedido.lineas.length)    { toast("Agrega al menos un producto"); return; }
+if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
+if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
 
-  const body = {
-    accion:       'crearPreventa',
-    cliente_nit:  STATE.pedido.cliente.cliente_nit,
-    vendedor_id:  STATE.vendedor.id_vendedor,
-    modo_prueba:  MODO_PRUEBA,
-    tipo_entrega:      STATE.pedido.tipo_entrega,
-    fecha_entrega:     STATE.pedido.fecha_entrega     || '',
-    obs_entrega:       STATE.pedido.obs_entrega       || '',
-    direccion_obra:    STATE.pedido.direccion_obra    || '',
-    contacto_obra:     STATE.pedido.contacto_obra     || '',
-    cel_contacto:      STATE.pedido.cel_contacto      || '',
-    detalle:      STATE.pedido.lineas.map(l => ({
-      tmcode:              l.tmcode,
-      cantidad_solicitada: l.cantidad_solicitada,
-      cantidad_despachada: 0,
-      descuento_aplicado:  l.descuento_aplicado
-    }))
-  };
+const body = {
+accion: 'crearPreventa',
+cliente_nit: STATE.pedido.cliente.cliente_nit,
+vendedor_id: STATE.vendedor.id_vendedor,
+modo_prueba: MODO_PRUEBA,
+tipo_entrega: STATE.pedido.tipo_entrega,
+destino: STATE.pedido.destino || '',
+flete_valor: STATE.pedido.flete_valor || 0,
+fecha_entrega: STATE.pedido.fecha_entrega || '',
+obs_entrega: STATE.pedido.obs_entrega || '',
+direccion_obra: STATE.pedido.direccion_obra || '',
+contacto_obra: STATE.pedido.contacto_obra || '',
+cel_contacto: STATE.pedido.cel_contacto || '',
+orden_compra_cliente: STATE.pedido.orden_compra_cliente || '',
+cotizacion_ref: STATE.pedido.cotizacion_ref || '',
+condiciones_pago: STATE.pedido.condiciones_pago || '',
+nombre_obra: STATE.pedido.nombre_obra || '',
+detalle: STATE.pedido.lineas.map(l => ({
+tmcode: l.tmcode,
+cantidad_solicitada: l.cantidad_solicitada,
+cantidad_despachada: 0,
+descuento_aplicado: l.descuento_aplicado
+}))
+};
 
-  toast("⏳ Guardando AP...");
-  await escribirGAS(body);
-  toast("✅ AP guardada correctamente");
+toast("⏳ Guardando AP...");
+await escribirGAS(body);
+toast("✅ AP guardada correctamente");
 
-  limpiarPedido();
-  await cargarMisAPs();
-  actualizarKPIs();
-  irA('screenPedidos');
+limpiarPedido();
+await cargarMisAPs();
+actualizarKPIs();
+irA('screenPedidos');
 }
 
 // =============================================================================
