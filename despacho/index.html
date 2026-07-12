@@ -550,7 +550,11 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     <div class="modal-title">Nuevo Lote en Curado</div>
     <div class="form-group">
       <label class="form-label">Producto</label>
-      <select id="curadoProducto" class="form-control"></select>
+      <select id="curadoProducto" class="form-control" onchange="actualizarDiasCurado()"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Dias de curado (sugerido, editable)</label>
+      <input id="curadoDias" class="form-control" type="number" min="1" oninput="actualizarFechaDesdeDias()">
     </div>
     <div class="form-group">
       <label class="form-label">Cantidad retenida en curado</label>
@@ -1428,20 +1432,57 @@ function renderCurado() {
 }
 
 function abrirModalCurado() {
-  // Fecha por defecto = hoy + 28 días
-  const def = new Date(); def.setDate(def.getDate() + 28);
-  document.getElementById('curadoFecha').value = def.toISOString().split('T')[0];
-  document.getElementById('curadoCant').value  = '';
+  document.getElementById('curadoCant').value = '';
+  document.getElementById('curadoProducto').value = '';
+  document.getElementById('curadoDias').value = '';
+  document.getElementById('curadoFecha').value = '';
   document.getElementById('modalCurado').classList.add('show');
+}
+
+function calcularDiasCurado(tmdescripRaw) {
+  const d = String(tmdescripRaw || '').toUpperCase();
+  if (d.includes('POSTE')) {
+    const m = d.match(/(d{3,4})s*(KGF|KG|KD)/);
+    if (m) {
+      const kgf = parseInt(m[1], 10);
+      if (kgf <= 1000) return 7;
+      if (kgf < 1250) return 14;
+      return 21;
+    }
+    return 7;
+  }
+  if (d.includes('BLOQUE')) return 7;
+  if (d.includes('BORDILLO') || d.includes('SARDINEL') || d.includes('ADOQUIN') || d.includes('ADOQUÍN') || d.includes('PISO') || d.includes('LOSETA') || d.includes('BALDOSA')) return 14;
+  if (d.includes('ALFAJIA') || d.includes('ALFAJÍA') || d.includes('RAYUELA') || d.includes('TAPA') || d.includes('CAÑUELA') || d.includes('CANUELA') || d.includes('ALCORQUE')) return 14;
+  if (d.includes('BANCA') || d.includes('BOLARDO') || d.includes('TOPELLANTA')) return 21;
+  if (d.includes('ZAPATA')) return 14;
+  if (d.includes('VIGA') || d.includes('COLUMNA')) return 21;
+  return 7;
+}
+
+function actualizarDiasCurado() {
+  const tmcode = document.getElementById('curadoProducto').value;
+  const prod = (S.productos||[]).find(p => String(p.tmcode) === String(tmcode));
+  const dias = calcularDiasCurado(prod ? prod.tmdescrip : '');
+  document.getElementById('curadoDias').value = dias;
+  actualizarFechaDesdeDias();
+}
+
+function actualizarFechaDesdeDias() {
+  const dias = parseFloat(document.getElementById('curadoDias').value) || 0;
+  if (!dias) return;
+  const f = new Date(); f.setDate(f.getDate() + dias);
+  document.getElementById('curadoFecha').value = f.toISOString().split('T')[0];
 }
 
 async function guardarCurado() {
   const tmcode = document.getElementById('curadoProducto').value;
   const cant   = parseFloat(document.getElementById('curadoCant').value) || 0;
   const fecha  = document.getElementById('curadoFecha').value;
+  const dias   = parseFloat(document.getElementById('curadoDias').value) || null;
   if (!tmcode || !cant || !fecha) { toast("Completa todos los campos"); return; }
 
-  await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha });
+  await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha, dias_curado_aplicado: dias });
   cerrarModal('modalCurado');
   toast(`⏳ ${cant} unidades registradas en curado`);
   await cargarTodo();
