@@ -1151,6 +1151,8 @@ function renderAPs() {
           ${ap.obs_entrega ? `<div style="font-size:0.70rem;color:#555;margin-top:2px;">💬 ${ap.obs_entrega}</div>` : ''}
           ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
+${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: $'+Number(ap.flete_valor).toLocaleString('es-CO') : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
+${ap.transportista_flete ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">🚛 ${ap.transportista_flete}</div>` : ''}
         </div>
         ${badge}
       </div>
@@ -1206,6 +1208,8 @@ function abrirDespacho(ap_id) {
       ${ap.obs_entrega ? `<div style="font-size:0.71rem;color:#555;margin-top:3px;">💬 ${ap.obs_entrega}</div>` : ''}
       ${ap.direccion_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:3px;">📍 Obra: ${ap.direccion_obra}</div>` : ''}
       ${ap.contacto_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">👤 Contacto: ${ap.contacto_obra}${ap.cel_contacto ? ' — <a href="tel:'+ap.cel_contacto+'" style="color:var(--verde);">'+ap.cel_contacto+'</a>' : ''}</div>` : ''}
+${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#0a5c36;margin-top:4px;font-weight:700;">🚚 Destino: ${ap.destino}</div>
+<div style="font-size:0.71rem;color:#333;margin-top:2px;">💰 Flete acordado: $${Number(ap.flete_valor||0).toLocaleString('es-CO')}${ap.flete_sugerido ? ' (tarifa sugerida: $'+Number(ap.flete_sugerido).toLocaleString('es-CO')+')' : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' <span style="color:#b45309;font-weight:700;">⚡ negociado</span>' : ''}</div>${ap.transportista_flete ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">🚛 Transportista: ${ap.transportista_flete}</div>` : ''}` : ''}
     </div>
 
     <!-- VEHÍCULO -->
