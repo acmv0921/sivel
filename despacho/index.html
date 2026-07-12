@@ -513,6 +513,31 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <button class="btn btn-danger" onclick="guardarAveria()">⚠️ Registrar Novedad</button>
     </div>
     <div class="card">
+      <div class="card-title">Registrar Novedad de Logistica</div>
+      <div class="form-group">
+        <label class="form-label">Tipo de novedad</label>
+        <select id="novedadLogCategoria" class="form-control">
+          <option value="transporte_varado">Transporte varado</option>
+          <option value="logistica_cancelada">Logistica cancelada por el cliente</option>
+          <option value="regresado_patio">Producto regresado al patio</option>
+          <option value="incidencia_entrega">Incidencia directa en la entrega</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">AP relacionada (opcional)</label>
+        <input id="novedadLogAP" class="form-control" type="number" placeholder="Numero de AP">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Placa del vehiculo (opcional)</label>
+        <input id="novedadLogPlaca" class="form-control" type="text" placeholder="Ej: ABC123">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripcion</label>
+        <textarea id="novedadLogDesc" class="form-control" rows="3" placeholder="Ej: Camion varado en via a Yumbo, se reprograma entrega..."></textarea>
+      </div>
+      <button class="btn btn-danger" onclick="guardarNovedadLogistica()">Registrar Novedad de Logistica</button>
+    </div>
+    <div class="card">
       <div class="card-title">Historial de Novedades</div>
       <div id="historialAverias">
         <div class="loading"><div class="spinner"></div></div>
@@ -1551,6 +1576,22 @@ async function guardarAveria() {
   document.getElementById('averiaDesc').value = '';
   document.getElementById('previewAv').style.display = 'none';
   await cargarTodo();
+}
+
+async function guardarNovedadLogistica() {
+  const categoria = document.getElementById('novedadLogCategoria').value;
+  const ap_id = document.getElementById('novedadLogAP').value || '';
+  const placa_vehiculo = document.getElementById('novedadLogPlaca').value || '';
+  const descripcion = document.getElementById('novedadLogDesc').value.trim();
+  if (!descripcion) { toast("Escribe una descripcion de la novedad"); return; }
+  const u = S.usuario || {};
+  const usuario = u.nombre || u.nombre_completo || u.correo || '';
+  if (!confirm("Registrar esta novedad de logistica?")) return;
+  await escribirGAS({ accion:'registrarNovedadLogistica', categoria, ap_id, descripcion, usuario, placa_vehiculo });
+  toast("Novedad de logistica registrada");
+  document.getElementById('novedadLogAP').value = '';
+  document.getElementById('novedadLogPlaca').value = '';
+  document.getElementById('novedadLogDesc').value = '';
 }
 
 // =============================================================================
