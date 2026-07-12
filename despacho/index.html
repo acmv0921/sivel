@@ -456,6 +456,23 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <span class="search-icon">🔍</span>
         <input id="buscarAP" class="form-control" placeholder="Buscar AP o cliente..." oninput="renderAPs()">
       </div>
+      <div style="margin-top:0.5rem;">
+        <button class="btn btn-outline btn-sm" id="btnModoReparto" onclick="toggleModoReparto()">🔗 Modo Reparto (combinar pedidos en un viaje)</button>
+      </div>
+    </div>
+    <div id="barReparto" class="card" style="display:none;background:#f5f0ff;border:1px solid #7c3aed;">
+      <div class="card-title" style="color:#7c3aed;">🔗 Viaje Compartido (Modalidad de Reparto)</div>
+      <div id="repartoResumen" style="font-size:0.82rem;margin-bottom:8px;color:#444;"></div>
+      <div class="form-group">
+        <label class="form-label">Vehiculo</label>
+        <select id="repartoVehiculo" class="form-control"><option value="">Seleccionar vehiculo...</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas (opcional)</label>
+        <input id="repartoNotas" class="form-control" type="text" placeholder="Ej: pedidos pequenos, mismo destino">
+      </div>
+      <button class="btn btn-morado" onclick="confirmarViajeCompartido()">🔗 Confirmar Viaje Compartido</button>
+      <button class="btn btn-outline" onclick="toggleModoReparto()" style="margin-left:6px;">Cancelar</button>
     </div>
     <div id="listaAPs">
       <div class="loading"><div class="spinner"></div> Cargando APs...</div>
@@ -1140,6 +1157,8 @@ function actualizarKPIs() {
 // RENDER APs
 // =============================================================================
 let _filtroActual = 'Pendiente';
+let MODO_REPARTO = false;
+let SELECCION_REPARTO = new Set();
 function filtrarAPs(estado, btn) {
   _filtroActual = estado;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1168,6 +1187,7 @@ function renderAPs() {
       : '<span class="estado-badge est-pendiente">Pendiente</span>';
     return `
     <div class="ap-card ${est}">
+      ${MODO_REPARTO && !ap.viaje_compartido_id ? `<div class="reparto-check" onclick="event.stopPropagation()"><label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;cursor:pointer;background:#f5f0ff;padding:6px 10px;border-radius:6px;margin-bottom:6px;"><input type="checkbox" ${SELECCION_REPARTO.has(String(ap.ap_id)) ? 'checked' : ''} onchange="toggleSeleccionReparto('${ap.ap_id}',this.checked)"> Incluir en viaje compartido</label></div>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;" onclick="abrirDespacho('${ap.ap_id}')">
         <div>
           <div class="ap-id">AP #${ap.ap_id}</div>
@@ -1181,6 +1201,7 @@ function renderAPs() {
           ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: $'+Number(ap.flete_valor).toLocaleString('es-CO') : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
+${ap.viaje_compartido_id ? `<div style="font-size:0.70rem;color:#7c3aed;margin-top:2px;font-weight:600;">🔗 Viaje compartido ${ap.viaje_compartido_id}</div>` : ''}
 ${ap.transportista_flete ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">🚛 ${ap.transportista_flete}</div>` : ''}
 ${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Entrega por tandas:</b> '+t.map(function(x){return (x.fecha||'?')+' — '+(x.descripcion||'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
         </div>
@@ -1200,6 +1221,71 @@ ${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '
     </div>`;
   }).join('');
 }
+
+function toggleModoReparto() {
+  MODO_REPARTO = !MODO_REPARTO;
+  SELECCION_REPARTO.clear();
+  const btn = document.getElementById('btnModoReparto');
+  const bar = document.getElementById('barReparto');
+  if (btn) btn.classList.toggle('btn-primary', MODO_REPARTO);
+  if (bar) bar.style.display = 'none';
+  if (MODO_REPARTO) {
+    const sel = document.getElementById('repartoVehiculo');
+    if (sel) {
+      sel.innerHTML = '<option value="">Seleccionar vehiculo...</option>' +
+        (VEHICULOS_SHEET||[]).filter(v => v.estado === 'Activo' || !v.estado).map(v =>
+          `<option value="${v.placa}">${v.placa} - ${v.marca||''} ${v.modelo||''} (Cap: ${v.capacidad_und||'?'} Ton, ${v.conductor_nombre||'Sin conductor'})</option>`
+        ).join('');
+    }
+  }
+  renderAPs();
+}
+
+function toggleSeleccionReparto(apId, checked) {
+  if (checked) SELECCION_REPARTO.add(String(apId));
+  else SELECCION_REPARTO.delete(String(apId));
+  actualizarBarReparto();
+}
+
+function actualizarBarReparto() {
+  const bar = document.getElementById('barReparto');
+  const resumen = document.getElementById('repartoResumen');
+  if (!bar || !resumen) return;
+  if (SELECCION_REPARTO.size === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  const seleccionados = Array.from(SELECCION_REPARTO).map(id => S.aps.find(a => String(a.ap_id) === id)).filter(Boolean);
+  const destinos = new Set(seleccionados.map(a => a.destino || ''));
+  let html = `<b>${seleccionados.length} pedido(s) seleccionado(s):</b> AP ${seleccionados.map(a=>'#'+a.ap_id).join(', ')}`;
+  if (destinos.size > 1) {
+    html += `<div style="color:#c0392b;margin-top:4px;">⚠️ Los pedidos seleccionados tienen destinos distintos (${Array.from(destinos).join(' / ')}). Todos deben ir al mismo destino/zona para compartir el mismo camion.</div>`;
+  } else {
+    html += `<div style="color:#0a5c36;margin-top:4px;">Destino: ${Array.from(destinos)[0] || '(sin destino)'}</div>`;
+  }
+  resumen.innerHTML = html;
+}
+
+async function confirmarViajeCompartido() {
+  const ids = Array.from(SELECCION_REPARTO);
+  if (ids.length < 2) { toast('Selecciona al menos 2 pedidos para combinar en un viaje'); return; }
+  const seleccionados = ids.map(id => S.aps.find(a => String(a.ap_id) === id)).filter(Boolean);
+  const destinos = new Set(seleccionados.map(a => a.destino || ''));
+  if (destinos.size > 1) { toast('Los pedidos seleccionados deben tener el mismo destino/zona'); return; }
+  const placa = document.getElementById('repartoVehiculo').value;
+  if (!placa) { toast('Selecciona el vehiculo que hara el viaje'); return; }
+  const notas = document.getElementById('repartoNotas').value || '';
+  const u = S.usuario || {};
+  const usuario = u.nombre || u.nombre_completo || u.correo || '';
+  if (!confirm(`Combinar ${ids.length} pedidos en un solo viaje compartido con el vehiculo ${placa}?`)) return;
+  await escribirGAS({ accion:'registrarViajeCompartido', ap_ids: ids, placa_vehiculo: placa, notas, usuario });
+  toast('Viaje compartido registrado');
+  MODO_REPARTO = false;
+  SELECCION_REPARTO.clear();
+  const bar = document.getElementById('barReparto');
+  if (bar) bar.style.display = 'none';
+  await cargarTodo();
+  renderAPs();
+}
+
 
 function renderAPsUrgentes() {
   const cont  = document.getElementById('apsUrgentesHome');
