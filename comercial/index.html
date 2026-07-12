@@ -575,12 +575,17 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 <option value="YUMBO">🚛 Yumbo</option>
 <option value="JAMUNDI">🚛 Jamundí</option>
 <option value="PALMIRA">🚛 Palmira</option>
+<option value="FUERA DEL MUNICIPIO (ZONA C)">🚛 Fuera del municipio (Zona C)</option>
 <option value="FUERA DEL PERIMETRO (>100KM)">🚛 Fuera del perímetro (&gt;100km)</option>
 </select>
 </div>
-<div id="fleteManualGroup" class="form-group" style="display:none;">
-<label class="form-label">💰 Valor del flete (negociado con transportador)</label>
-<input id="fleteManualInput" class="form-control" type="number" min="0" placeholder="0" oninput="calcularTotales();">
+<div id="fleteGroup" class="form-group" style="display:none;">
+<label class="form-label">💰 Flete sugerido (tarifa vigente)</label>
+<input id="fleteSugeridoDisplay" class="form-control" disabled>
+<label class="form-label" style="margin-top:0.5rem;">✏️ Flete acordado con el transportador</label>
+<input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="calcularTotales();">
+<label class="form-label" style="margin-top:0.5rem;">🚚 Transportista / condiciones negociadas</label>
+<input id="transportistaFleteInput" class="form-control" placeholder="Ej: Transportes XYZ, pago contraentrega..." oninput="calcularTotales();">
 </div>
 
         <!-- PASO 2b: Datos de entrega (campo) -->
@@ -1330,6 +1335,10 @@ if (ap.orden_compra_cliente) extraInfo += `<div style="font-size:0.72rem;color:#
 if (ap.cotizacion_ref) extraInfo += `<div style="font-size:0.72rem;color:#888;">📋 Cotización: ${ap.cotizacion_ref}</div>`;
 if (ap.condiciones_pago) extraInfo += `<div style="font-size:0.72rem;color:#888;">💳 Pago: ${ap.condiciones_pago}</div>`;
 if (ap.nombre_obra) extraInfo += `<div style="font-size:0.72rem;color:#888;">🏗️ Obra: ${ap.nombre_obra}</div>`;
+if (ap.transportista_flete) extraInfo += `<div style="font-size:0.72rem;color:#888;">🚚 Transportista: ${ap.transportista_flete}</div>`;
+if (ap.flete_negociado === true || ap.flete_negociado === 'TRUE' || ap.flete_negociado === 'VERDADERO') {
+extraInfo += `<div style="font-size:0.72rem;color:#b45309;">⚠️ Flete negociado: ${fmt(ap.flete_valor)} (sugerido: ${fmt(ap.flete_sugerido)})</div>`;
+}
 
 let html = `
 <div class="modal-title">AP #${ap.ap_id}</div>
@@ -1460,12 +1469,13 @@ function limpiarCliente() {
 }
 
 function limpiarPedido() {
-STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, lineas:[],
+STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, flete_sugerido:0,
+transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteManualInput']
-.forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteValorInput','transportistaFleteInput']
+.forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
 toggleDatosEntrega();
 limpiarCliente();
@@ -1680,9 +1690,16 @@ const tipo = document.getElementById('tipoEntrega')?.value || '';
 const extra = document.getElementById('datosEntregaExtra');
 if (extra) extra.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
 const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
-const esManual = tarifa ? (tarifa.manual === true || tarifa.manual === 'TRUE' || tarifa.manual === 'VERDADERO') : tipo.indexOf('FUERA DEL PERIMETRO') !== -1;
-const fleteGroup = document.getElementById('fleteManualGroup');
-if (fleteGroup) fleteGroup.style.display = esManual ? 'block' : 'none';
+const sugerido = tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0;
+const fleteGroup = document.getElementById('fleteGroup');
+if (fleteGroup) fleteGroup.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
+const dispEl = document.getElementById('fleteSugeridoDisplay');
+if (dispEl) dispEl.value = fmt(sugerido);
+const inputEl = document.getElementById('fleteValorInput');
+if (inputEl && (inputEl.value === '' || inputEl.dataset.autofilled === '1')) {
+inputEl.value = sugerido || '';
+inputEl.dataset.autofilled = '1';
+}
 }
 
 function calcularTotales() {
@@ -1699,6 +1716,7 @@ STATE.pedido.orden_compra_cliente = document.getElementById('ordenCompraCliente'
 STATE.pedido.cotizacion_ref = document.getElementById('cotizacionRef')?.value || '';
 STATE.pedido.condiciones_pago = document.getElementById('condicionesPago')?.value || '';
 STATE.pedido.nombre_obra = document.getElementById('nombreObra')?.value || '';
+STATE.pedido.transportista_flete = document.getElementById('transportistaFleteInput')?.value || '';
 
 if (!lineas.length) {
 document.getElementById('resumenAP').style.display = 'none';
@@ -1719,14 +1737,12 @@ if ((l.tipo_iva || 'E') === 'G') iva += neto * 0.19;
 });
 
 const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
-const esManual = tarifa ? (tarifa.manual === true || tarifa.manual === 'TRUE' || tarifa.manual === 'VERDADERO') : tipo.indexOf('FUERA DEL PERIMETRO') !== -1;
-let flete = 0;
-if (esManual) {
-flete = parseFloat(document.getElementById('fleteManualInput')?.value) || 0;
-} else if (tarifa) {
-flete = parseFloat(tarifa.valor_lista) || 0;
-}
+const fleteSugerido = tipo === 'PLANTA' ? 0 : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0);
+const fleteInputRaw = document.getElementById('fleteValorInput')?.value;
+const flete = tipo === 'PLANTA' ? 0 : (fleteInputRaw === '' || fleteInputRaw === undefined ? fleteSugerido : (parseFloat(fleteInputRaw) || 0));
 STATE.pedido.flete_valor = flete;
+STATE.pedido.flete_sugerido = fleteSugerido;
+STATE.pedido.flete_negociado = tipo !== 'PLANTA' && Math.round(flete) !== Math.round(fleteSugerido);
 
 const total = subtotal - descuentos + flete + iva;
 
@@ -1830,6 +1846,9 @@ modo_prueba: MODO_PRUEBA,
 tipo_entrega: STATE.pedido.tipo_entrega,
 destino: STATE.pedido.destino || '',
 flete_valor: STATE.pedido.flete_valor || 0,
+flete_sugerido: STATE.pedido.flete_sugerido || 0,
+transportista_flete: STATE.pedido.transportista_flete || '',
+flete_negociado: !!STATE.pedido.flete_negociado,
 fecha_entrega: STATE.pedido.fecha_entrega || '',
 obs_entrega: STATE.pedido.obs_entrega || '',
 direccion_obra: STATE.pedido.direccion_obra || '',
