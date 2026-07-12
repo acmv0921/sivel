@@ -1442,7 +1442,7 @@ function abrirModalCurado() {
 function calcularDiasCurado(tmdescripRaw) {
   const d = String(tmdescripRaw || '').toUpperCase();
   if (d.includes('POSTE')) {
-    const m = d.match(/(d{3,4})s*(KGF|KG|KD)/);
+    const m = d.match(/([0-9]{3,4})[ ]*(KGF|KG|KD)/);
     if (m) {
       const kgf = parseInt(m[1], 10);
       if (kgf <= 1000) return 7;
