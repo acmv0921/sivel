@@ -1153,6 +1153,7 @@ function renderAPs() {
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: $'+Number(ap.flete_valor).toLocaleString('es-CO') : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
 ${ap.transportista_flete ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">🚛 ${ap.transportista_flete}</div>` : ''}
+${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Entrega por tandas:</b> '+t.map(function(x){return (x.fecha||'?')+' — '+(x.descripcion||'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
         </div>
         ${badge}
       </div>
