@@ -587,6 +587,10 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 <input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="calcularTotales();">
 <label class="form-label" style="margin-top:0.5rem;">🚚 Transportista / condiciones negociadas</label>
 <input id="transportistaFleteInput" class="form-control" placeholder="Ej: Transportes XYZ, pago contraentrega..." oninput="calcularTotales();">
+<div class="form-group" style="margin-top:0.5rem;">
+<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteIncorporadoCheck"> Flete incorporado al precio (prorratear en el valor unitario)</label>
+<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
+</div>
 </div>
 
         <!-- PASO 2b: Datos de entrega (campo) -->
@@ -2059,6 +2063,8 @@ flete_valor: STATE.pedido.flete_valor || 0,
 flete_sugerido: STATE.pedido.flete_sugerido || 0,
 transportista_flete: STATE.pedido.transportista_flete || '',
 flete_negociado: !!STATE.pedido.flete_negociado,
+flete_incorporado: !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked),
+flete_contra_entrega: !!(document.getElementById('fleteContraEntregaCheck') && document.getElementById('fleteContraEntregaCheck').checked),
 fecha_entrega: STATE.pedido.fecha_entrega || '',
 obs_entrega: STATE.pedido.obs_entrega || '',
 direccion_obra: STATE.pedido.direccion_obra || '',
