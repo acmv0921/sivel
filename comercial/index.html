@@ -377,6 +377,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   padding:2px 8px;border-radius:12px;margin-top:2px;
   background:#dbeafe;color:#1e40af;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -995,6 +996,7 @@ const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 const GVIZ = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
 
 // Estado global
+let CESION_ACTUAL = JSON.parse(localStorage.getItem('sivel_cesion_actual')||'[]');
 let STATE = {
   usuario: null,
   vendedor: null,
@@ -1927,6 +1929,75 @@ async function cancelarAPReservada(ap_id) {
   } catch(e) { console.warn('No se pudo cancelar la AP en el servidor'); }
 }
 
+function registrarApEnCesion(){
+  try{
+    const apId=document.getElementById('inputApId')?.value||'';
+    const cliente=STATE.pedido.cliente;
+    const totalTxt=document.getElementById('rTotal')?.textContent||'0';
+    const item={ap_id:apId,cliente_nombre:cliente?cliente.razon_social:'',cliente_nit:cliente?cliente.cliente_nit:'',lineas:STATE.pedido.lineas.length,total:totalTxt,hora:new Date().toLocaleString('es-CO')};
+    CESION_ACTUAL.push(item);
+    localStorage.setItem('sivel_cesion_actual', JSON.stringify(CESION_ACTUAL));
+  }catch(e){ console.warn('No se pudo registrar AP en cesión', e); }
+}
+
+async function continuarOCerrarCesion(){
+  const ultimo = CESION_ACTUAL.length ? CESION_ACTUAL[CESION_ACTUAL.length-1] : null;
+  const nombreCli = ultimo ? ultimo.cliente_nombre : '';
+  const nitCli = ultimo ? ultimo.cliente_nit : '';
+  if (confirm('✅ Pedido' + (ultimo && ultimo.ap_id ? ' #'+ultimo.ap_id : '') + ' guardado.\n\n¿Deseas agregar otro pedido para ' + nombreCli + ' en esta misma visita?')) {
+    if (nitCli) { nuevoPedidoDesdeCliente(nitCli); } else { irA('screenPedidos'); }
+    return;
+  }
+  if (CESION_ACTUAL.length > 1) {
+    if (confirm('¿Cerrar la cesión de esta visita y generar el informe de ' + CESION_ACTUAL.length + ' pedido(s) para enviar por WhatsApp?')) {
+      await cerrarCesionYGenerarInforme();
+      irA('screenPedidos');
+      return;
+    }
+  }
+  CESION_ACTUAL = [];
+  localStorage.removeItem('sivel_cesion_actual');
+  irA('screenPedidos');
+}
+
+async function cerrarCesionYGenerarInforme(){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 18;
+    doc.setFontSize(14);
+    doc.text('POSTEC DE OCCIDENTE S.A.S.', 14, y); y+=7;
+    doc.setFontSize(11);
+    doc.text('Resumen de pedidos de la visita', 14, y); y+=6;
+    doc.setFontSize(9);
+    doc.text('Vendedor: ' + (STATE.vendedor?.nombre_vendedor||''), 14, y); y+=5;
+    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), 14, y); y+=8;
+    doc.setFontSize(10);
+    CESION_ACTUAL.forEach(function(it,i){
+      doc.text((i+1) + '. AP #' + it.ap_id + ' — ' + it.cliente_nombre + ' (NIT ' + it.cliente_nit + ')', 14, y); y+=5;
+      doc.text('   ' + it.lineas + ' producto(s) · Total: $' + it.total + ' · ' + it.hora, 14, y); y+=7;
+      if (y > 270) { doc.addPage(); y = 18; }
+    });
+    const blob = doc.output('blob');
+    const filename = 'Pedidos_Visita_' + Date.now() + '.pdf';
+    const pdfFile = new File([blob], filename, {type:'application/pdf'});
+    if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+      await navigator.share({files:[pdfFile], title:'Pedidos de la visita', text:'Resumen de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      toast('📄 PDF descargado — compártelo manualmente por WhatsApp');
+    }
+  } catch(e) {
+    console.error('Error generando informe PDF', e);
+    toast('⚠️ No se pudo generar el PDF: ' + e.message);
+  } finally {
+    CESION_ACTUAL = [];
+    localStorage.removeItem('sivel_cesion_actual');
+  }
+}
+
 async function guardarAP() {
 if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
 if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
@@ -1963,10 +2034,13 @@ toast("⏳ Guardando AP...");
 await escribirGAS(body);
 toast("✅ AP guardada correctamente");
 
+registrarApEnCesion();
+
 limpiarPedido();
 await cargarMisAPs();
 actualizarKPIs();
-irA('screenPedidos');
+
+await continuarOCerrarCesion();
 }
 
 // =============================================================================
