@@ -614,7 +614,19 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
           <input id="obsEntrega" class="form-control" placeholder="Ej: Solo antes de las 9AM, llamar antes de llegar...">
         </div>
 
-        <!-- PASO 3: Agregar productos -->
+        <div class="form-group">
+  <label class="form-label">📦 Compromiso de entrega</label>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="unica" onclick="seleccionarModoEntrega('unica')" style="font-size:0.78rem;border-color:#16a34a;background:#f0fdf4;color:#14532d;">📅 Entrega única</button>
+    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="tandas" onclick="seleccionarModoEntrega('tandas')" style="font-size:0.78rem;">📦 Por tandas</button>
+  </div>
+  <input type="hidden" id="modoEntregaInput" value="unica">
+  <div id="tandasContainer" style="display:none;margin-top:8px;">
+    <div id="tandasLista"></div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="agregarTanda()">+ Agregar tanda</button>
+  </div>
+</div>
+<!-- PASO 3: Agregar productos -->
         <div class="card-title" style="margin-top:0.5rem;">Productos del Pedido</div>
         <div id="lineasAP" style="margin-bottom:0.75rem;"></div>
         <button class="btn btn-outline btn-sm" onclick="abrirModalProducto()">➕ Agregar producto</button>
@@ -1492,7 +1504,7 @@ function limpiarCliente() {
 function limpiarPedido() {
 STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, flete_sugerido:0,
 transportista_flete:'', flete_negociado:false, lineas:[],
-fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'',
+fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
 'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteValorInput','transportistaFleteInput']
@@ -1501,6 +1513,7 @@ const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA
 toggleDatosEntrega();
 limpiarCliente();
 renderLineasAP();
+_TANDAS=[];seleccionarModoEntrega('unica');
 calcularTotales();
 
 borrarBorradorPedido();
@@ -1929,6 +1942,39 @@ async function cancelarAPReservada(ap_id) {
   } catch(e) { console.warn('No se pudo cancelar la AP en el servidor'); }
 }
 
+let _TANDAS=[];
+function seleccionarModoEntrega(modo){
+  const inp=document.getElementById('modoEntregaInput'); if(inp) inp.value=modo;
+  document.querySelectorAll('.entrega-modo-btn').forEach(function(b){
+    const sel=b.dataset.modo===modo;
+    b.style.borderColor=sel?'#16a34a':'#e2e8f0';
+    b.style.background=sel?'#f0fdf4':'#fff';
+    b.style.color=sel?'#14532d':'#888';
+  });
+  const cont=document.getElementById('tandasContainer'); if(cont) cont.style.display = modo==='tandas'?'block':'none';
+  if(modo==='tandas' && !_TANDAS.length) agregarTanda(); else calcularPlanEntregas();
+}
+function agregarTanda(){ _TANDAS.push({fecha:'',descripcion:''}); renderTandas(); }
+function quitarTanda(i){ _TANDAS.splice(i,1); renderTandas(); }
+function actualizarTanda(i,campo,valor){ if(_TANDAS[i]) _TANDAS[i][campo]=valor; calcularPlanEntregas(); }
+function renderTandas(){
+  const cont=document.getElementById('tandasLista'); if(!cont) return;
+  cont.innerHTML=_TANDAS.map(function(t,i){
+    return '<div style="display:grid;grid-template-columns:130px 1fr 28px;gap:6px;margin-bottom:6px;">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" type="date" value="'+(t.fecha||'')+'" onchange="actualizarTanda('+i+',&#39;fecha&#39;,this.value)">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Ej: 40% del pedido, bloques grises..." value="'+String(t.descripcion||'').replace(/"/g,'&quot;')+'" oninput="actualizarTanda('+i+',&#39;descripcion&#39;,this.value)">'+
+    '<button type="button" onclick="quitarTanda('+i+')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button>'+
+    '</div>';
+  }).join('');
+  calcularPlanEntregas();
+}
+function calcularPlanEntregas(){
+  const modo=document.getElementById('modoEntregaInput')?.value||'unica';
+  if(modo==='unica'){ STATE.pedido.plan_entregas=''; return; }
+  const validas=_TANDAS.filter(function(t){ return t.fecha||t.descripcion; });
+  STATE.pedido.plan_entregas = validas.length ? JSON.stringify(validas) : '';
+}
+
 function registrarApEnCesion(){
   try{
     const apId=document.getElementById('inputApId')?.value||'';
@@ -2022,6 +2068,7 @@ orden_compra_cliente: STATE.pedido.orden_compra_cliente || '',
 cotizacion_ref: STATE.pedido.cotizacion_ref || '',
 condiciones_pago: STATE.pedido.condiciones_pago || '',
 nombre_obra: STATE.pedido.nombre_obra || '',
+plan_entregas: STATE.pedido.plan_entregas || '',
 detalle: STATE.pedido.lineas.map(l => ({
 tmcode: l.tmcode,
 cantidad_solicitada: l.cantidad_solicitada,
