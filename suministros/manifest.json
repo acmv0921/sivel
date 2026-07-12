@@ -1,12 +1,44 @@
 {
   "name": "SIVIL Suministros",
   "short_name": "Suministros",
-  "start_url": "/sivel/suministros/",
+  "description": "POSTEC DE OCCIDENTE S.A.S. — Sistema Integrado de Ventas, Inventario y Logistica — SIVIL",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#14532d",
-  "theme_color": "#14532d",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
+  "background_color": "#4c1d95",
+  "theme_color": "#4c1d95",
+  "lang": "es-CO",
+  "prefer_related_applications": false,
   "icons": [
-    {"src": "../assets/icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "../assets/icon-512.png", "sizes": "512x512", "type": "image/png"}
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
