@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SIVIL Patio">
-<link rel="apple-touch-icon" sizes="192x192" href="../assets/icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="../assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <style>
 :root {
   --naranja:  #e05c1a;
@@ -1314,6 +1314,8 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
 
   document.getElementById('modalDespacho').classList.add('show');
 
+
+restaurarBorradorDespacho();
 }
 
 function verificarSaldo(detalle_id, pendiente, und) {
@@ -1383,6 +1385,8 @@ async function confirmarDespacho() {
   // Recargar y abrir WhatsApp
   await cargarTodo();
   setTimeout(() => abrirModalWADespacho(ap.ap_id, placa, document.getElementById('despConductor')?.value||''), 600);
+
+borrarBorradorDespacho();
 }
 
 // =============================================================================
@@ -1686,6 +1690,8 @@ function seleccionarVehiculo(v) {
       </div>`;
   }
   toast(`✅ ${VEH_SELECCIONADO.placa} seleccionado`);
+
+guardarBorradorDespacho();
 }
 
 function mostrarFormVehiculo() {
@@ -1979,6 +1985,8 @@ function seleccionarTipo(btn, detalle_id) {
   btn.style.borderColor  = esA ? 'var(--verde)' : 'var(--naranja)';
   const hidden = document.getElementById(`tipoProd_${detalle_id}`);
   if (hidden) hidden.value = btn.dataset.tipo;
+
+guardarBorradorDespacho();
 }
 
 function toggleCargueManual() {
@@ -2043,8 +2051,78 @@ function toast(msg, dur=2800) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
 }
+
+function guardarBorradorDespacho() {
+try {
+if (!S.despachoActual || !S.despachoActual.ap) return;
+const ap_id = S.despachoActual.ap.ap_id;
+const cargas = {};
+(S.despachoActual.lineas||[]).forEach(function(l) {
+const cEl = document.getElementById('carga_' + l.detalle_id);
+const tEl = document.getElementById('tipoProd_' + l.detalle_id);
+if (cEl || tEl) cargas[l.detalle_id] = { carga: cEl ? cEl.value : '', tipo: tEl ? tEl.value : '' };
+});
+const conductor = document.getElementById('despConductor')?.value || '';
+const draft = { ap_id: ap_id, vehiculo: VEH_SELECCIONADO || null, conductor: conductor, cargas: cargas, ts: Date.now() };
+localStorage.setItem('sivil_despacho_borrador', JSON.stringify(draft));
+} catch(e) { /* localStorage no disponible, ignorar */ }
+}
+
+function borrarBorradorDespacho() {
+try { localStorage.removeItem('sivil_despacho_borrador'); } catch(e) {}
+}
+
+function restaurarBorradorDespacho() {
+try {
+const raw = localStorage.getItem('sivil_despacho_borrador');
+if (!raw) return;
+const draft = JSON.parse(raw);
+if (!draft || !S.despachoActual || !S.despachoActual.ap || String(draft.ap_id) !== String(S.despachoActual.ap.ap_id)) return;
+const tieneCargas = draft.cargas && Object.keys(draft.cargas).length;
+if (!draft.vehiculo && !draft.conductor && !tieneCargas) { borrarBorradorDespacho(); return; }
+if (!confirm('📝 Hay datos sin guardar de este despacho (AP #' + draft.ap_id + '). ¿Deseas continuar donde quedaste?')) {
+borrarBorradorDespacho();
+return;
+}
+if (draft.vehiculo) { seleccionarVehiculo(draft.vehiculo); }
+if (draft.conductor) {
+const cEl = document.getElementById('despConductor');
+if (cEl) cEl.value = draft.conductor;
+}
+Object.keys(draft.cargas||{}).forEach(function(detalleId) {
+const info = draft.cargas[detalleId];
+const cargaEl = document.getElementById('carga_' + detalleId);
+if (cargaEl && info.carga !== '' && info.carga !== undefined) cargaEl.value = info.carga;
+const tipoEl = document.getElementById('tipoProd_' + detalleId);
+if (tipoEl && info.tipo) {
+tipoEl.value = info.tipo;
+document.querySelectorAll('.tipo-btn-' + detalleId).forEach(function(btn) {
+const esSel = btn.dataset.tipo === info.tipo;
+btn.classList.toggle('active', esSel);
+if (esSel) {
+btn.style.background = info.tipo === 'B' ? '#f59e0b' : 'var(--verde)';
+btn.style.color = '#fff';
+btn.style.borderColor = info.tipo === 'B' ? '#f59e0b' : 'var(--verde)';
+} else {
+btn.style.background = '';
+btn.style.color = '';
+btn.style.borderColor = '';
+}
+});
+}
+});
+toast('✅ Despacho restaurado');
+} catch(e) { console.warn('No se pudo restaurar el borrador de despacho', e); }
+}
+
 document.getElementById('loginPin').addEventListener('keydown', e => {
   if (e.key === 'Enter') hacerLogin();
+});
+
+
+document.addEventListener('input', function(e) {
+var id = (e.target && e.target.id) || '';
+if (id === 'despConductor' || id.indexOf('carga_') === 0) { guardarBorradorDespacho(); }
 });
 </script>
 
