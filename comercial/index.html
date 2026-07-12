@@ -720,6 +720,22 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div class="form-group" style="margin-bottom:0;"><label class="form-label">Correo</label><input id="visitaContCorreo" class="form-control" type="email" placeholder="contacto@empresa.com"></div>
     </div>
     <div class="form-group">
+  <label class="form-label">🎯 Productos de interés discutidos</label>
+  <div style="display:flex;gap:6px;">
+    <input id="visitaProdInput" class="form-control" list="visitaProdList" placeholder="Buscar producto...">
+    <datalist id="visitaProdList"></datalist>
+    <button type="button" class="btn btn-outline btn-sm" onclick="agregarProductoInteres()" style="white-space:nowrap;">+ Agregar</button>
+  </div>
+  <div id="visitaProdChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+</div>
+<div class="form-group">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <label class="form-label" style="margin:0;">🏢 Competencia presente</label>
+    <button type="button" class="btn btn-outline btn-sm" onclick="agregarFilaCompetencia()">+ Agregar</button>
+  </div>
+  <div id="visitaCompetenciaRows" style="margin-top:8px;"></div>
+</div>
+<div class="form-group">
       <label class="form-label">📝 Notas</label>
       <textarea id="visitaNotas" class="form-control" rows="3" placeholder="Intereses, observaciones, próxima visita..."></textarea>
     </div>
@@ -883,7 +899,7 @@ async function procesarFotoMDA(file,gps,quien){
     };reader.readAsDataURL(file);
   });
 }
-let _VGPS=null,_VFOTOS=[],_VCLI=null;
+let _VGPS=null,_VFOTOS=[],_VCLI=null,_VPRODINT=[],_VCOMP=[];
 function _cntF(){const n=_VFOTOS.length,el=document.getElementById('visitaCnt');if(!el)return;el.className='foto-cnt '+(n>=3?'ok':n>0?'warn':'err');el.textContent=(n>=3?'✅':'⚠️')+' '+n+'/3';}
 function _renderVF(){const c=document.getElementById('visitaFotos');if(!c)return;c.innerHTML=_VFOTOS.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="_VFOTOS.splice('+i+',1);_renderVF();_cntF();">✕</button></div>').join('');}
 
@@ -2161,12 +2177,21 @@ let VISITA = { cliente:null, fotos:[], gps:null, notas:'', hora:null };
 let VISITAS_GUARDADAS = JSON.parse(localStorage.getItem('sivel_visitas') || '[]');
 
 // ---- REGISTRO DE VISITA ----
+function agregarProductoInteres(){const inp=document.getElementById('visitaProdInput');const val=(inp.value||'').trim();if(!val)return;const prod=(STATE.inventario||[]).find(p=>p.tmdescrip===val);const nombre=prod?prod.tmdescrip:val;if(_VPRODINT.includes(nombre)){inp.value='';return;}_VPRODINT.push(nombre);inp.value='';renderProductosInteres();}
+function quitarProductoInteres(i){_VPRODINT.splice(i,1);renderProductosInteres();}
+function renderProductosInteres(){const cont=document.getElementById('visitaProdChips');if(!cont)return;cont.innerHTML=_VPRODINT.map((n,i)=>'<span style="background:#eff6ff;color:var(--azul2);border-radius:20px;padding:4px 10px;font-size:.72rem;display:inline-flex;align-items:center;gap:6px;">'+n+'<button type="button" onclick="quitarProductoInteres('+i+')" style="border:none;background:none;color:var(--rojo);cursor:pointer;font-weight:700;">✕</button></span>').join('')||'<span style="color:#aaa;font-size:.72rem;">Ninguno agregado</span>';}
+function poblarDatalistProductos(){const dl=document.getElementById('visitaProdList');if(!dl)return;const nombres=[...new Set((STATE.inventario||[]).map(p=>p.tmdescrip))];dl.innerHTML=nombres.map(n=>'<option value="'+String(n).replace(/"/g,'&quot;')+'">').join('');}
+function agregarFilaCompetencia(){_VCOMP.push({nombre:'',producto:'',precio:''});renderCompetencia();}
+function quitarFilaCompetencia(i){_VCOMP.splice(i,1);renderCompetencia();}
+function actualizarCompetencia(i,campo,valor){if(_VCOMP[i])_VCOMP[i][campo]=valor;}
+function renderCompetencia(){const cont=document.getElementById('visitaCompetenciaRows');if(!cont)return;if(!_VCOMP.length){cont.innerHTML='<span style="color:#aaa;font-size:.72rem;">Ninguna registrada</span>';return;}cont.innerHTML=_VCOMP.map((c,i)=>'<div style="display:grid;grid-template-columns:1fr 1fr 90px 28px;gap:6px;margin-bottom:6px;">'+'<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Competidor" value="'+String(c.nombre||'').replace(/"/g,'&quot;')+'" oninput="actualizarCompetencia('+i+',\'nombre\',this.value)">'+'<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Producto" value="'+String(c.producto||'').replace(/"/g,'&quot;')+'" oninput="actualizarCompetencia('+i+',\'producto\',this.value)">'+'<input class="form-control" style="font-size:.75rem;padding:6px;" type="number" placeholder="Precio" value="'+(c.precio||'')+'" oninput="actualizarCompetencia('+i+',\'precio\',this.value)">'+'<button type="button" onclick="quitarFilaCompetencia('+i+')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button></div>').join('');}
+
 function abrirRegistroVisita(nit){
   const c=STATE.clientes.find(x=>String(x.cliente_nit)===String(nit));if(!c)return;
-  _VCLI=c;_VFOTOS=[];_VGPS=null;
+  _VCLI=c;_VFOTOS=[];_VGPS=null;_VPRODINT=[];_VCOMP=[];
   document.getElementById('visitaCliente').textContent=c.razon_social;
   document.getElementById('visitaFotos').innerHTML='';
-  document.getElementById('visitaNotas').value='';
+  document.getElementById('visitaNotas').value='';renderProductosInteres();renderCompetencia();poblarDatalistProductos();
   document.getElementById('visitaDireccion').value=c.coordenadas_home||'';
   ['visitaContNombre','visitaContCel','visitaContCorreo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   _cntF();document.getElementById('visitaGPS').textContent='📍 Obteniendo GPS...';
@@ -2224,7 +2249,7 @@ async function guardarVisita(){
     cel:document.getElementById('visitaContCel')?.value.trim()||'',
     correo:document.getElementById('visitaContCorreo')?.value.trim()||''},
     fotos:_VFOTOS.map(f=>({b64:f.b64,hora:f.hora})),
-    notas:document.getElementById('visitaNotas')?.value.trim()||'',
+    notas:document.getElementById('visitaNotas')?.value.trim()||'',productos_interes:_VPRODINT.slice(),competencia:_VCOMP.filter(c=>c.nombre||c.producto||c.precio),
     hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
   VISITAS_GUARDADAS.unshift(reg);if(VISITAS_GUARDADAS.length>50)VISITAS_GUARDADAS=VISITAS_GUARDADAS.slice(0,50);
   localStorage.setItem('sivel_visitas',JSON.stringify(VISITAS_GUARDADAS));
