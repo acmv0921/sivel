@@ -590,6 +590,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 <div class="form-group" style="margin-top:0.5rem;">
 <label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteIncorporadoCheck"> Flete incorporado al precio (prorratear en el valor unitario)</label>
 <label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
+<div id="basculaWarning" style="display:none;margin-top:0.5rem;padding:0.5rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.8rem;color:#856404;"></div>
 </div>
 </div>
 
@@ -1744,6 +1745,17 @@ const fleteGroup = document.getElementById('fleteGroup');
 if (fleteGroup) fleteGroup.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
 const dispEl = document.getElementById('fleteSugeridoDisplay');
 if (dispEl) dispEl.value = fmt(sugerido);
+const basculaEl = document.getElementById('basculaWarning');
+if (basculaEl) {
+const restringido = tarifa && (tarifa.bascula_restriccion === true || tarifa.bascula_restriccion === 'TRUE' || tarifa.bascula_restriccion === 'VERDADERO');
+const capMax = tarifa ? (parseFloat(tarifa.capacidad_maxima_bascula) || 0) : 0;
+if (restringido && capMax > 0) {
+basculaEl.style.display = 'block';
+basculaEl.textContent = 'Ruta con restriccion de bascula: maximo ' + capMax + ' unidades por viaje. Si el pedido supera esta cantidad, coordina con Despacho para dividir en varios viajes.';
+} else {
+basculaEl.style.display = 'none';
+}
+}
 const inputEl = document.getElementById('fleteValorInput');
 if (inputEl && (inputEl.value === '' || inputEl.dataset.autofilled === '1')) {
 inputEl.value = sugerido || '';
