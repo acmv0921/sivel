@@ -627,6 +627,19 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       </div>
     </div>
 
+    <div class="card" id="cardCarpetasInformes" style="border-top:3px solid #2563eb;">
+      <div class="card-title">🗂️ Informes PDF (Ventas y Despachos)</div>
+      <p style="font-size:.78rem;color:#555;margin-bottom:.75rem;">
+        Cada informe de negociación (Comercial) y de despacho (Despacho) se guarda automáticamente
+        como PDF en una de estas dos carpetas de Drive, con fotos y datos completos, para consulta de Gerencia.
+      </p>
+      <div id="carpetasInformesStatus" style="font-size:.78rem;color:#888;">Cargando enlaces...</div>
+      <div id="carpetasInformesLinks" style="margin-top:.5rem;display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <div style="margin-top:.75rem;">
+        <button class="btn btn-outline btn-sm" onclick="cargarCarpetasInformes()">🔄 Actualizar</button>
+      </div>
+    </div>
+
     <div class="card" style="border-top:3px solid var(--verde);">
       <div class="card-title">⬇️ Importar Existencias al SIVIL</div>
       <p style="font-size:.78rem;color:#555;margin-bottom:1rem;">
@@ -1924,6 +1937,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnInvDrive.onclick = function() {
       irA('screenInventDrive');
       cargarArchivosDrive();
+      cargarCarpetasInformes();
     };
   }
 });
@@ -1933,6 +1947,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════════
 // IMPORTAR INVENTARIO DESDE GOOGLE DRIVE
 // ═══════════════════════════════════════════════════════════
+async function cargarCarpetasInformes() {
+  const status = document.getElementById('carpetasInformesStatus');
+  const cont = document.getElementById('carpetasInformesLinks');
+  if (!status) return;
+  status.textContent = '⏳ Consultando carpetas...';
+  try {
+    const r = await fetch(`${GAS_URL}?accion=getCarpetasInformes`);
+    const j = await r.json();
+    if (!j.ok) { status.textContent = '❌ ' + (j.error || 'No se pudo obtener las carpetas'); return; }
+    status.textContent = 'Carpetas disponibles:';
+    cont.innerHTML = `
+      <a href="${j.ventas}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">💰 Informes de Ventas</a>
+      <a href="${j.despachos}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">🚚 Informes de Despacho</a>
+    `;
+  } catch(e) {
+    status.textContent = '❌ Error consultando carpetas: ' + e.message;
+  }
+}
+
 async function cargarArchivosDrive() {
   const cont = document.getElementById('driveFilesList');
   const status = document.getElementById('driveFilesStatus');
