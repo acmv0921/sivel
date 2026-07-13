@@ -721,12 +721,21 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <label class="form-label" style="margin:0;">📷 Fotos de la visita</label>
         <span id="visitaCnt" class="foto-cnt err">⚠️ 0/3</span>
       </div>
-      <label class="foto-drop" for="inputFotoVisita">
-        <p style="font-size:1.5rem;margin:0;">📷</p>
-        <p>Tomar foto o seleccionar galería · Mínimo 3 requeridas</p>
-        <p style="font-size:.63rem;">Logo POSTECSA + GPS + Hora automáticos en cada foto</p>
-      </label>
+      <div style="display:flex;gap:8px;">
+        <label class="foto-drop" for="inputFotoVisita" style="flex:1;">
+          <p style="font-size:1.5rem;margin:0;">📷</p>
+          <p>Tomar foto · Mínimo 3 requeridas</p>
+          <p style="font-size:.63rem;">Logo POSTECSA + GPS + Hora automáticos en cada foto</p>
+        </label>
+        <label class="foto-drop" for="inputFotoVisitaGaleria" style="flex:1;">
+          <p style="font-size:1.5rem;margin:0;">🖼️</p>
+          <p>Elegir de galería</p>
+          <p style="font-size:.63rem;">También se marca con logo, GPS y hora</p>
+        </label>
+      </div>
       <input id="inputFotoVisita" type="file" accept="image/*" capture="environment"
+             style="display:none;" onchange="agregarFotoVisita(this)">
+      <input id="inputFotoVisitaGaleria" type="file" accept="image/*" multiple
              style="display:none;" onchange="agregarFotoVisita(this)">
       <div id="visitaFotos" class="thumb-grid"></div>
     </div>
@@ -955,6 +964,15 @@ function activarSandbox() {
 
 // Reemplazar escribirGAS en modo sandbox
 const _escribirGAS_real = typeof escribirGAS !== 'undefined' ? escribirGAS : null;
+
+function _blobABase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 async function escribirGAS(body) {
   if (_SANDBOX) {
@@ -2193,6 +2211,10 @@ async function cerrarCesionYGenerarInforme(){
     const blob = doc.output('blob');
     const filename = 'Informe_Negociacion_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
+
+    // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
+    _blobABase64(blob).then(b64 => escribirGAS({accion:'guardarInformePDF', tipo:'venta', nombre_archivo: filename, base64_pdf: b64})).catch(err => console.error('No se pudo guardar el informe en Drive', err));
+
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
     } else {
