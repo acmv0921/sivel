@@ -1062,25 +1062,39 @@ async function cargarMetaActualizacion() {
   }
 }
 
-async function escribirGAS(body) {
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type':'text/plain'},
-    body: JSON.stringify(body)
-  });
-  await new Promise(r => setTimeout(r, 900));
+async function leerGVIZSafe(hoja) {
+  try { return await leerGVIZ(hoja); } catch(e) { console.error('Error leyendo ' + hoja, e); return []; }
+}
+
+function sincronizarFuncionariosBackend(datos) {
+  if (datos && datos.length) {
+    S.funcionarios = datos.map(f => ({
+      id: f.id,
+      nombre: f.nombre,
+      cargo: f.cargo,
+      wa: String(f.wa || ''),
+      recibe: f.recibe,
+      activo: (f.activo === 'si' || f.activo === true)
+    }));
+    guardarFuncionariosLocal();
+  } else if (S.funcionarios.length === 0) {
+    agregarFuncionariosDefault();
+  }
 }
 
 async function cargarTodo() {
   try {
-    [S.aps, S.detalles, S.productos, S.patio, S.clientes, S.vendedores] = await Promise.all([
+    let funcionariosBackend;
+    [S.aps, S.detalles, S.productos, S.patio, S.clientes, S.vendedores, funcionariosBackend] = await Promise.all([
       leerGVIZ("PREVENTAS_AP"),
       leerGVIZ("DETALLE_AP"),
       leerGVIZ("PRODUCTOS_MAESTRO"),
       leerGVIZ("CONTROL_PATIO_Y_LOGISTICA"),
       leerGVIZ("CLIENTES"),
-      leerGVIZ("VENDEDORES")
+      leerGVIZ("VENDEDORES"),
+      leerGVIZSafe("FUNCIONARIOS")
     ]);
+    sincronizarFuncionariosBackend(funcionariosBackend);
     cargarMetaActualizacion();
     poblarSelectProductos();
     actualizarKPIs();
