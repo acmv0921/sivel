@@ -2237,6 +2237,37 @@ async function cerrarCesionYGenerarInforme(){
         y += 8;
       }
 
+      // Notas de visita / productos de interés / competencia (si hubo una visita a este mismo cliente en esta sesión)
+      const _visitaAsociada = VISITAS_GUARDADAS.find(v => v.cliente && String(v.cliente.cliente_nit) === String(it.cliente_nit));
+      if (_visitaAsociada && (_visitaAsociada.notas || (_visitaAsociada.productos_interes||[]).length || (_visitaAsociada.competencia||[]).filter(cp=>cp.nombre||cp.producto||cp.precio).length)) {
+        ensureSpace(20);
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(9);
+        doc.text('Notas de la visita comercial', 14, y); y += 5;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(8.5);
+        if (_visitaAsociada.notas) {
+          const lineasNota = doc.splitTextToSize(_visitaAsociada.notas, pageW - 28);
+          lineasNota.forEach(function(ln){ ensureSpace(5); doc.text(ln, 14, y); y += 4.5; });
+          y += 1;
+        }
+        if ((_visitaAsociada.productos_interes||[]).length) {
+          ensureSpace(6);
+          doc.text('Productos de interés: ' + _visitaAsociada.productos_interes.join(', '), 14, y); y += 5;
+        }
+        const compValida = (_visitaAsociada.competencia||[]).filter(cp=>cp.nombre||cp.producto||cp.precio);
+        if (compValida.length) {
+          ensureSpace(6);
+          doc.text('Competencia mencionada:', 14, y); y += 4.5;
+          compValida.forEach(function(cp){
+            ensureSpace(5);
+            const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+fmtN(cp.precio)) : ''].filter(Boolean).join(' — ');
+            doc.text('• ' + partes, 16, y); y += 4.5;
+          });
+        }
+        y += 3;
+      }
+
       // Evidencia fotográfica DE ESTE PEDIDO (cada AP muestra solo sus propias fotos, nunca las de otro)
       if (it.fotos && it.fotos.length) {
         _pdfFooter(doc, pageW, pageH);
