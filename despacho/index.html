@@ -524,8 +524,12 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       </div>
       <div class="form-group">
         <label class="form-label">📷 Foto de la novedad</label>
-        <label class="foto-btn" for="fotoAveria">📷 Tomar / seleccionar foto</label>
+        <div style="display:flex;gap:8px;">
+          <label class="foto-btn" for="fotoAveria" style="flex:1;text-align:center;">📷 Tomar foto</label>
+          <label class="foto-btn" for="fotoAveriaGaleria" style="flex:1;text-align:center;">🖼️ Galería</label>
+        </div>
         <input id="fotoAveria" type="file" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto('fotoAveria','previewAv')">
+        <input id="fotoAveriaGaleria" type="file" accept="image/*" style="display:none;" onchange="previewFoto('fotoAveriaGaleria','previewAv')">
         <img id="previewAv" class="foto-preview">
       </div>
       <button class="btn btn-danger" onclick="guardarAveria()">⚠️ Registrar Novedad</button>
@@ -864,6 +868,15 @@ function activarSandbox() {
 
 // Reemplazar escribirGAS en modo sandbox
 const _escribirGAS_real = typeof escribirGAS !== 'undefined' ? escribirGAS : null;
+
+function _blobABase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 async function escribirGAS(body) {
   if (_SANDBOX) {
@@ -1418,12 +1431,21 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
         <label class="form-label" style="margin:0;">📷 Fotos del vehículo y carga</label>
         <span id="despFotoCnt" class="foto-cnt-badge cnt-err">⚠️ 0/3</span>
       </div>
-      <label class="foto-capture-box" for="fotoCargaInput">
-        <div class="icon">📷</div>
-        <p>Vehículo, plataforma, carga. Mínimo 3 fotos.</p>
-        <p style="font-size:0.65rem;margin-top:2px;">Logo POSTECSA + GPS + Hora automáticos</p>
-      </label>
+      <div style="display:flex;gap:8px;">
+        <label class="foto-capture-box" for="fotoCargaInput" style="flex:1;">
+          <div class="icon">📷</div>
+          <p>Tomar foto. Mínimo 3 fotos.</p>
+          <p style="font-size:0.65rem;margin-top:2px;">Logo POSTECSA + GPS + Hora automáticos</p>
+        </label>
+        <label class="foto-capture-box" for="fotoCargaInputGaleria" style="flex:1;">
+          <div class="icon">🖼️</div>
+          <p>Elegir de galería</p>
+          <p style="font-size:0.65rem;margin-top:2px;">También se marca con logo, GPS y hora</p>
+        </label>
+      </div>
       <input id="fotoCargaInput" type="file" accept="image/*" capture="environment"
+             style="display:none;" onchange="agregarFotosDespacho(this)">
+      <input id="fotoCargaInputGaleria" type="file" accept="image/*" multiple
              style="display:none;" onchange="agregarFotosDespacho(this)">
       <div id="fotosDespachoPreview" class="thumb-row"></div>
     </div>
@@ -1609,6 +1631,10 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     const blob = doc.output('blob');
     const filename = 'Informe_Despacho_AP' + ap.ap_id + '_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
+
+    // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
+    _blobABase64(blob).then(b64 => escribirGAS({accion:'guardarInformePDF', tipo:'despacho', nombre_archivo: filename, base64_pdf: b64})).catch(err => console.error('No se pudo guardar el informe en Drive', err));
+
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTEC DE OCCIDENTE'});
     } else {
