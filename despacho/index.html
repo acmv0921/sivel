@@ -452,6 +452,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <button class="tab active" onclick="filtrarAPs('Pendiente',this)">Pendientes</button>
         <button class="tab" onclick="filtrarAPs('Despachado Parcial',this)">Con Saldo</button>
         <button class="tab" onclick="filtrarAPs('todos',this)">Todos</button>
+        <button class="tab" onclick="filtrarAPs('HISTORIAL',this)">🕘 Historial</button>
       </div>
       <div class="search-box form-group">
         <span class="search-icon">🔍</span>
@@ -1196,6 +1197,7 @@ function filtrarAPs(estado, btn) {
 
 function renderAPs() {
   const cont  = document.getElementById('listaAPs');
+  if (_filtroActual === 'HISTORIAL') { renderHistorialDespachos(); return; }
   const q     = (document.getElementById('buscarAP')?.value || '').toLowerCase();
   let lista   = S.aps.filter(a => {
     if (_filtroActual !== 'todos' && a.estado_ap !== _filtroActual) return false;
@@ -1248,6 +1250,55 @@ ${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '
       </div>
     </div>`;
   }).join('');
+}
+
+function renderHistorialDespachos() {
+  const cont = document.getElementById('listaAPs');
+  if (!DESPACHOS_HISTORIAL.length) {
+    cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin despachos en el historial todavía</div>';
+    return;
+  }
+  cont.innerHTML = `
+    <div style="text-align:right;margin-bottom:8px;">
+      <button class="btn btn-outline btn-sm" style="color:var(--rojo);border-color:var(--rojo);" onclick="borrarTodoHistorialDespacho()">🗑️ Borrar todo el historial</button>
+    </div>` +
+    DESPACHOS_HISTORIAL.map(h => `
+    <div class="ap-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="ap-id">AP #${h.ap_id}</div>
+          <div class="ap-cliente">${h.cliente||''}</div>
+          <div class="ap-meta">
+            <span>📅 ${h.fecha||''}</span>
+            <span>${h.estado||''}</span>
+          </div>
+          <div style="font-size:0.72rem;color:#444;margin-top:3px;">🚚 ${h.placa||'—'} · 👷 ${h.conductor||'—'}</div>
+          ${h.lineas && h.lineas.length ? `<div style="font-size:0.70rem;color:#555;margin-top:4px;">${h.lineas.map(l=>l.nombre+' · '+l.cantidad+' '+l.unidad).join(' · ')}</div>` : ''}
+        </div>
+        ${h.thumb ? `<img src="${h.thumb}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;" onclick="verFotoGrande('${h.thumb}')">` : ''}
+      </div>
+      <div style="margin-top:8px;text-align:right;">
+        <button class="btn btn-outline btn-sm" style="font-size:0.72rem;padding:4px 10px;color:var(--rojo);border-color:var(--rojo);"
+          onclick="borrarHistorialDespacho(${h.id})">
+          🗑️ Borrar del historial
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function borrarHistorialDespacho(id) {
+  DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.filter(h => h.id !== id);
+  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
+  renderHistorialDespachos();
+  toast('🗑️ Eliminado del historial');
+}
+
+function borrarTodoHistorialDespacho() {
+  if (!confirm('¿Borrar todo el historial de despachos? Esto no afecta los datos guardados en el Sheet ni en Drive, solo esta lista local.')) return;
+  DESPACHOS_HISTORIAL = [];
+  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
+  renderHistorialDespachos();
+  toast('🗑️ Historial de despachos borrado');
 }
 
 function toggleModoReparto() {
@@ -1538,6 +1589,21 @@ async function confirmarDespacho() {
 
   // Informe PDF con logo, datos del despacho y fotos — se comparte/descarga en el dispositivo
   generarInformePDFDespacho(ap, placa, conductorFinal, lineasInforme, nuevoEstado, FOTOS_DESP.slice());
+
+  // Guardar en el historial local de despachos (para consulta y borrado, sin saturar la vista principal)
+  DESPACHOS_HISTORIAL.unshift({
+    id: Date.now(),
+    ap_id: ap.ap_id,
+    cliente: nombreCliente(ap.cliente_nit),
+    placa: placa,
+    conductor: conductorFinal,
+    estado: nuevoEstado,
+    fecha: new Date().toLocaleString('es-CO'),
+    lineas: lineasInforme,
+    thumb: FOTOS_DESP.length ? FOTOS_DESP[0].b64 : ''
+  });
+  if (DESPACHOS_HISTORIAL.length > 100) DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.slice(0,100);
+  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
 
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
@@ -1925,6 +1991,7 @@ function eliminarFuncionario(id) {
 let VEHICULOS_SHEET = [];
 let VEH_SELECCIONADO = null;
 let FOTOS_DESP = [];
+let DESPACHOS_HISTORIAL = JSON.parse(localStorage.getItem('sivel_despachos_historial')||'[]');
 let GPS_DESP   = null;
 
 async function cargarVehiculos() {
