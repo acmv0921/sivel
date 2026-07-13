@@ -1156,28 +1156,32 @@ async function cargarMetaActualizacion() {
 }
 
 // =============================================================================
-// ESCRIBIR DATOS (POST no-cors)
-// =============================================================================
-async function escribirGAS(body) {
-  await fetch(GAS_URL, {
-    method:  'POST',
-    mode:    'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body:    JSON.stringify(body)
-  });
-  // no-cors no devuelve respuesta — esperamos un tick
-  await new Promise(r => setTimeout(r, 800));
-}
-
-// =============================================================================
 // CARGA INICIAL
 // =============================================================================
+async function sincronizarFuncionariosBackend() {
+  try {
+    const datos = await leerGVIZ("FUNCIONARIOS");
+    if (datos && datos.length) {
+      const lista = datos.map(f => ({
+        id: f.id,
+        nombre: f.nombre,
+        cargo: f.cargo,
+        wa: String(f.wa || ''),
+        recibe: f.recibe,
+        activo: (f.activo === 'si' || f.activo === true)
+      }));
+      localStorage.setItem(FUNCIONARIOS_KEY, JSON.stringify(lista));
+    }
+  } catch (e) { console.error('Error sincronizando funcionarios', e); }
+}
+
 async function cargarTodo() {
   await Promise.all([
     cargarInventario(),
     cargarClientes(),
     cargarMisAPs(),
-    cargarMetaActualizacion()
+    cargarMetaActualizacion(),
+    sincronizarFuncionariosBackend()
   ]);
   actualizarKPIs();
 
@@ -2010,8 +2014,9 @@ async function continuarOCerrarCesion(){
     if (nitCli) { nuevoPedidoDesdeCliente(nitCli); } else { irA('screenPedidos'); }
     return;
   }
-  if (CESION_ACTUAL.length > 1) {
-    if (confirm('¿Cerrar la cesión de esta visita y generar el informe de ' + CESION_ACTUAL.length + ' pedido(s) para enviar por WhatsApp?')) {
+  if (CESION_ACTUAL.length >= 1) {
+    const plural = CESION_ACTUAL.length > 1 ? 's' : '';
+    if (confirm('¿Cerrar la visita y generar el informe en PDF de ' + CESION_ACTUAL.length + ' pedido' + plural + ' para enviar por WhatsApp?')) {
       await cerrarCesionYGenerarInforme();
       irA('screenPedidos');
       return;
