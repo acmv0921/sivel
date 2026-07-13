@@ -362,6 +362,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   padding:2px 8px;border-radius:12px;margin-top:2px;
   background:#dbeafe;color:#1e40af;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -524,7 +525,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div class="form-group">
         <label class="form-label">📷 Foto de la novedad</label>
         <label class="foto-btn" for="fotoAveria">📷 Tomar / seleccionar foto</label>
-        <input id="fotoAveria" type="file" accept="image/*" style="display:none;" onchange="previewFoto('fotoAveria','previewAv')">
+        <input id="fotoAveria" type="file" accept="image/*" capture="environment" style="display:none;" onchange="previewFoto('fotoAveria','previewAv')">
         <img id="previewAv" class="foto-preview">
       </div>
       <button class="btn btn-danger" onclick="guardarAveria()">⚠️ Registrar Novedad</button>
@@ -1422,8 +1423,8 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
         <p>Vehículo, plataforma, carga. Mínimo 3 fotos.</p>
         <p style="font-size:0.65rem;margin-top:2px;">Logo POSTECSA + GPS + Hora automáticos</p>
       </label>
-      <input id="fotoCargaInput" type="file" accept="image/*"
-             multiple style="display:none;" onchange="agregarFotosDespacho(this)">
+      <input id="fotoCargaInput" type="file" accept="image/*" capture="environment"
+             style="display:none;" onchange="agregarFotosDespacho(this)">
       <div id="fotosDespachoPreview" class="thumb-row"></div>
     </div>
 
@@ -1492,6 +1493,14 @@ async function confirmarDespacho() {
   const nuevoEstado = todoCompleto ? 'Despachado Total' : 'Despachado Parcial';
   await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado });
 
+  const conductorFinal = document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '';
+  const lineasInforme = lineas.map(l => ({
+    tmcode: l.tmcode,
+    nombre: nombreProducto(l.tmcode),
+    unidad: undProducto(l.tmcode),
+    cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0)
+  }));
+
   // Generar informe individual del despacho (PDF + Excel) en Drive
   await escribirGAS({
     accion: 'generarInformeDespacho',
@@ -1500,23 +1509,118 @@ async function confirmarDespacho() {
       cliente: nombreCliente(ap.cliente_nit),
       vendedor: ap.nombre_vendedor,
       placa: placa,
-      conductor: document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '',
-      lineas: lineas.map(l => ({
-        tmcode: l.tmcode,
-        nombre: nombreProducto(l.tmcode),
-        cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0)
-      }))
+      conductor: conductorFinal,
+      lineas: lineasInforme
     })
   });
+
+  // Informe PDF con logo, datos del despacho y fotos — se comparte/descarga en el dispositivo
+  generarInformePDFDespacho(ap, placa, conductorFinal, lineasInforme, nuevoEstado, FOTOS_DESP.slice());
 
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
 
   // Recargar y abrir WhatsApp
   await cargarTodo();
-  setTimeout(() => abrirModalWADespacho(ap.ap_id, placa, document.getElementById('despConductor')?.value||''), 600);
+  setTimeout(() => abrirReporteWA(ap.ap_id, placa, conductorFinal), 600);
 
 borrarBorradorDespacho();
+}
+
+// =============================================================================
+// INFORME PDF DE DESPACHO (logo + datos + fotos)
+// =============================================================================
+let _despLogoDataURL = null;
+async function _cargarLogoDespacho() {
+  if (_despLogoDataURL) return _despLogoDataURL;
+  try {
+    const blob = await fetch('../assets/logo_postecsa.jpg').then(r => r.blob());
+    _despLogoDataURL = await new Promise(res => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch(e) { console.warn('No se pudo cargar el logo para el PDF', e); _despLogoDataURL = null; }
+  return _despLogoDataURL;
+}
+
+async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, estado, fotos) {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const logo = await _cargarLogoDespacho();
+
+    const header = (titulo) => {
+      if (logo) { try{ doc.addImage(logo, 'JPEG', 14, 10, 38, 14); }catch(e){} }
+      doc.setFontSize(13); doc.setFont(undefined, 'bold');
+      doc.text('POSTEC DE OCCIDENTE S.A.S.', 56, 16);
+      doc.setFont(undefined, 'normal'); doc.setFontSize(10);
+      doc.text(titulo, 56, 22);
+      doc.setDrawColor(200); doc.line(14, 28, pageW - 14, 28);
+      return 34;
+    };
+    const footer = () => {
+      doc.setFontSize(7); doc.setTextColor(140);
+      doc.text('Documento generado automáticamente por SIVIL — POSTEC DE OCCIDENTE S.A.S.', 14, pageH - 8);
+      doc.text('Pág. ' + doc.internal.getNumberOfPages(), pageW - 20, pageH - 8);
+      doc.setTextColor(0);
+    };
+
+    let y = header('Informe de Despacho');
+    doc.setFontSize(9);
+    doc.text('AP #' + ap.ap_id + '   ·   Cliente: ' + nombreCliente(ap.cliente_nit), 14, y); y += 5;
+    doc.text('Vehículo: ' + placa + '   ·   Conductor: ' + (conductor||'N/A'), 14, y); y += 5;
+    doc.text('Tipo de entrega: ' + (ap.tipo_entrega||''), 14, y); y += 5;
+    doc.text('Estado: ' + estado, 14, y); y += 5;
+    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), 14, y); y += 8;
+
+    doc.setFont(undefined, 'bold'); doc.setFontSize(8);
+    doc.text('Producto', 14, y);
+    doc.text('Cantidad', 140, y);
+    doc.text('Unidad', 170, y);
+    doc.setFont(undefined, 'normal');
+    y += 2; doc.setDrawColor(200); doc.line(14, y, pageW - 14, y); y += 4;
+
+    lineasInforme.forEach(l => {
+      if (y > pageH - 20) { footer(); doc.addPage(); y = header('Informe de Despacho'); }
+      const nombre = (l.nombre||'').length > 55 ? l.nombre.substring(0,52)+'...' : (l.nombre||'');
+      doc.text(nombre, 14, y);
+      doc.text(String(l.cantidad||0), 140, y);
+      doc.text(l.unidad||'', 170, y);
+      y += 5;
+    });
+
+    if (fotos && fotos.length) {
+      footer(); doc.addPage();
+      y = header('Evidencia Fotográfica del Despacho');
+      const imgW = 85, imgH = 64, gap = 6;
+      let col = 0, x = 14;
+      fotos.forEach(f => {
+        if (y + imgH > pageH - 16) { footer(); doc.addPage(); y = header('Evidencia Fotográfica del Despacho'); col = 0; x = 14; }
+        try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
+        if (col === 0) { x = 14 + imgW + gap; col = 1; }
+        else { x = 14; col = 0; y += imgH + gap; }
+      });
+    }
+    footer();
+
+    const blob = doc.output('blob');
+    const filename = 'Informe_Despacho_AP' + ap.ap_id + '_' + Date.now() + '.pdf';
+    const pdfFile = new File([blob], filename, {type:'application/pdf'});
+    if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+      await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTEC DE OCCIDENTE'});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      toast('📄 PDF de despacho descargado — adjúntalo manualmente en WhatsApp');
+    }
+  } catch(e) {
+    console.error('Error generando informe PDF de despacho', e);
+    toast('⚠️ No se pudo generar el PDF de despacho: ' + e.message);
+  }
 }
 
 // =============================================================================
