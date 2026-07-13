@@ -1018,11 +1018,6 @@ async function cargarMetaActualizacion() {
   }
 }
 
-async function escribirGAS(body) {
-  await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
-  await new Promise(r=>setTimeout(r,900));
-}
-
 async function cargarDatos() {
   try {
     [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios,G.vehiculos] = await Promise.all([
