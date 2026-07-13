@@ -726,8 +726,8 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <p>Tomar foto o seleccionar galería · Mínimo 3 requeridas</p>
         <p style="font-size:.63rem;">Logo POSTECSA + GPS + Hora automáticos en cada foto</p>
       </label>
-      <input id="inputFotoVisita" type="file" accept="image/*"
-             multiple style="display:none;" onchange="agregarFotoVisita(this)">
+      <input id="inputFotoVisita" type="file" accept="image/*" capture="environment"
+             style="display:none;" onchange="agregarFotoVisita(this)">
       <div id="visitaFotos" class="thumb-grid"></div>
     </div>
     </div><!-- /seccionFotos -->
@@ -1817,6 +1817,7 @@ document.getElementById('rFlete').textContent = fmt(flete);
 document.getElementById('rIva').textContent = fmt(iva);
 document.getElementById('rTotal').textContent = fmt(total);
 document.getElementById('resumenAP').style.display = 'block';
+STATE.pedido._totales = { subtotal, descuentos, flete, iva, total };
 
 guardarBorradorPedido();
 }
@@ -2000,7 +2001,29 @@ function registrarApEnCesion(){
     const apId=document.getElementById('inputApId')?.value||'';
     const cliente=STATE.pedido.cliente;
     const totalTxt=document.getElementById('rTotal')?.textContent||'0';
-    const item={ap_id:apId,cliente_nombre:cliente?cliente.razon_social:'',cliente_nit:cliente?cliente.cliente_nit:'',lineas:STATE.pedido.lineas.length,total:totalTxt,hora:new Date().toLocaleString('es-CO')};
+    const item={
+      ap_id:apId,
+      cliente_nombre:cliente?cliente.razon_social:'',
+      cliente_nit:cliente?cliente.cliente_nit:'',
+      lineas:STATE.pedido.lineas.length,
+      total:totalTxt,
+      hora:new Date().toLocaleString('es-CO'),
+      // Datos completos de la negociación para el informe PDF
+      detalle_lineas: JSON.parse(JSON.stringify(STATE.pedido.lineas||[])),
+      totales: STATE.pedido._totales || null,
+      tipo_entrega: STATE.pedido.tipo_entrega||'',
+      destino: STATE.pedido.destino||'',
+      direccion_obra: STATE.pedido.direccion_obra||'',
+      contacto_obra: STATE.pedido.contacto_obra||'',
+      cel_contacto: STATE.pedido.cel_contacto||'',
+      nombre_obra: STATE.pedido.nombre_obra||'',
+      orden_compra_cliente: STATE.pedido.orden_compra_cliente||'',
+      cotizacion_ref: STATE.pedido.cotizacion_ref||'',
+      condiciones_pago: STATE.pedido.condiciones_pago||'',
+      fecha_entrega: STATE.pedido.fecha_entrega||'',
+      obs_entrega: STATE.pedido.obs_entrega||'',
+      transportista_flete: STATE.pedido.transportista_flete||''
+    };
     CESION_ACTUAL.push(item);
     localStorage.setItem('sivel_cesion_actual', JSON.stringify(CESION_ACTUAL));
   }catch(e){ console.warn('No se pudo registrar AP en cesión', e); }
@@ -2027,35 +2050,161 @@ async function continuarOCerrarCesion(){
   irA('screenPedidos');
 }
 
+function _pdfFooter(doc, pageW, pageH){
+  doc.setFontSize(7);
+  doc.setTextColor(140);
+  doc.text('Documento generado automáticamente por SIVIL — POSTEC DE OCCIDENTE S.A.S.', 14, pageH - 8);
+  doc.text('Pág. ' + doc.internal.getNumberOfPages(), pageW - 20, pageH - 8);
+  doc.setTextColor(0);
+}
+
+function _pdfHeader(doc, pageW, titulo){
+  try{ doc.addImage(_LOGO_SRC, 'JPEG', 14, 10, 38, 14); }catch(e){}
+  doc.setFontSize(13);
+  doc.setFont(undefined, 'bold');
+  doc.text('POSTEC DE OCCIDENTE S.A.S.', 56, 16);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(10);
+  doc.text(titulo, 56, 22);
+  doc.setDrawColor(200);
+  doc.line(14, 28, pageW - 14, 28);
+  return 34;
+}
+
 async function cerrarCesionYGenerarInforme(){
   try{
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    let y = 18;
-    doc.setFontSize(14);
-    doc.text('POSTEC DE OCCIDENTE S.A.S.', 14, y); y+=7;
-    doc.setFontSize(11);
-    doc.text('Resumen de pedidos de la visita', 14, y); y+=6;
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const fmtN = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
+
+    let y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial');
     doc.setFontSize(9);
-    doc.text('Vendedor: ' + (STATE.vendedor?.nombre_vendedor||''), 14, y); y+=5;
-    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), 14, y); y+=8;
-    doc.setFontSize(10);
-    CESION_ACTUAL.forEach(function(it,i){
-      doc.text((i+1) + '. AP #' + it.ap_id + ' — ' + it.cliente_nombre + ' (NIT ' + it.cliente_nit + ')', 14, y); y+=5;
-      doc.text('   ' + it.lineas + ' producto(s) · Total: $' + it.total + ' · ' + it.hora, 14, y); y+=7;
-      if (y > 270) { doc.addPage(); y = 18; }
+    doc.text('Vendedor: ' + (STATE.vendedor?.nombre_vendedor||''), 14, y);
+    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), pageW - 14, y, {align:'right'});
+    y += 4;
+    doc.text('Pedido(s) en esta visita: ' + CESION_ACTUAL.length, 14, y);
+    y += 8;
+
+    const ensureSpace = (needed) => {
+      if (y + needed > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial'); }
+    };
+
+    CESION_ACTUAL.forEach(function(it, idx){
+      ensureSpace(30);
+      doc.setFillColor(37, 99, 168);
+      doc.rect(14, y, pageW - 28, 7, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      doc.text('Pedido ' + (idx+1) + ' de ' + CESION_ACTUAL.length + '  ·  AP #' + it.ap_id, 16, y + 5);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(0);
+      y += 11;
+
+      doc.setFontSize(9);
+      doc.text('Cliente: ' + (it.cliente_nombre||'') + '   ·   NIT: ' + (it.cliente_nit||''), 14, y); y += 5;
+      const entrega = (it.tipo_entrega==='PLANTA') ? 'Venta en planta (recoge cliente)' : ('Con transporte — ' + (it.destino||''));
+      doc.text('Entrega: ' + entrega, 14, y); y += 5;
+      if (it.direccion_obra) { doc.text('Dirección de entrega: ' + it.direccion_obra, 14, y); y += 5; }
+      if (it.nombre_obra) { doc.text('Obra: ' + it.nombre_obra, 14, y); y += 5; }
+      if (it.contacto_obra || it.cel_contacto) { doc.text('Contacto en obra: ' + (it.contacto_obra||'') + (it.cel_contacto ? ' · Cel: '+it.cel_contacto : ''), 14, y); y += 5; }
+      if (it.orden_compra_cliente) { doc.text('N° Orden de compra: ' + it.orden_compra_cliente, 14, y); y += 5; }
+      if (it.cotizacion_ref) { doc.text('N° Cotización: ' + it.cotizacion_ref, 14, y); y += 5; }
+      if (it.condiciones_pago) { doc.text('Condiciones de pago: ' + it.condiciones_pago, 14, y); y += 5; }
+      if (it.fecha_entrega) { doc.text('Fecha de entrega solicitada: ' + it.fecha_entrega, 14, y); y += 5; }
+      y += 2;
+
+      // Tabla de productos negociados
+      ensureSpace(14);
+      const colX = {prod:14, cal:96, cant:112, precio:132, desc:156, total:172};
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(8);
+      doc.text('Producto', colX.prod, y);
+      doc.text('Calidad', colX.cal, y);
+      doc.text('Cant.', colX.cant, y);
+      doc.text('P. Unit.', colX.precio, y);
+      doc.text('Dcto %', colX.desc, y);
+      doc.text('Total línea', colX.total, y);
+      doc.setFont(undefined, 'normal');
+      y += 2;
+      doc.setDrawColor(200);
+      doc.line(14, y, pageW - 14, y);
+      y += 4;
+
+      (it.detalle_lineas||[]).forEach(function(l){
+        ensureSpace(6);
+        const base = l.cantidad_solicitada * l.precio_base;
+        const desc = base * (l.descuento_aplicado||0);
+        const neto = base - desc;
+        const ivaLinea = (l.tipo_iva||'E')==='G' ? neto * 0.19 : 0;
+        const totalLinea = neto + ivaLinea;
+        const nombre = (l.tmdescrip||'').length > 44 ? l.tmdescrip.substring(0,41)+'...' : (l.tmdescrip||'');
+        doc.text(nombre, colX.prod, y);
+        doc.text(l.calidad||'', colX.cal, y);
+        doc.text(String(l.cantidad_solicitada||0) + ' ' + (l.tmund||''), colX.cant, y);
+        doc.text('$'+fmtN(l.precio_base), colX.precio, y);
+        doc.text(((l.descuento_aplicado||0)*100).toFixed(0)+'%', colX.desc, y);
+        doc.text('$'+fmtN(totalLinea), colX.total, y);
+        y += 5;
+      });
+
+      y += 2;
+      doc.setDrawColor(200);
+      doc.line(14, y, pageW - 14, y);
+      y += 5;
+
+      if (it.totales) {
+        const t = it.totales;
+        doc.text('Subtotal: $' + fmtN(t.subtotal), pageW - 14, y, {align:'right'}); y += 5;
+        doc.text('Descuentos: -$' + fmtN(t.descuentos), pageW - 14, y, {align:'right'}); y += 5;
+        doc.text('Flete: $' + fmtN(t.flete), pageW - 14, y, {align:'right'}); y += 5;
+        doc.text('IVA: $' + fmtN(t.iva), pageW - 14, y, {align:'right'}); y += 5;
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL: $' + fmtN(t.total), pageW - 14, y, {align:'right'});
+        doc.setFont(undefined, 'normal');
+        y += 8;
+      } else {
+        doc.text('Total: $' + it.total, pageW - 14, y, {align:'right'});
+        y += 8;
+      }
     });
+
+    // Evidencia fotográfica (si se registró una visita con fotos en esta sesión)
+    if (_VFOTOS && _VFOTOS.length) {
+      _pdfFooter(doc, pageW, pageH);
+      doc.addPage();
+      y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica de la Visita');
+      const imgW = 85, imgH = 64, gap = 6;
+      let col = 0;
+      let x = 14;
+      _VFOTOS.forEach(function(f){
+        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica de la Visita'); col = 0; x = 14; }
+        try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
+        if (col === 0) { x = 14 + imgW + gap; col = 1; }
+        else { x = 14; col = 0; y += imgH + gap; }
+      });
+      if (col === 1) y += imgH + gap;
+    }
+
+    _pdfFooter(doc, pageW, pageH);
+
     const blob = doc.output('blob');
-    const filename = 'Pedidos_Visita_' + Date.now() + '.pdf';
+    const filename = 'Informe_Negociacion_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({files:[pdfFile], title:'Pedidos de la visita', text:'Resumen de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
+      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filename; a.click();
-      toast('📄 PDF descargado — compártelo manualmente por WhatsApp');
+      toast('📄 PDF descargado — adjúntalo manualmente en el chat de WhatsApp que se abrirá a continuación');
     }
+
+    // Además del PDF, siempre abrir WhatsApp con el resumen de texto de la venta
+    // (mismo patrón confiable que ya funciona para el reporte de visitas)
+    abrirWAVenta(CESION_ACTUAL.slice());
   } catch(e) {
     console.error('Error generando informe PDF', e);
     toast('⚠️ No se pudo generar el PDF: ' + e.message);
@@ -2063,6 +2212,51 @@ async function cerrarCesionYGenerarInforme(){
     CESION_ACTUAL = [];
     localStorage.removeItem('sivel_cesion_actual');
   }
+}
+
+function abrirWAVenta(items) {
+  if (!items || !items.length) return;
+  const fmtN = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
+  let detalle = '';
+  items.forEach((it, i) => {
+    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
+  });
+  const msg = `🏭 *POSTEC DE OCCIDENTE S.A.S.*
+━━━━━━━━━━━━━━━━━━
+📋 *REPORTE DE VENTA — PEDIDO(S)*
+━━━━━━━━━━━━━━━━━━
+👤 Vendedor: ${STATE.vendedor?.nombre_vendedor||''}
+🕐 Fecha: ${new Date().toLocaleString('es-CO')}
+📦 Pedido(s): ${items.length}
+${detalle}
+━━━━━━━━━━━━━━━━━━
+📄 Informe PDF con el detalle completo generado — adjúntalo en este chat.
+━━━━━━━━━━━━━━━━━━
+_SIVIL · POSTECSA v1.0_`;
+
+  const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'modalWAVenta';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('modalWAVenta').remove()">✕</button>
+      <div class="modal-title">📲 Enviar Reporte de Venta</div>
+      <div class="wa-panel">
+        <div class="wa-panel-title">MENSAJE A ENVIAR</div>
+        <div style="font-size:0.75rem;white-space:pre-wrap;color:#333;line-height:1.6;max-height:150px;overflow-y:auto;">${msg}</div>
+      </div>
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
+        ${funcs.map(f => `
+          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''}
+                  onclick="waEnviar('${f.wa}','${encodeURIComponent(msg)}')">
+            📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
+          </button>`).join('')}
+      </div>
+      ${!funcs.length ? '<p style="color:#888;font-size:0.78rem;text-align:center;">No hay funcionarios activos configurados.<br>Agrégalos en la sección Clientes → Funcionarios.</p>' : ''}
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
 async function guardarAP() {
