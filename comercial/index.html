@@ -636,6 +636,32 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
         <div id="lineasAP" style="margin-bottom:0.75rem;"></div>
         <button class="btn btn-outline btn-sm" onclick="abrirModalProducto()">➕ Agregar producto</button>
 
+        <!-- FOTOS DE LA NEGOCIACION — propias de este pedido, no de la visita -->
+        <div class="form-group" style="margin-top:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="form-label" style="margin:0;">📷 Fotos de esta negociación (opcional)</label>
+            <span id="pedidoFotoCnt" class="foto-cnt" style="background:#eef2ff;color:#3730a3;">📷 0</span>
+          </div>
+          <p style="font-size:.68rem;color:#888;margin:0 0 6px;">Estas fotos son específicas de este pedido/AP y se incluyen en su informe. No se comparten con otros pedidos ni con las fotos de visita.</p>
+          <div style="display:flex;gap:8px;">
+            <label class="foto-drop" for="inputFotoPedido" style="flex:1;">
+              <p style="font-size:1.5rem;margin:0;">📷</p>
+              <p>Tomar foto</p>
+              <p style="font-size:.63rem;">Logo POSTECSA + GPS + Hora automáticos</p>
+            </label>
+            <label class="foto-drop" for="inputFotoPedidoGaleria" style="flex:1;">
+              <p style="font-size:1.5rem;margin:0;">🖼️</p>
+              <p>Elegir de galería</p>
+              <p style="font-size:.63rem;">También se marca con logo, GPS y hora</p>
+            </label>
+          </div>
+          <input id="inputFotoPedido" type="file" accept="image/*" capture="environment"
+                 style="display:none;" onchange="agregarFotoPedido(this)">
+          <input id="inputFotoPedidoGaleria" type="file" accept="image/*" multiple
+                 style="display:none;" onchange="agregarFotoPedido(this)">
+          <div id="pedidoFotos" class="thumb-grid"></div>
+        </div>
+
         <!-- RESUMEN FINANCIERO -->
         <div id="resumenAP" style="display:none;margin-top:1rem;padding-top:1rem;border-top:2px solid var(--borde);">
           <div class="card-title">Resumen Financiero</div>
@@ -929,6 +955,25 @@ async function procesarFotoMDA(file,gps,quien){
 let _VGPS=null,_VFOTOS=[],_VCLI=null,_VPRODINT=[],_VCOMP=[];
 function _cntF(){const n=_VFOTOS.length,el=document.getElementById('visitaCnt');if(!el)return;el.className='foto-cnt '+(n>=3?'ok':n>0?'warn':'err');el.textContent=(n>=3?'✅':'⚠️')+' '+n+'/3';}
 function _renderVF(){const c=document.getElementById('visitaFotos');if(!c)return;c.innerHTML=_VFOTOS.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="_VFOTOS.splice('+i+',1);_renderVF();_cntF();">✕</button></div>').join('');}
+
+// Fotos propias del PEDIDO/AP en edición (independientes de las fotos de visita _VFOTOS,
+// para que el informe de venta no dependa de si hubo o no una visita en la misma sesion)
+let FOTOS_PEDIDO=[];
+function initFotosPedido(){
+  FOTOS_PEDIDO=[];
+  const cont=document.getElementById('pedidoFotos'); if(cont) cont.innerHTML='';
+  _cntFP();
+}
+function _cntFP(){const n=FOTOS_PEDIDO.length,el=document.getElementById('pedidoFotoCnt');if(!el)return;el.textContent='📷 '+n;}
+function _renderFP(){const c=document.getElementById('pedidoFotos');if(!c)return;c.innerHTML=FOTOS_PEDIDO.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="FOTOS_PEDIDO.splice('+i+',1);_renderFP();_cntFP();">✕</button></div>').join('');}
+function agregarFotoPedido(input){
+  const files=Array.from(input.files);if(!files.length)return;
+  toast('⏳ Procesando '+files.length+' foto(s)...');
+  obtenerGPS().then(async gps=>{const quien=STATE.vendedor?.nombre_vendedor||'';
+    for(const file of files){const b64=await procesarFotoMDA(file,gps,quien);FOTOS_PEDIDO.push({b64,hora:new Date().toLocaleTimeString('es-CO')});}
+    input.value='';_renderFP();_cntFP();toast('✅ '+FOTOS_PEDIDO.length+' foto(s) del pedido con MDA POSTECSA');
+  });
+}
 
 
 // =============================================================================
@@ -1542,6 +1587,7 @@ limpiarCliente();
 renderLineasAP();
 _TANDAS=[];seleccionarModoEntrega('unica');
 calcularTotales();
+initFotosPedido();
 
 borrarBorradorPedido();
 }
@@ -2040,10 +2086,13 @@ function registrarApEnCesion(){
       condiciones_pago: STATE.pedido.condiciones_pago||'',
       fecha_entrega: STATE.pedido.fecha_entrega||'',
       obs_entrega: STATE.pedido.obs_entrega||'',
-      transportista_flete: STATE.pedido.transportista_flete||''
+      transportista_flete: STATE.pedido.transportista_flete||'',
+      // Fotos propias de ESTE pedido — no las de la visita, para que cada AP muestre solo sus propias fotos
+      fotos: FOTOS_PEDIDO.map(f=>({b64:f.b64,hora:f.hora}))
     };
     CESION_ACTUAL.push(item);
     localStorage.setItem('sivel_cesion_actual', JSON.stringify(CESION_ACTUAL));
+    initFotosPedido(); // limpiar para el siguiente pedido de la misma cesion (si aplica)
   }catch(e){ console.warn('No se pudo registrar AP en cesión', e); }
 }
 
@@ -2187,24 +2236,24 @@ async function cerrarCesionYGenerarInforme(){
         doc.text('Total: $' + it.total, pageW - 14, y, {align:'right'});
         y += 8;
       }
-    });
 
-    // Evidencia fotográfica (si se registró una visita con fotos en esta sesión)
-    if (_VFOTOS && _VFOTOS.length) {
-      _pdfFooter(doc, pageW, pageH);
-      doc.addPage();
-      y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica de la Visita');
-      const imgW = 85, imgH = 64, gap = 6;
-      let col = 0;
-      let x = 14;
-      _VFOTOS.forEach(function(f){
-        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica de la Visita'); col = 0; x = 14; }
-        try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
-        if (col === 0) { x = 14 + imgW + gap; col = 1; }
-        else { x = 14; col = 0; y += imgH + gap; }
-      });
-      if (col === 1) y += imgH + gap;
-    }
+      // Evidencia fotográfica DE ESTE PEDIDO (cada AP muestra solo sus propias fotos, nunca las de otro)
+      if (it.fotos && it.fotos.length) {
+        _pdfFooter(doc, pageW, pageH);
+        doc.addPage();
+        y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id);
+        const imgW = 85, imgH = 64, gap = 6;
+        let col = 0, x = 14;
+        it.fotos.forEach(function(f){
+          if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id); col = 0; x = 14; }
+          try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
+          if (col === 0) { x = 14 + imgW + gap; col = 1; }
+          else { x = 14; col = 0; y += imgH + gap; }
+        });
+        if (col === 1) y += imgH + gap;
+        if (idx < CESION_ACTUAL.length - 1) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial'); }
+      }
+    });
 
     _pdfFooter(doc, pageW, pageH);
 
@@ -2281,9 +2330,13 @@ _SIVIL · POSTECSA v1.0_`;
   overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
+let _guardandoAP = false;
 async function guardarAP() {
+if (_guardandoAP) { toast("⏳ Ya se está guardando este pedido..."); return; }
 if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
 if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
+_guardandoAP = true;
+try {
 
 const body = {
 accion: 'crearPreventa',
@@ -2327,6 +2380,9 @@ await cargarMisAPs();
 actualizarKPIs();
 
 await continuarOCerrarCesion();
+} finally {
+  _guardandoAP = false;
+}
 }
 
 // =============================================================================
