@@ -196,7 +196,6 @@ function doPost(e) {
       case "importarExistenciasDrive":   resultado = importarExistenciasDrive(body); break;
       case "actualizarDescuentoSegunda":  resultado = actualizarDescuentoSegunda(body); break;
       case "resetSistema":              resultado = resetSistema(body); break;
-      case "resetSistema":             resultado = resetSistema(body); break;
       case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(e.parameter); break;
       default:
         resultado = { ok: false, error: `Acción desconocida: ${accion}` };
@@ -652,9 +651,21 @@ function agregarDetalleAP(body) {
   const hoja       = getHoja(HOJAS.DETALLE);
   const detalle_id = siguienteId(hoja, 0);
 
-  // Validar descuento contra tabla de precios
-  const precioCheck = validarDescuento(body.tmcode, body.descuento_aplicado || 0);
-  if (!precioCheck.ok) return precioCheck;
+  // Regla global: sin tope de descuento — validarDescuento() ya no bloquea,
+  // se llama solo para trazabilidad (no se usa su resultado para abortar).
+  validarDescuento(body.tmcode, body.descuento_aplicado || 0);
+
+  // Asegurar columnas valor_estiba / valor_postes (comparación con el
+  // FORMATO AP en Excel: cargos por unidad que se suman al precio antes
+  // del IVA, igual que el flete prorrateado). Se crean solas la primera
+  // vez que se necesitan, para no depender de editar la hoja a mano.
+  const hdrsDetalle = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  if (hdrsDetalle.indexOf("valor_estiba") === -1) {
+    hoja.getRange(1, hoja.getLastColumn() + 1).setValue("valor_estiba");
+  }
+  if (hdrsDetalle.indexOf("valor_postes") === -1) {
+    hoja.getRange(1, hoja.getLastColumn() + 1).setValue("valor_postes");
+  }
 
   hoja.appendRow([
     detalle_id,
@@ -664,7 +675,9 @@ function agregarDetalleAP(body) {
     body.cantidad_despachada || 0,
     body.descuento_aplicado  || 0,
     body.calidad             || "PRIMERA",
-    body.precio_base         || 0
+    body.precio_base         || 0,
+    body.valor_estiba        || 0,
+    body.valor_postes        || 0
   ]);
   return { ok: true, mensaje: "Línea agregada", detalle_id };
 }
@@ -680,8 +693,8 @@ function modificarDetalleAP(body) {
     if (String(datos[i][colId]) === String(body.detalle_id)) {
       if (body.cantidad_solicitada !== undefined) hoja.getRange(i+1, hdrs.indexOf("cantidad_solicitada")+1).setValue(body.cantidad_solicitada);
       if (body.descuento_aplicado  !== undefined) {
-        const check = validarDescuento(datos[i][hdrs.indexOf("tmcode")], body.descuento_aplicado);
-        if (!check.ok) return check;
+        // Regla global: sin tope de descuento — no se bloquea la actualización.
+        validarDescuento(datos[i][hdrs.indexOf("tmcode")], body.descuento_aplicado);
         hoja.getRange(i+1, hdrs.indexOf("descuento_aplicado")+1).setValue(body.descuento_aplicado);
       }
       // Marcar AP como Modificado
@@ -708,19 +721,22 @@ function getPrecios(tmcode) {
 }
 
 function validarDescuento(tmcode, descuento) {
+  // Regla global (2026-07-14): se elimina el tope de descuento para el
+  // vendedor. Esta función YA NO bloquea el guardado — el vendedor tiene
+  // libertad total para aplicar el descuento que requiera. Se conserva la
+  // comparación contra descuento_max_vendedor únicamente como referencia
+  // informativa (para el reporte de descuentos de Gerencia), nunca para
+  // impedir la escritura.
   const precios = getPrecios(tmcode);
-  if (!precios.ok || precios.data.length === 0) return { ok: true }; // Sin política = sin restricción
+  if (!precios.ok || precios.data.length === 0) return { ok: true };
   const politica = precios.data[0];
   const maxDesc  = parseFloat(politica.descuento_max_vendedor) || 0;
-  if (parseFloat(descuento) > maxDesc) {
-    return {
-      ok: false,
-      error: `Descuento ${(descuento*100).toFixed(1)}% supera el máximo permitido (${(maxDesc*100).toFixed(1)}%). Se requiere aprobación de gerencia.`,
-      requiere_aprobacion: true,
-      max_permitido: maxDesc
-    };
-  }
-  return { ok: true };
+  const excedeReferencia = parseFloat(descuento) > maxDesc;
+  return {
+    ok: true,
+    excede_referencia: excedeReferencia,
+    referencia_historica: maxDesc
+  };
 }
 
 function crearPrecio(body) {
