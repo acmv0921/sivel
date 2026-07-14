@@ -1504,6 +1504,15 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
       <input id="despConductor" class="form-control" placeholder="Nombre del conductor">
     </div>
 
+    <!-- DETALLE DEL FLETE (control interno de Valentina, distinto del transportista del vendedor) -->
+    <div class="form-group">
+      <label class="form-label">🧾 Detalle del flete (control interno)</label>
+      <div style="display:flex;gap:6px;">
+        <input id="despDetalleFlete" class="form-control" style="flex:1;" placeholder="Notas de flete para control de despacho..." value="${(ap.detalle_flete_despacho||'').replace(/"/g,'&quot;')}">
+        <button type="button" class="btn btn-outline btn-sm" onclick="guardarDetalleFlete(${ap.ap_id})">💾</button>
+      </div>
+    </div>
+
     <div class="card-title" style="margin-top:0.5rem;">Cantidades a despachar</div>`;
 
   lineas.forEach((l, i) => {
@@ -1516,6 +1525,7 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
       <div class="linea-desp-title">${nombreProducto(l.tmcode)}</div>
       <div class="linea-desp-meta">
         Solicitado: ${sol} ${und} · Despachado: ${desp} · <strong>Pendiente: ${pend} ${und}</strong>
+        ${l.precio_base ? `<br>💲 Precio unitario: $${Number(l.precio_base).toLocaleString('es-CO')}/${und}` : ''}
       </div>
       <div style="margin:4px 0;">
         <label style="font-size:0.75rem;font-weight:700;display:block;margin-bottom:3px;">
@@ -1617,6 +1627,18 @@ function verificarSaldo(detalle_id, pendiente, und) {
   else           cont.innerHTML = '';
 }
 
+async function guardarDetalleFlete(ap_id) {
+  const val = document.getElementById('despDetalleFlete')?.value.trim() || '';
+  try {
+    await escribirGAS({ accion:'actualizarEstadoAP', ap_id, detalle_flete_despacho: val });
+    const ap = S.aps.find(a => String(a.ap_id) === String(ap_id));
+    if (ap) ap.detalle_flete_despacho = val;
+    toast('💾 Detalle del flete guardado');
+  } catch(e) {
+    toast('⚠️ No se pudo guardar el detalle del flete: ' + e.message);
+  }
+}
+
 async function confirmarDespacho() {
   // Validar vehículo
   const placa = VEH_SELECCIONADO?.placa || '';
@@ -1651,14 +1673,16 @@ async function confirmarDespacho() {
   }
 
   const nuevoEstado = todoCompleto ? 'Despachado Total' : 'Despachado Parcial';
-  await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado });
+  const detalleFlete = document.getElementById('despDetalleFlete')?.value.trim() || '';
+  await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete });
 
   const conductorFinal = document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '';
   const lineasInforme = lineas.map(l => ({
     tmcode: l.tmcode,
     nombre: nombreProducto(l.tmcode),
     unidad: undProducto(l.tmcode),
-    cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0)
+    cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0),
+    precio_base: parseFloat(l.precio_base) || 0
   }));
 
   // Generar informe individual del despacho (PDF + Excel) en Drive
@@ -1753,19 +1777,34 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
 
     doc.setFont(undefined, 'bold'); doc.setFontSize(8);
     doc.text('Producto', 14, y);
-    doc.text('Cantidad', 140, y);
-    doc.text('Unidad', 170, y);
+    doc.text('Cantidad', 108, y);
+    doc.text('Unidad', 130, y);
+    doc.text('Precio unit.', 150, y);
+    doc.text('Valor', 180, y);
     doc.setFont(undefined, 'normal');
     y += 2; doc.setDrawColor(200); doc.line(14, y, pageW - 14, y); y += 4;
 
+    let totalInforme = 0;
     lineasInforme.forEach(l => {
       if (y > pageH - 20) { footer(); doc.addPage(); y = header('Informe de Despacho'); }
-      const nombre = (l.nombre||'').length > 55 ? l.nombre.substring(0,52)+'...' : (l.nombre||'');
+      const nombre = (l.nombre||'').length > 40 ? l.nombre.substring(0,37)+'...' : (l.nombre||'');
+      const precioU = Number(l.precio_base||0);
+      const valorL = precioU * Number(l.cantidad||0);
+      totalInforme += valorL;
       doc.text(nombre, 14, y);
-      doc.text(String(l.cantidad||0), 140, y);
-      doc.text(l.unidad||'', 170, y);
+      doc.text(String(l.cantidad||0), 108, y);
+      doc.text(l.unidad||'', 130, y);
+      doc.text(precioU ? '$' + precioU.toLocaleString('es-CO') : '-', 150, y);
+      doc.text(valorL ? '$' + valorL.toLocaleString('es-CO') : '-', 180, y);
       y += 5;
     });
+    if (totalInforme > 0) {
+      y += 2; doc.setDrawColor(200); doc.line(140, y, pageW - 14, y); y += 5;
+      doc.setFont(undefined, 'bold');
+      doc.text('Total: $' + totalInforme.toLocaleString('es-CO'), 150, y);
+      doc.setFont(undefined, 'normal');
+      y += 6;
+    }
 
     if (fotos && fotos.length) {
       footer(); doc.addPage();
@@ -2104,10 +2143,16 @@ function renderSelectorVehiculo(contenedorId) {
     </div>
     <div id="listaVehiculos">
       ${activos.length ? activos.map(v => `
-        <div class="vehiculo-card" id="vehCard_${v.vehiculo_id}" onclick="seleccionarVehiculo(${JSON.stringify(v).replace(/"/g,"'")})">
-          <div class="veh-placa">${v.placa}</div>
-          <div class="veh-info">${v.marca} ${v.modelo||''} · ${v.color} · Cap: ${v.capacidad_und||'?'} Ton</div>
-          <div class="veh-info">👷 ${v.conductor_nombre||'Sin conductor'} · 📱 ${v.conductor_cel||'N/A'}</div>
+        <div class="vehiculo-card" id="vehCard_${v.vehiculo_id}">
+          <div onclick="seleccionarVehiculo(${JSON.stringify(v).replace(/"/g,"'")})" style="cursor:pointer;">
+            <div class="veh-placa">${v.placa}</div>
+            <div class="veh-info">${v.marca} ${v.modelo||''} · ${v.color} · Cap: ${v.capacidad_und||'?'} Ton</div>
+            <div class="veh-info">👷 ${v.conductor_nombre||'Sin conductor'} · 📱 ${v.conductor_cel||'N/A'}</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button type="button" class="btn btn-outline btn-sm" style="flex:1;font-size:0.7rem;padding:4px;" onclick="event.stopPropagation();editarVehiculo(${JSON.stringify(v).replace(/"/g,"'")})">✏️ Editar</button>
+            <button type="button" class="btn btn-outline btn-sm" style="flex:1;font-size:0.7rem;padding:4px;color:#b91c1c;border-color:#b91c1c;" onclick="event.stopPropagation();eliminarVehiculo(${v.vehiculo_id},'${String(v.placa).replace(/'/g,"")}')">🗑️ Eliminar</button>
+          </div>
         </div>`).join('') : '<p style="font-size:0.78rem;color:#888;">Sin vehículos registrados. Agrega uno abajo.</p>'}
     </div>
     <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="mostrarFormVehiculo()">➕ Registrar nuevo vehículo</button>
@@ -2150,7 +2195,10 @@ function seleccionarVehiculo(v) {
     res.style.display = 'block';
     res.innerHTML = `
       <div style="background:#fff5f0;border-radius:8px;padding:10px 12px;border-left:4px solid var(--naranja);">
-        <div style="font-size:0.68rem;color:var(--naranja);font-weight:700;">VEHÍCULO SELECCIONADO</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:0.68rem;color:var(--naranja);font-weight:700;">VEHÍCULO SELECCIONADO</div>
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:0.68rem;padding:3px 8px;" onclick="cambiarVehiculo()">🔄 Cambiar vehículo</button>
+        </div>
         <div style="font-size:1rem;font-weight:800;color:var(--naranja2);">${VEH_SELECCIONADO.placa}</div>
         <div style="font-size:0.75rem;color:#555;">${VEH_SELECCIONADO.marca||''} ${VEH_SELECCIONADO.modelo||''} · ${VEH_SELECCIONADO.color||''}</div>
         <div style="font-size:0.75rem;color:#555;">👷 ${VEH_SELECCIONADO.conductor_nombre||''} · 📱 ${VEH_SELECCIONADO.conductor_cel||''}</div>
@@ -2166,14 +2214,52 @@ function mostrarFormVehiculo() {
   if (f) f.style.display = f.style.display==='none' ? 'block' : 'none';
 }
 
+let VEH_EDITANDO_ID = null;
+
+function cambiarVehiculo() {
+  VEH_SELECCIONADO = null;
+  const res = document.getElementById('vehResumen');
+  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  document.querySelectorAll('.vehiculo-card').forEach(c => c.classList.remove('sel'));
+  document.getElementById('buscarVeh')?.focus();
+  guardarBorradorDespacho();
+}
+
+function editarVehiculo(v) {
+  v = typeof v === 'string' ? JSON.parse(v.replace(/'/g,'"')) : v;
+  VEH_EDITANDO_ID = v.vehiculo_id;
+  document.getElementById('formNuevoVeh').style.display = 'block';
+  document.getElementById('nvPlaca').value      = v.placa||'';
+  document.getElementById('nvMarca').value      = v.marca||'';
+  document.getElementById('nvColor').value      = v.color||'';
+  document.getElementById('nvConductor').value  = v.conductor_nombre||'';
+  document.getElementById('nvCel').value        = v.conductor_cel||'';
+  document.getElementById('nvTonelaje').value   = v.capacidad_und||'';
+  const btn = document.querySelector('#formNuevoVeh .btn-primary');
+  if (btn) btn.textContent = '💾 Guardar cambios';
+  document.getElementById('formNuevoVeh').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+async function eliminarVehiculo(vehiculo_id, placa) {
+  if (!confirm(`¿Eliminar el vehículo ${placa}? Esta acción no se puede deshacer.`)) return;
+  try {
+    await escribirGAS({ accion:'eliminarVehiculo', vehiculo_id });
+    VEHICULOS_SHEET = VEHICULOS_SHEET.filter(v => String(v.vehiculo_id) !== String(vehiculo_id));
+    if (VEH_SELECCIONADO && String(VEH_SELECCIONADO.vehiculo_id) === String(vehiculo_id)) cambiarVehiculo();
+    renderSelectorVehiculo('selectorVehiculo');
+    toast('🗑️ Vehículo eliminado');
+  } catch(e) {
+    toast('⚠️ No se pudo eliminar el vehículo: ' + e.message);
+  }
+}
+
 async function guardarNuevoVehiculo() {
   const placa     = document.getElementById('nvPlaca')?.value.trim().toUpperCase();
   const conductor = document.getElementById('nvConductor')?.value.trim();
   const cel       = document.getElementById('nvCel')?.value.trim();
   if (!placa || !conductor || !cel) { toast("Placa, conductor y celular son obligatorios"); return; }
 
-  const nuevoVeh = {
-    vehiculo_id:      Date.now(),
+  const datosVeh = {
     placa,
     marca:            document.getElementById('nvMarca')?.value.trim()||'',
     color:            document.getElementById('nvColor')?.value.trim()||'',
@@ -2183,12 +2269,26 @@ async function guardarNuevoVehiculo() {
     estado:           'Activo'
   };
 
-  await escribirGAS({ accion:'crearVehiculo', ...nuevoVeh });
-  VEHICULOS_SHEET.push(nuevoVeh);
-  VEH_SELECCIONADO = nuevoVeh;
-  seleccionarVehiculo(nuevoVeh);
+  if (VEH_EDITANDO_ID) {
+    const vehActualizado = { vehiculo_id: VEH_EDITANDO_ID, ...datosVeh };
+    await escribirGAS({ accion:'actualizarVehiculo', ...vehActualizado });
+    const idx = VEHICULOS_SHEET.findIndex(v => String(v.vehiculo_id) === String(VEH_EDITANDO_ID));
+    if (idx >= 0) VEHICULOS_SHEET[idx] = vehActualizado;
+    VEH_EDITANDO_ID = null;
+    const btn = document.querySelector('#formNuevoVeh .btn-primary');
+    if (btn) btn.textContent = '💾 Guardar vehículo';
+    renderSelectorVehiculo('selectorVehiculo');
+    toast("✅ Vehículo actualizado");
+  } else {
+    const nuevoVeh = { vehiculo_id: Date.now(), ...datosVeh };
+    await escribirGAS({ accion:'crearVehiculo', ...nuevoVeh });
+    VEHICULOS_SHEET.push(nuevoVeh);
+    VEH_SELECCIONADO = nuevoVeh;
+    seleccionarVehiculo(nuevoVeh);
+    toast("✅ Vehículo registrado");
+  }
   document.getElementById('formNuevoVeh').style.display = 'none';
-  toast("✅ Vehículo registrado");
+  ['nvPlaca','nvMarca','nvColor','nvConductor','nvCel','nvTonelaje'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
 }
 
 // =============================================================================
