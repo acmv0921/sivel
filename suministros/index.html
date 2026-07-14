@@ -394,6 +394,31 @@ function toast(msg, ms=3000) {
   setTimeout(() => t.style.display = 'none', ms);
 }
 
+function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
+  if (document.getElementById('bienvenidaAppBanner')) return;
+  const primerNombre = (nombre || '').split(' ')[0] || '';
+  const b = document.createElement('div');
+  b.id = 'bienvenidaAppBanner';
+  b.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:99998;background:${color};color:#fff;
+    padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:0.85rem;box-shadow:0 2px 10px rgba(0,0,0,.25);font-family:inherit;
+    animation:bienvenidaSlideDown .35s ease-out;`;
+  b.innerHTML = `<div>👋 <strong>¡Hola, ${primerNombre}!</strong> Estás en <strong>${appNombre}</strong> — ${appDesc}${rol ? ' <span style="opacity:.8;">(' + rol + ')</span>' : ''}</div>`;
+  const btn = document.createElement('button');
+  btn.textContent = '✕';
+  btn.style.cssText = 'background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;flex-shrink:0;';
+  btn.onclick = () => b.remove();
+  b.appendChild(btn);
+  document.body.appendChild(b);
+  if (!document.getElementById('bienvenidaAppStyle')) {
+    const st = document.createElement('style');
+    st.id = 'bienvenidaAppStyle';
+    st.textContent = '@keyframes bienvenidaSlideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(st);
+  }
+  setTimeout(() => { if (b.parentNode) { b.style.transition='opacity .4s'; b.style.opacity='0'; setTimeout(()=>b.remove(),400); } }, 5000);
+}
+
 function fmt(n) {
   const num = parseFloat(n) || 0;
   return num.toLocaleString('es-CO');
@@ -474,6 +499,7 @@ async function hacerLogin() {
     document.getElementById('mainApp').style.display = 'block';
     document.getElementById('userChip').textContent = usuario.nombre_completo?.split(' ')[0] || correo;
     document.getElementById('headerSub').textContent = usuario.cargo || 'Suministros';
+    mostrarBienvenidaApp(usuario.nombre_completo, usuario.rol || usuario.cargo || '', '#4c1d95', 'SIVIL Suministros', 'tu app de Compras');
     cargarTodo();
   } catch(e) {
     toast('Error de conexión: ' + e.message);

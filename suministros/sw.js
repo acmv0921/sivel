@@ -1,5 +1,5 @@
 // Service Worker v2.0
-const CACHE_NAME = 'suministros-cache-v2';
+const CACHE_NAME = 'suministros-cache-v3';
 const PRECACHE = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
