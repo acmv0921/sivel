@@ -1284,33 +1284,59 @@ async function cargarTodo() {
 restaurarBorradorPedido();
 }
 
+// Consulta el consecutivo sugerido y lo compara contra las APs REALMENTE
+// registradas (de cualquier vendedor). Si el número sugerido ya está
+// ocupado (por cualquiera, no solo por el vendedor actual), avanza al
+// siguiente libre. Así cada vendedor que entra ve un número garantizado
+// disponible, sin importar qué números hayan tomado los demás mientras tanto.
+async function obtenerProximaAPDisponible() {
+  try {
+    const [rCons, todas] = await Promise.all([
+      fetch(`${GAS_URL}?accion=getConsecutivoAP`).then(r => r.json()),
+      leerGVIZ("PREVENTAS_AP")
+    ]);
+    let candidato = parseInt(rCons.siguiente) || 1;
+    const ocupados = new Set(
+      (todas || [])
+        .filter(a => a.estado_ap !== 'Cancelado')
+        .map(a => String(a.ap_id).trim())
+    );
+    let vueltas = 0;
+    while (ocupados.has(String(candidato)) && vueltas < 500) {
+      candidato++;
+      vueltas++;
+    }
+    return candidato;
+  } catch(e) {
+    console.error('Error calculando próxima AP disponible:', e);
+    return null;
+  }
+}
+
 async function cargarProximaAP() {
   const el = document.getElementById('numeroProximaAP');
-  try {
-    const r = await fetch(`${GAS_URL}?accion=getConsecutivoAP`);
-    const j = await r.json();
-    const siguiente = j.siguiente || '';
-    STATE.proximaAPSugerida = siguiente;
-    if (el) el.textContent = siguiente ? `AP #${siguiente}` : '—';
-  } catch(e) {
-    STATE.proximaAPSugerida = null;
-    if (el) el.textContent = 'Sin conexión';
-  }
+  const siguiente = await obtenerProximaAPDisponible();
+  STATE.proximaAPSugerida = siguiente;
+  if (el) el.textContent = siguiente ? `AP #${siguiente}` : 'Sin conexión';
 }
 
 function usarProximaAP() {
   irA('screenPedido');
-  setTimeout(() => {
+  setTimeout(async () => {
     const badge = document.getElementById('apReservadaBadge');
     const input = document.getElementById('inputApId');
     const texto = document.getElementById('apBadgeTexto');
     if (badge) badge.style.display = 'block';
-    if (STATE.proximaAPSugerida) {
-      if (input && !input.value) input.value = STATE.proximaAPSugerida;
-      if (texto) texto.textContent = `Sugerido: AP #${STATE.proximaAPSugerida} — puedes cambiarlo`;
+    // Re-verificar por si alguien tomó el número entre que se cargó
+    // el dashboard y el momento en que el vendedor toca este botón.
+    const siguiente = await obtenerProximaAPDisponible();
+    STATE.proximaAPSugerida = siguiente;
+    if (siguiente) {
+      if (input && !input.value) input.value = siguiente;
+      if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
       validarNumeroAP(input);
     } else {
-      iniciarNuevaAP();
+      if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
     }
   }, 200);
 }
@@ -2042,20 +2068,20 @@ async function iniciarNuevaAP() {
   // 1. Ir al formulario
   irA('screenPedido');
 
-  // 2. Obtener el último número de AP para sugerir el siguiente
+  // 2. Obtener el siguiente número de AP REALMENTE disponible
+  //    (salta automáticamente cualquier número ya ocupado por otro vendedor)
   setTimeout(async () => {
     const badge  = document.getElementById('apReservadaBadge');
     const input  = document.getElementById('inputApId');
     const texto  = document.getElementById('apBadgeTexto');
     if (badge) badge.style.display = 'block';
 
-    try {
-      const r = await fetch(`${GAS_URL}?accion=getConsecutivoAP`);
-      const j = await r.json();
-      const siguiente = j.siguiente || '';
+    const siguiente = await obtenerProximaAPDisponible();
+    STATE.proximaAPSugerida = siguiente;
+    if (siguiente) {
       if (input && !input.value) input.value = siguiente;
       if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
-    } catch(e) {
+    } else {
       if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
     }
   }, 400);
