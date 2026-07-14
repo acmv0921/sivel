@@ -594,8 +594,8 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
 <label class="form-label" style="margin-top:0.5rem;">🚚 Transportista / condiciones negociadas</label>
 <input id="transportistaFleteInput" class="form-control" placeholder="Ej: Transportes XYZ, pago contraentrega..." oninput="calcularTotales();">
 <div class="form-group" style="margin-top:0.5rem;">
-<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteIncorporadoCheck"> Flete incorporado al precio (prorratear en el valor unitario)</label>
-<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
+<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteIncorporadoCheck" onchange="calcularTotales()"> Flete incorporado al precio (prorratear en el valor unitario)</label>
+<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck" onchange="calcularTotales()"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
 <div id="basculaWarning" style="display:none;margin-top:0.5rem;padding:0.5rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.8rem;color:#856404;"></div>
 </div>
 </div>
@@ -853,6 +853,14 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div id="detalleDescAlert" style="font-size:0.72rem;color:var(--rojo);margin-top:4px;"></div>
     </div>
     <div class="form-group">
+      <label class="form-label">Valor estiba (por unidad, opcional)</label>
+      <input id="detalleEstiba" class="form-control" type="number" min="0" placeholder="0" oninput="calcularLineaModal()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Valor postes (por unidad, opcional)</label>
+      <input id="detallePostes" class="form-control" type="number" min="0" placeholder="0" oninput="calcularLineaModal()">
+    </div>
+    <div class="form-group">
       <label class="form-label">Precio unitario</label>
       <input id="detallePrecio" class="form-control" type="text" disabled>
       <div id="detallePrecioInfo" style="font-size:.68rem;color:#888;margin-top:3px;"></div>
@@ -1039,13 +1047,24 @@ async function escribirGAS(body) {
     toast('🟠 PRUEBA: ' + (body.accion || 'operación') + ' simulada (no guardada)');
     return; // NO escribe al Sheet
   }
-  // Si no es sandbox, llamar la función real
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify(body)
-  });
-  await new Promise(r => setTimeout(r, 900));
+  // Si no es sandbox, llamar la función real.
+  // IMPORTANTE (fix BUG-01): ya NO se usa mode:'no-cors'. Content-Type
+  // 'text/plain' evita el preflight CORS, así que esta sigue siendo una
+  // "simple request" — Apps Script Web App responde con Access-Control
+  // abierto por defecto para apps públicas. Esto permite leer la respuesta
+  // real del backend (incluyendo errores) en vez de asumir éxito siempre.
+  try {
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(body)
+    });
+    const resultado = await resp.json();
+    return resultado;
+  } catch (e) {
+    console.error('escribirGAS: error de red o respuesta no válida', e);
+    return { ok: false, error: 'Error de conexión con el servidor: ' + e.message };
+  }
 }
 
 function verLogSandbox() {
@@ -1098,6 +1117,9 @@ let STATE = {
   // Producto seleccionado en modal
   prodSeleccionado: null
 };
+
+// Intentar restaurar sesión guardada al cargar la app (fix BUG-02).
+restaurarSesionGuardada();
 
 // =============================================================================
 // LOGIN
@@ -1160,13 +1182,71 @@ async function hacerLogin() {
     if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
       activarSandbox();
     }
-    
+
+    // Persistir sesión (fix BUG-02): así el reload automático del Service
+    // Worker tras una actualización no expulsa al usuario a login.
+    try {
+      localStorage.setItem('sivil_sesion_comercial', JSON.stringify({ correo: correo, ts: Date.now() }));
+    } catch(e) { /* localStorage no disponible, la sesión simplemente no persiste */ }
+
     // Entrar a la app — sin setTimeout para no cambiar comportamiento
     iniciarApp();
     
   } catch(e) {
     err.textContent = 'Error de conexión: ' + e.message;
     console.error('Login error:', e);
+  }
+}
+
+// Restaura una sesión guardada (si existe y es reciente) sin pedir PIN de
+// nuevo — se ejecuta al cargar la página. Fix BUG-02: evita que el reload
+// automático del Service Worker (tras cada actualización de la PWA) expulse
+// al usuario a la pantalla de login.
+async function restaurarSesionGuardada() {
+  let guardada;
+  try {
+    guardada = JSON.parse(localStorage.getItem('sivil_sesion_comercial') || 'null');
+  } catch(e) { return; }
+  if (!guardada || !guardada.correo) return;
+
+  const VIGENCIA_MS = 1000 * 60 * 60 * 18; // 18 horas
+  if (Date.now() - (guardada.ts || 0) > VIGENCIA_MS) {
+    localStorage.removeItem('sivil_sesion_comercial');
+    return;
+  }
+
+  try {
+    let usuarios;
+    try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
+    catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+
+    const usuario = usuarios.find(u =>
+      String(u.correo || u.correo_usuario || '').toLowerCase().trim() === guardada.correo
+    );
+    if (!usuario) { localStorage.removeItem('sivil_sesion_comercial'); return; }
+
+    const estado = String(usuario.estado || '').trim();
+    if (estado !== 'ACTIVO' && estado !== 'Activo') { localStorage.removeItem('sivil_sesion_comercial'); return; }
+
+    const rol = String(usuario.rol || usuario.cargo || '').trim();
+    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(guardada.correo) >= 0;
+    const rolesPermitidos = ["VENDEDOR","JEFE_VENTAS","ADMIN","GERENTE"];
+    if (!esSuperusuario && rolesPermitidos.indexOf(rol) === -1) { localStorage.removeItem('sivil_sesion_comercial'); return; }
+
+    const nombre = usuario.nombre_vendedor || usuario.nombre_completo || usuario.nombre || guardada.correo;
+    usuario.nombre_vendedor = nombre;
+
+    STATE.usuario  = guardada.correo;
+    STATE.vendedor = usuario;
+
+    if (guardada.correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
+      activarSandbox();
+    }
+
+    iniciarApp();
+  } catch(e) {
+    // Si algo falla, simplemente se muestra la pantalla de login normal.
+    console.warn('No se pudo restaurar la sesión guardada:', e);
   }
 }
 
@@ -1210,6 +1290,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 
 function cerrarSesion() {
   if (!confirm("¿Cerrar sesión?")) return;
+  try { localStorage.removeItem('sivil_sesion_comercial'); } catch(e) {}
   STATE = { usuario:null, vendedor:null, inventario:[], clientes:[], aps:[],
             pedido:{cliente:null, tipo_entrega:"Venta en Planta", lineas:[]}, prodSeleccionado:null };
   document.getElementById('appMain').style.display = 'none';
@@ -1727,6 +1808,8 @@ function abrirDetalleProducto(tmcode) {
   document.getElementById('modalDetalleTitle').textContent = p.tmdescrip;
   document.getElementById('detalleCant').value = '';
   document.getElementById('detalleDesc').value = '';
+  document.getElementById('detalleEstiba').value = '';
+  document.getElementById('detallePostes').value = '';
   document.getElementById('detalleTotal').value = '';
   document.getElementById('detalleDescAlert').textContent = '';
   document.getElementById('detallePrecioInfo').textContent = '';
@@ -1804,8 +1887,11 @@ if (desc > p.desc_max && p.desc_max > 0) {
   alert.textContent = '';
 }
 
-document.getElementById('detallePrecio').value = fmt(precioBase);
-const totalSinIva = cant * precioBase * (1 - desc);
+const estiba = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
+const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
+const unitAntesIva = precioBase * (1 - desc) + estiba + postes;
+document.getElementById('detallePrecio').value = fmt(unitAntesIva);
+const totalSinIva = cant * unitAntesIva;
 const esGravado = (p.tipo_iva || 'E') === 'G';
 const ivaLinea = esGravado ? totalSinIva * 0.19 : 0;
 const totalConIva = totalSinIva + ivaLinea;
@@ -1832,6 +1918,8 @@ if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de
 const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
 const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
 const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
+const estibaFinal = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
+const postesFinal = parseFloat(document.getElementById('detallePostes')?.value) || 0;
 STATE.pedido.lineas.push({
 tmcode: p.tmcode,
 tmdescrip: p.tmdescrip,
@@ -1843,6 +1931,8 @@ descuento_segunda_pct: dsctoSeg,
 precio_base: precioFinal,
 precio_base_primera: p.precio_base,
 tipo_iva: p.tipo_iva || 'E',
+valor_estiba: estibaFinal,
+valor_postes: postesFinal,
 flete_a: p.flete_a,
 flete_b: p.flete_b
 });
@@ -1870,11 +1960,12 @@ function renderLineasAP() {
     const calidadBadge = (l.calidad||'PRIMERA')==='SEGUNDA'
       ? '<span style="background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥈 2a</span>'
       : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 1a</span>';
+    const unitResultante = (typeof l._precioUnitResultante === "number") ? l._precioUnitResultante : null;
     return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
       <div class="linea-info">
         <div class="linea-prod">${l.tmdescrip} ${calidadBadge}</div>
-        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%</div>
+        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%${unitResultante !== null ? ' · Unit. resultante: $' + fmt(unitResultante) + '/u' : ''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
         <div class="linea-precio">${fmt(l.cantidad_solicitada * l.precio_base * (1-l.descuento_aplicado))}</div>
@@ -1942,6 +2033,23 @@ document.getElementById('resumenAP').style.display = 'none';
 return;
 }
 
+const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
+const fleteSugerido = tipo === 'PLANTA' ? 0 : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0);
+const fleteInputRaw = document.getElementById('fleteValorInput')?.value;
+const flete = tipo === 'PLANTA' ? 0 : (fleteInputRaw === '' || fleteInputRaw === undefined ? fleteSugerido : (parseFloat(fleteInputRaw) || 0));
+STATE.pedido.flete_valor = flete;
+STATE.pedido.flete_sugerido = fleteSugerido;
+STATE.pedido.flete_negociado = tipo !== 'PLANTA' && Math.round(flete) !== Math.round(fleteSugerido);
+
+// El IVA se aplica ÚNICAMENTE por producto, según su columna G/E
+// (tipo_iva) en PRECIOS_GERENCIA — nunca sobre el flete, para no generar
+// doble IVA. El flete solo puede prorratearse en el valor unitario o
+// cobrarse aparte; en ningún caso lleva IVA propio.
+const fletePorratear = !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked);
+
+const totalUnidades = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
+const fletePorUnidad = fletePorratear && totalUnidades > 0 ? flete / totalUnidades : 0;
+
 let subtotal = 0;
 let descuentos = 0;
 let iva = 0;
@@ -1952,27 +2060,41 @@ const desc = base * l.descuento_aplicado;
 const neto = base - desc;
 subtotal += base;
 descuentos += desc;
-if ((l.tipo_iva || 'E') === 'G') iva += neto * 0.19;
+const gravado = (l.tipo_iva || 'E') === 'G';
+
+// Precio unitario resultante (después de descuento, flete prorrateado e
+// IVA) — replica la fórmula real del FORMATO AP en Excel: el flete
+// unitario se suma al precio ANTES del IVA cuando se prorratea, y el 19%
+// (si el producto es gravado) aplica sobre ese valor ya con flete
+// incluido — igual que columna G (VALOR UNITARIO) y P*H (TOTAL IVA) del
+// formato físico. Si el flete se cobra aparte, no se prorratea y por lo
+// tanto no se grava (el IVA solo recae sobre el producto).
+const unitNeto = l.precio_base * (1 - l.descuento_aplicado) + (l.valor_estiba || 0) + (l.valor_postes || 0);
+const unitAntesIva = fletePorratear ? unitNeto + fletePorUnidad : unitNeto;
+l._precioUnitResultante = gravado ? unitAntesIva * 1.19 : unitAntesIva;
+
+const netoConFlete = l.cantidad_solicitada * unitAntesIva;
+if (gravado) iva += netoConFlete * 0.19;
 });
 
-const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
-const fleteSugerido = tipo === 'PLANTA' ? 0 : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0);
-const fleteInputRaw = document.getElementById('fleteValorInput')?.value;
-const flete = tipo === 'PLANTA' ? 0 : (fleteInputRaw === '' || fleteInputRaw === undefined ? fleteSugerido : (parseFloat(fleteInputRaw) || 0));
-STATE.pedido.flete_valor = flete;
-STATE.pedido.flete_sugerido = fleteSugerido;
-STATE.pedido.flete_negociado = tipo !== 'PLANTA' && Math.round(flete) !== Math.round(fleteSugerido);
-
-const total = subtotal - descuentos + flete + iva;
+// El flete SIEMPRE forma parte del total (esté prorrateado o aparte) — lo
+// único que cambia es cómo se muestra en el resumen: si se prorrateó, ya
+// quedó absorbido dentro del valor de cada línea (arriba) y por eso no se
+// repite como fila aparte, pero su valor sigue sumando al total.
+const totalCalculado = subtotal - descuentos + flete + iva;
 
 document.getElementById('rSubtotal').textContent = fmt(subtotal);
 document.getElementById('rDescuentos').textContent = '-' + fmt(descuentos);
-document.getElementById('rFlete').textContent = fmt(flete);
+document.getElementById('rFlete').textContent = fletePorratear ? 'Incorporado al precio (' + fmt(flete) + ')' : fmt(flete);
 document.getElementById('rIva').textContent = fmt(iva);
-document.getElementById('rTotal').textContent = fmt(total);
+document.getElementById('rTotal').textContent = fmt(totalCalculado);
 document.getElementById('resumenAP').style.display = 'block';
-STATE.pedido._totales = { subtotal, descuentos, flete, iva, total };
+STATE.pedido._totales = { subtotal, descuentos, flete, flete_prorrateado: fletePorratear, iva, total: totalCalculado };
 
+// Solo re-renderizar líneas si ya hay un número de AP válido, para no
+// disparar el aviso de renderLineasAP() en cada tecla mientras se escribe.
+const apIdActual = parseInt(document.getElementById('inputApId')?.value);
+if (apIdActual && apIdActual >= 1) renderLineasAP();
 guardarBorradorPedido();
 }
 
@@ -2486,12 +2608,22 @@ detalle: STATE.pedido.lineas.map(l => ({
 tmcode: l.tmcode,
 cantidad_solicitada: l.cantidad_solicitada,
 cantidad_despachada: 0,
-descuento_aplicado: l.descuento_aplicado
+descuento_aplicado: l.descuento_aplicado,
+precio_base: l.precio_base,
+calidad: l.calidad || 'PRIMERA',
+valor_estiba: l.valor_estiba || 0,
+valor_postes: l.valor_postes || 0
 }))
 };
 
 toast("⏳ Guardando AP...");
-await escribirGAS(body);
+const resultado = await escribirGAS(body);
+
+if (!resultado || resultado.ok === false) {
+  toast("❌ No se pudo guardar: " + (resultado && resultado.error ? resultado.error : "error desconocido del servidor"));
+  return; // No se limpia el pedido ni se cierra la cesión: el vendedor conserva sus datos para reintentar
+}
+
 toast("✅ AP guardada correctamente");
 
 registrarApEnCesion();
@@ -2552,7 +2684,12 @@ async function guardarCliente() {
   };
 
   err.textContent = "Guardando...";
-  await escribirGAS(body);
+  const resultadoCliente = await escribirGAS(body);
+
+  if (!resultadoCliente || resultadoCliente.ok === false) {
+    err.textContent = "❌ " + (resultadoCliente && resultadoCliente.error ? resultadoCliente.error : "No se pudo guardar el cliente");
+    return;
+  }
 
   // Agregar localmente para uso inmediato
   STATE.clientes.push({ cliente_nit:nit, razon_social:nombre, vendedor_asignado:STATE.vendedor.id_vendedor, coordenadas_home:gps });
