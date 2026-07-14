@@ -909,6 +909,9 @@ let G = {
   aprobaciones: JSON.parse(localStorage.getItem('sivel_aprobaciones')||'[]')
 };
 
+// Intentar restaurar sesión guardada al cargar la app (fix BUG-02).
+restaurarSesionGuardada();
+
 // =============================================================================
 // LOGIN
 // =============================================================================
@@ -973,13 +976,67 @@ async function hacerLogin() {
       // No activar sandbox por defecto — el admin trabaja con datos reales
       console.log('ADMIN logueado — modo producción normal');
     }
-    
+
+    // Persistir sesión (fix BUG-02): así el reload automático del Service
+    // Worker tras una actualización no expulsa al usuario a login.
+    try {
+      localStorage.setItem('sivil_sesion_gerencia', JSON.stringify({ correo: correo, ts: Date.now() }));
+    } catch(e) { /* localStorage no disponible, la sesión simplemente no persiste */ }
+
     // Entrar a la app — sin setTimeout para no cambiar comportamiento
     iniciarApp();
     
   } catch(e) {
     err.textContent = 'Error de conexión: ' + e.message;
     console.error('Login error:', e);
+  }
+}
+
+// Restaura una sesión guardada (si existe y es reciente) sin pedir PIN de
+// nuevo — se ejecuta al cargar la página. Fix BUG-02: evita que el reload
+// automático del Service Worker (tras cada actualización de la PWA) expulse
+// al usuario a la pantalla de login.
+async function restaurarSesionGuardada() {
+  let guardada;
+  try {
+    guardada = JSON.parse(localStorage.getItem('sivil_sesion_gerencia') || 'null');
+  } catch(e) { return; }
+  if (!guardada || !guardada.correo) return;
+
+  const VIGENCIA_MS = 1000 * 60 * 60 * 18; // 18 horas
+  if (Date.now() - (guardada.ts || 0) > VIGENCIA_MS) {
+    localStorage.removeItem('sivil_sesion_gerencia');
+    return;
+  }
+
+  try {
+    let usuarios;
+    try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
+    catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+
+    const usuario = usuarios.find(u =>
+      String(u.correo || u.correo_usuario || '').toLowerCase().trim() === guardada.correo
+    );
+    if (!usuario) { localStorage.removeItem('sivil_sesion_gerencia'); return; }
+
+    const estado = String(usuario.estado || '').trim();
+    if (estado !== 'ACTIVO' && estado !== 'Activo') { localStorage.removeItem('sivil_sesion_gerencia'); return; }
+
+    const rol = String(usuario.rol || usuario.cargo || '').trim();
+    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(guardada.correo) >= 0;
+    const rolesPermitidos = ["GERENTE","JEFE_VENTAS","ADMIN"];
+    if (!esSuperusuario && rolesPermitidos.indexOf(rol) === -1) { localStorage.removeItem('sivil_sesion_gerencia'); return; }
+
+    const nombre = usuario.nombre_completo || usuario.nombre_vendedor || usuario.nombre || guardada.correo;
+    usuario.nombre_vendedor = nombre;
+    usuario.nombre_completo = nombre;
+
+    G.usuario  = guardada.correo;
+    G.vendedor = usuario;
+
+    iniciarApp();
+  } catch(e) {
+    console.warn('No se pudo restaurar la sesión guardada:', e);
   }
 }
 
@@ -1022,6 +1079,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 
 function cerrarSesion() {
   if (!confirm("¿Cerrar sesión?")) return;
+  try { localStorage.removeItem('sivil_sesion_gerencia'); } catch(e) {}
   G.usuario=null; G.vendedor=null;
   document.getElementById('appMain').style.display='none';
   document.getElementById('navBottom').style.display='none';
