@@ -991,43 +991,25 @@ function iniciarApp() {
   const n=G.vendedor.nombre_vendedor||"";
   document.getElementById('headerSub').textContent=n;
   document.getElementById('userNombre').textContent=n.split(' ')[0];
-  mostrarBienvenidaApp(n, G.vendedor.rol || G.vendedor.cargo || '', '#14532d', 'SIVIL Gerencia', 'Panel de Dirección', {
-    icon: '🚛', nombre: 'SIVIL Despacho', desc: 'despacha los pedidos aprobados',
-    url: 'https://acmv0921.github.io/sivel/despacho/'
-  });
+  mostrarBienvenidaApp(n, G.vendedor.rol || G.vendedor.cargo || '', '#14532d', 'SIVIL Gerencia', 'Panel de Dirección');
   cargarDatos();
 }
 
-function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc, siguiente) {
+function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
   if (document.getElementById('bienvenidaAppBanner')) return;
   const primerNombre = (nombre || '').split(' ')[0] || '';
   const b = document.createElement('div');
   b.id = 'bienvenidaAppBanner';
   b.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:99998;background:${color};color:#fff;
-    padding:14px 16px;display:flex;flex-direction:column;gap:8px;
+    padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;
     font-size:0.85rem;box-shadow:0 2px 10px rgba(0,0,0,.25);font-family:inherit;
     animation:bienvenidaSlideDown .35s ease-out;`;
-
-  const filaSup = document.createElement('div');
-  filaSup.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
-  filaSup.innerHTML = `<div>👋 <strong>¡Hola, ${primerNombre}!</strong> Estás en <strong>${appNombre}</strong> — ${appDesc}${rol ? ' <span style="opacity:.8;">(' + rol + ')</span>' : ''}</div>`;
+  b.innerHTML = `<div>👋 <strong>¡Hola, ${primerNombre}!</strong> Estás en <strong>${appNombre}</strong> — ${appDesc}${rol ? ' <span style="opacity:.8;">(' + rol + ')</span>' : ''}</div>`;
   const btn = document.createElement('button');
   btn.textContent = '✕';
   btn.style.cssText = 'background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;flex-shrink:0;';
-  btn.onclick = () => { b.style.transition='opacity .3s'; b.style.opacity='0'; setTimeout(()=>b.remove(),300); };
-  filaSup.appendChild(btn);
-  b.appendChild(filaSup);
-
-  if (siguiente) {
-    const filaInf = document.createElement('div');
-    filaInf.style.cssText = 'display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.15);border-radius:8px;padding:8px 12px;font-size:0.8rem;flex-wrap:wrap;';
-    const link = siguiente.url
-      ? `<a href="${siguiente.url}" style="color:#fff;text-decoration:underline;font-weight:700;">${siguiente.icon} ${siguiente.nombre}</a>`
-      : `<strong>${siguiente.icon} ${siguiente.nombre}</strong>`;
-    filaInf.innerHTML = `<span style="opacity:.85;">➡️ Sigue en turno:</span> ${link} <span style="opacity:.7;">— ${siguiente.desc}</span>`;
-    b.appendChild(filaInf);
-  }
-
+  btn.onclick = () => b.remove();
+  b.appendChild(btn);
   document.body.appendChild(b);
   if (!document.getElementById('bienvenidaAppStyle')) {
     const st = document.createElement('style');
@@ -1035,7 +1017,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc, siguiente)
     st.textContent = '@keyframes bienvenidaSlideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}';
     document.head.appendChild(st);
   }
-  setTimeout(() => { if (b.parentNode) { b.style.transition='opacity .4s'; b.style.opacity='0'; setTimeout(()=>b.remove(),400); } }, 9000);
+  setTimeout(() => { if (b.parentNode) { b.style.transition='opacity .4s'; b.style.opacity='0'; setTimeout(()=>b.remove(),400); } }, 5000);
 }
 
 function cerrarSesion() {
