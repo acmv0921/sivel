@@ -1149,6 +1149,13 @@ async function cargarDatos() {
       leerGVIZ("VEHICULOS"),
       leerGVIZ("APROBACIONES").catch(()=>[])
     ]);
+    // Defensivo: si la hoja APROBACIONES tiene encabezados pero cero filas de
+    // datos, GVIZ a veces malinterpreta la fila de encabezado como si fuera
+    // un registro (columnas A,B,C... en vez de los nombres reales), lo que
+    // produce una fila fantasma con "estado" undefined. La filtramos.
+    G.aprobaciones = (G.aprobaciones||[]).filter(a =>
+      a && ['pendiente','aprobada','rechazada'].includes(a.estado)
+    );
     cargarMetaActualizacion();
     calcularInventarioDinamico();
     renderDashboard();
