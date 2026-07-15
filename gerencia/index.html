@@ -382,6 +382,17 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
       <div class="kpi-box morado"><div class="kpi-val" id="kpiAprobaciones">—</div><div class="kpi-sub">APROBACIONES PEND.</div></div>
     </div>
 
+    <!-- KPIs EN PESOS -->
+    <div class="card">
+      <div class="card-title">💰 Ventas en Pesos</div>
+      <div class="kpi-grid">
+        <div class="kpi-box"><div class="kpi-val" id="kpiVentasHoy" style="font-size:1.1rem;">—</div><div class="kpi-sub">VENTAS HOY</div></div>
+        <div class="kpi-box azul"><div class="kpi-val" id="kpiVentasTotal" style="font-size:1.1rem;">—</div><div class="kpi-sub">VENTAS TOTALES</div></div>
+        <div class="kpi-box naranja"><div class="kpi-val" id="kpiTicketProm" style="font-size:1.1rem;">—</div><div class="kpi-sub">TICKET PROMEDIO</div></div>
+        <div class="kpi-box morado"><div class="kpi-val" id="kpiDescuentoProm" style="font-size:1.1rem;">—</div><div class="kpi-sub">DESCUENTO PROMEDIO</div></div>
+      </div>
+    </div>
+
     <!-- VENTAS POR VENDEDOR -->
     <div class="card">
       <div class="card-title">📊 Ventas por Vendedor</div>
@@ -860,13 +871,24 @@ async function escribirGAS(body) {
     toast('🟠 PRUEBA: ' + (body.accion || 'operación') + ' simulada (no guardada)');
     return; // NO escribe al Sheet
   }
-  // Si no es sandbox, llamar la función real
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify(body)
-  });
-  await new Promise(r => setTimeout(r, 900));
+  // Si no es sandbox, llamar la función real.
+  // IMPORTANTE (mismo fix que Comercial, BUG-01): ya NO se usa mode:'no-cors'.
+  // Content-Type 'text/plain' evita el preflight CORS, así que esta sigue
+  // siendo una "simple request" — Apps Script Web App responde con Access-
+  // Control abierto por defecto para apps públicas. Esto permite leer la
+  // respuesta real del backend (incluyendo errores) en vez de asumir éxito.
+  try {
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(body)
+    });
+    const resultado = await resp.json();
+    return resultado;
+  } catch (e) {
+    console.error('escribirGAS: error de red o respuesta no válida', e);
+    return { ok: false, error: 'Error de conexión con el servidor: ' + e.message };
+  }
 }
 
 function verLogSandbox() {
@@ -906,7 +928,7 @@ const PIN_GERENCIA = "GER2025";
 let G = {
   usuario:null, vendedor:null,
   aps:[], detalles:[], productos:[], patio:[], vendedores:[], precios:[],
-  aprobaciones: JSON.parse(localStorage.getItem('sivel_aprobaciones')||'[]')
+  aprobaciones: []
 };
 
 // Intentar restaurar sesión guardada al cargar la app (fix BUG-02).
@@ -1117,14 +1139,15 @@ async function cargarMetaActualizacion() {
 
 async function cargarDatos() {
   try {
-    [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios,G.vehiculos] = await Promise.all([
+    [G.aps,G.detalles,G.productos,G.patio,G.vendedores,G.precios,G.vehiculos,G.aprobaciones] = await Promise.all([
       leerGVIZ("PREVENTAS_AP"),
       leerGVIZ("DETALLE_AP"),
       leerGVIZ("PRODUCTOS_MAESTRO"),
       leerGVIZ("CONTROL_PATIO_Y_LOGISTICA"),
       leerGVIZ("VENDEDORES"),
       leerGVIZ("PRECIOS_GERENCIA"),
-      leerGVIZ("VEHICULOS")
+      leerGVIZ("VEHICULOS"),
+      leerGVIZ("APROBACIONES").catch(()=>[])
     ]);
     cargarMetaActualizacion();
     calcularInventarioDinamico();
@@ -1189,6 +1212,61 @@ function calcularInventarioDinamico() {
 // =============================================================================
 // DASHBOARD
 // =============================================================================
+// KPIs en pesos — construidos desde DETALLE_AP (precio_base, descuento_aplicado,
+// valor_estiba, valor_postes), replicando la misma fórmula de línea que usa
+// App Comercial (calcularLineaModal): cant * (precio_base*(1-desc)+estiba+postes),
+// con IVA 19% agregado solo si el producto es Gravado (tipo_iva === 'G').
+function calcularVentasKPIs() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const prodByCode = {};
+  G.productos.forEach(p=>{ prodByCode[String(p.tmcode)] = p; });
+  const apById = {};
+  G.aps.forEach(a=>{ apById[String(a.ap_id)] = a; });
+
+  let ventasTotal = 0, ventasHoy = 0;
+  let sumDescPonderado = 0, sumBaseDesc = 0;
+  const apsConVenta = new Set();
+
+  G.detalles.forEach(d=>{
+    const ap = apById[String(d.ap_id)];
+    if (!ap || ap.estado_ap === 'Cancelado') return;
+
+    const prod = prodByCode[String(d.tmcode)];
+    const cant       = parseFloat(d.cantidad_solicitada) || 0;
+    const precioBase = parseFloat(d.precio_base) || 0;
+    const desc       = parseFloat(d.descuento_aplicado) || 0;
+    const estiba     = parseFloat(d.valor_estiba) || 0;
+    const postes     = parseFloat(d.valor_postes) || 0;
+    const unitAntesIva = precioBase * (1 - desc) + estiba + postes;
+    const totalSinIva  = cant * unitAntesIva;
+    const esGravado = prod ? (prod.tipo_iva || 'E') === 'G' : false;
+    const totalLinea = esGravado ? totalSinIva * 1.19 : totalSinIva;
+
+    ventasTotal        += totalLinea;
+    sumDescPonderado    += desc * (cant * precioBase);
+    sumBaseDesc         += (cant * precioBase);
+    apsConVenta.add(String(d.ap_id));
+
+    const fCreacion = parseFecha(ap.fecha_creacion);
+    if (fCreacion) {
+      const fSolo = new Date(fCreacion); fSolo.setHours(0,0,0,0);
+      if (fSolo.getTime() === hoy.getTime()) ventasHoy += totalLinea;
+    }
+  });
+
+  const ticketProm = apsConVenta.size ? ventasTotal / apsConVenta.size : 0;
+  const descProm    = sumBaseDesc ? (sumDescPonderado / sumBaseDesc) * 100 : 0;
+
+  const elVentasHoy   = document.getElementById('kpiVentasHoy');
+  const elVentasTotal = document.getElementById('kpiVentasTotal');
+  const elTicketProm  = document.getElementById('kpiTicketProm');
+  const elDescProm    = document.getElementById('kpiDescuentoProm');
+  if (elVentasHoy)   elVentasHoy.textContent   = fmt(ventasHoy);
+  if (elVentasTotal) elVentasTotal.textContent = fmt(ventasTotal);
+  if (elTicketProm)  elTicketProm.textContent  = fmt(ticketProm);
+  if (elDescProm)    elDescProm.textContent    = descProm.toFixed(1) + '%';
+}
+
 function renderDashboard() {
   const pend    = G.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap));
   const alertas = _inventario.filter(p=>p.disponible<=0);
@@ -1198,6 +1276,8 @@ function renderDashboard() {
   document.getElementById('kpiPendientes').textContent  = pend.length;
   document.getElementById('kpiAlertas').textContent     = alertas.length;
   document.getElementById('kpiAprobaciones').textContent= aprobPend.length;
+
+  calcularVentasKPIs();
 
   // Actualizar dot de notificación
   const navAprobac = document.getElementById('navAprobac');
@@ -1468,22 +1548,25 @@ function renderAprobaciones() {
   if(!pend.length){
     cont.innerHTML='<div class="card" style="text-align:center;color:var(--verde);font-weight:700;padding:1.5rem;">✅ Sin aprobaciones pendientes</div>';
   } else {
-    cont.innerHTML=pend.map(a=>`
+    cont.innerHTML=pend.map(a=>{
+      const fecha = parseFecha(a.fecha);
+      return `
       <div class="aprobacion-card" id="aprobCard_${a.id}">
         <div style="font-size:.68rem;color:var(--morado);font-weight:700;">DESCUENTO REQUIERE APROBACIÓN</div>
-        <div style="font-weight:700;font-size:.9rem;margin:4px 0;">${a.producto}</div>
+        <div style="font-weight:700;font-size:.9rem;margin:4px 0;">${a.producto_nombre}</div>
         <div style="font-size:.78rem;color:#555;">
           Vendedor: <strong>${a.vendedor}</strong><br>
           Cliente: ${a.cliente}<br>
-          Descuento solicitado: <strong style="color:var(--rojo);">${(a.descuento*100).toFixed(1)}%</strong>
-          · Máximo permitido: ${(a.desc_max*100).toFixed(1)}%<br>
-          AP #${a.ap_id} · ${a.fecha}
+          Descuento solicitado: <strong style="color:var(--rojo);">${(parseFloat(a.descuento)*100).toFixed(1)}%</strong>
+          · Máximo permitido: ${(parseFloat(a.desc_max)*100).toFixed(1)}%<br>
+          AP #${a.ap_id} · ${fecha?fecha.toLocaleString('es-CO'):''}
         </div>
         <div class="btn-row" style="margin-top:.75rem;">
-          <button class="btn btn-primary btn-sm" onclick="resolverAprobacion(${a.id},'aprobada')">✅ Aprobar</button>
-          <button class="btn btn-danger btn-sm"  onclick="resolverAprobacion(${a.id},'rechazada')">❌ Rechazar</button>
+          <button class="btn btn-primary btn-sm" onclick="resolverAprobacion('${a.id}','aprobada')">✅ Aprobar</button>
+          <button class="btn btn-danger btn-sm"  onclick="resolverAprobacion('${a.id}','rechazada')">❌ Rechazar</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   // Historial
@@ -1491,8 +1574,8 @@ function renderAprobaciones() {
     <div class="aprobacion-card ${a.estado}" style="margin-bottom:.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
-          <div style="font-size:.8rem;font-weight:700;">${a.producto}</div>
-          <div style="font-size:.72rem;color:#666;">${a.vendedor} · AP #${a.ap_id} · ${(a.descuento*100).toFixed(1)}%</div>
+          <div style="font-size:.8rem;font-weight:700;">${a.producto_nombre}</div>
+          <div style="font-size:.72rem;color:#666;">${a.vendedor} · AP #${a.ap_id} · ${(parseFloat(a.descuento)*100).toFixed(1)}%</div>
         </div>
         <span class="badge ${a.estado==='aprobada'?'badge-activo':'badge-inactivo'}">${a.estado==='aprobada'?'✅ Aprobada':'❌ Rechazada'}</span>
       </div>
@@ -1501,33 +1584,22 @@ function renderAprobaciones() {
 }
 
 async function resolverAprobacion(id, decision) {
-  const ap = G.aprobaciones.find(a=>a.id===id);
+  const ap = G.aprobaciones.find(a=>String(a.id)===String(id));
   if (!ap) return;
-  ap.estado      = decision;
-  ap.resueltoPor = G.vendedor?.nombre_vendedor||'Gerencia';
-  ap.fechaRes    = new Date().toLocaleString('es-CO');
-  localStorage.setItem('sivel_aprobaciones', JSON.stringify(G.aprobaciones));
-
-  if (decision==='aprobada') {
-    await escribirGAS({
-      accion:'modificarDetalleAP', ap_id:ap.ap_id,
-      detalle_id:ap.detalle_id, descuento_aplicado:ap.descuento
-    });
-    toast(`✅ Descuento aprobado para AP #${ap.ap_id}`);
-  } else {
-    toast(`❌ Descuento rechazado — AP #${ap.ap_id}`);
+  const res = await escribirGAS({
+    accion: 'resolverAprobacion', id: ap.id, decision,
+    resuelto_por: G.vendedor?.nombre_vendedor || 'Gerencia'
+  });
+  if (!res || res.ok === false) {
+    toast('❌ Error: ' + (res && res.error || 'No se pudo resolver la aprobación'));
+    return;
   }
+  ap.estado = decision;
+  toast(decision==='aprobada'
+    ? `✅ Descuento aprobado para AP #${ap.ap_id}`
+    : `❌ Descuento rechazado — AP #${ap.ap_id} (se ajustó al máximo permitido)`);
   renderAprobaciones();
   renderDashboard();
-}
-
-// Registrar nueva solicitud de aprobación (llamado desde App Comercial)
-function registrarSolicitudAprobacion(data) {
-  G.aprobaciones.unshift({
-    id: Date.now(), estado:'pendiente',
-    ...data, fecha: new Date().toLocaleString('es-CO')
-  });
-  localStorage.setItem('sivel_aprobaciones', JSON.stringify(G.aprobaciones));
 }
 
 // =============================================================================
