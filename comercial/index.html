@@ -1033,6 +1033,26 @@ function _blobABase64(blob) {
   });
 }
 
+async function _guardarPDFEnDrive(tipo, filename, blob, intentos) {
+  intentos = intentos || 2;
+  try {
+    const b64 = await _blobABase64(blob);
+    for (let i = 0; i < intentos; i++) {
+      const r = await escribirGAS({accion:'guardarInformePDF', tipo, nombre_archivo: filename, base64_pdf: b64});
+      if (r && r.ok) return true;
+      console.error('guardarInformePDF intento ' + (i+1) + ' fallido:', r && r.error);
+      if (i < intentos - 1) await new Promise(res => setTimeout(res, 1500));
+    }
+    toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
+    return false;
+  } catch (e) {
+    console.error('No se pudo guardar el informe en Drive', e);
+    toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
+    return false;
+  }
+}
+
+
 async function escribirGAS(body) {
   if (_SANDBOX) {
     const entrada = {
@@ -2522,7 +2542,7 @@ async function cerrarCesionYGenerarInforme(){
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
     // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
-    _blobABase64(blob).then(b64 => escribirGAS({accion:'guardarInformePDF', tipo:'venta', nombre_archivo: filename, base64_pdf: b64})).catch(err => console.error('No se pudo guardar el informe en Drive', err));
+    await _guardarPDFEnDrive('venta', filename, blob);
 
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
@@ -2552,7 +2572,7 @@ function abrirWAVenta(items) {
   items.forEach((it, i) => {
     detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
   });
-  const msg = `🏭 *POSTEC DE OCCIDENTE S.A.S.*
+  const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
 📋 *REPORTE DE VENTA — PEDIDO(S)*
 ━━━━━━━━━━━━━━━━━━
@@ -2954,7 +2974,7 @@ async function guardarVisita(){
 function abrirWAVisita(registro) {
   const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
   const gpsLink = registro.gps ? linkMaps(registro.gps.lat, registro.gps.lon) : 'Sin GPS';
-  const msg = `🏭 *POSTEC DE OCCIDENTE S.A.S.*
+  const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
 📋 *REPORTE DE VISITA COMERCIAL*
 ━━━━━━━━━━━━━━━━━━
