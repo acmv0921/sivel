@@ -387,7 +387,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;text-align:center;margin-top:1.5rem;line-height:1.8;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.65);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTEC DE OCCIDENTE S.A.S. · v1.0 · 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.0 · 2026
   </div>
 </div>
 
@@ -1910,7 +1910,7 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     const header = (titulo) => {
       if (logo) { try{ doc.addImage(logo, 'JPEG', 14, 10, 38, 14); }catch(e){} }
       doc.setFontSize(13); doc.setFont(undefined, 'bold');
-      doc.text('POSTEC DE OCCIDENTE S.A.S.', 56, 16);
+      doc.text('POSTECSA DE COLOMBIA S.A.S.', 56, 16);
       doc.setFont(undefined, 'normal'); doc.setFontSize(10);
       doc.text(titulo, 56, 22);
       doc.setDrawColor(200); doc.line(14, 28, pageW - 14, 28);
@@ -1918,7 +1918,7 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     };
     const footer = () => {
       doc.setFontSize(7); doc.setTextColor(140);
-      doc.text('Documento generado automáticamente por SIVIL — POSTEC DE OCCIDENTE S.A.S.', 14, pageH - 8);
+      doc.text('Documento generado automáticamente por SIVIL — POSTECSA DE COLOMBIA S.A.S.', 14, pageH - 8);
       doc.text('Pág. ' + doc.internal.getNumberOfPages(), pageW - 20, pageH - 8);
       doc.setTextColor(0);
     };
@@ -1984,7 +1984,7 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     await _guardarPDFEnDrive('despacho', filename, blob);
 
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTEC DE OCCIDENTE'});
+      await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.'});
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
