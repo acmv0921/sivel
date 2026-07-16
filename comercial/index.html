@@ -402,7 +402,7 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   <div style="color:rgba(255,255,255,0.45);font-size:0.65rem;text-align:center;margin-top:1.5rem;line-height:1.7;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.7);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTEC DE OCCIDENTE S.A.S. · v1.0 · 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.0 · 2026
   </div>
 </div>
 
@@ -2352,7 +2352,7 @@ async function continuarOCerrarCesion(){
 function _pdfFooter(doc, pageW, pageH){
   doc.setFontSize(7);
   doc.setTextColor(140);
-  doc.text('Documento generado automáticamente por SIVIL — POSTEC DE OCCIDENTE S.A.S.', 14, pageH - 8);
+  doc.text('Documento generado automáticamente por SIVIL — POSTECSA DE COLOMBIA S.A.S.', 14, pageH - 8);
   doc.text('Pág. ' + doc.internal.getNumberOfPages(), pageW - 20, pageH - 8);
   doc.setTextColor(0);
 }
@@ -2361,7 +2361,7 @@ function _pdfHeader(doc, pageW, titulo){
   try{ doc.addImage(_LOGO_SRC, 'JPEG', 14, 10, 38, 14); }catch(e){}
   doc.setFontSize(13);
   doc.setFont(undefined, 'bold');
-  doc.text('POSTEC DE OCCIDENTE S.A.S.', 56, 16);
+  doc.text('POSTECSA DE COLOMBIA S.A.S.', 56, 16);
   doc.setFont(undefined, 'normal');
   doc.setFontSize(10);
   doc.text(titulo, 56, 22);
@@ -2545,7 +2545,7 @@ async function cerrarCesionYGenerarInforme(){
     await _guardarPDFEnDrive('venta', filename, blob);
 
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTEC DE OCCIDENTE'});
+      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
