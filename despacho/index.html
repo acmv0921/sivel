@@ -610,7 +610,9 @@ body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
     <div class="modal-title">Nuevo Lote en Curado</div>
     <div class="form-group">
       <label class="form-label">Producto</label>
-      <select id="curadoProducto" class="form-control" onchange="actualizarDiasCurado()"></select>
+      <input id="curadoProductoBuscar" class="form-control" list="curadoProductoList" placeholder="Buscar producto..." oninput="sincronizarCuradoProducto()" autocomplete="off">
+      <datalist id="curadoProductoList"></datalist>
+      <input type="hidden" id="curadoProducto">
     </div>
     <div class="form-group">
       <label class="form-label">Dias de curado (sugerido, editable)</label>
@@ -1247,10 +1249,26 @@ async function cargarTodo() {
 
 function poblarSelectProductos() {
   const opts = S.productos.map(p => `<option value="${p.tmcode}">${p.tmdescrip} (${p.tmund})</option>`).join('');
-  ['averiaProducto','curadoProducto'].forEach(id => {
+  ['averiaProducto'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '<option value="">Seleccionar...</option>' + opts;
   });
+  poblarDatalistCurado();
+}
+
+function poblarDatalistCurado() {
+  const dl = document.getElementById('curadoProductoList');
+  if (!dl) return;
+  dl.innerHTML = S.productos.map(p =>
+    `<option value="${String(p.tmdescrip).replace(/"/g,'&quot;')} (${p.tmund})">`
+  ).join('');
+}
+
+function sincronizarCuradoProducto() {
+  const val = (document.getElementById('curadoProductoBuscar').value || '').trim();
+  const prod = S.productos.find(p => `${p.tmdescrip} (${p.tmund})` === val);
+  document.getElementById('curadoProducto').value = prod ? prod.tmcode : '';
+  if (prod) actualizarDiasCurado();
 }
 
 // =============================================================================
@@ -2008,6 +2026,7 @@ function renderCurado() {
 function abrirModalCurado() {
   document.getElementById('curadoCant').value = '';
   document.getElementById('curadoProducto').value = '';
+  document.getElementById('curadoProductoBuscar').value = '';
   document.getElementById('curadoDias').value = '';
   document.getElementById('curadoFecha').value = '';
   document.getElementById('modalCurado').classList.add('show');
@@ -2049,17 +2068,27 @@ function actualizarFechaDesdeDias() {
   document.getElementById('curadoFecha').value = f.toISOString().split('T')[0];
 }
 
+let _guardandoCurado = false;
 async function guardarCurado() {
+  if (_guardandoCurado) return;
   const tmcode = document.getElementById('curadoProducto').value;
   const cant   = parseFloat(document.getElementById('curadoCant').value) || 0;
   const fecha  = document.getElementById('curadoFecha').value;
   const dias   = parseFloat(document.getElementById('curadoDias').value) || null;
-  if (!tmcode || !cant || !fecha) { toast("Completa todos los campos"); return; }
+  if (!tmcode || !cant || !fecha) { toast("Completa todos los campos (verifica que el producto quedo seleccionado de la lista)"); return; }
 
-  await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha, dias_curado_aplicado: dias });
-  cerrarModal('modalCurado');
-  toast(`⏳ ${cant} unidades registradas en curado`);
-  await cargarTodo();
+  _guardandoCurado = true;
+  const btn = document.querySelector('#modalCurado .btn-morado, #modalCurado button[onclick="guardarCurado()"]');
+  if (btn) { btn.disabled = true; btn.dataset._txt = btn.textContent; btn.textContent = 'Guardando...'; }
+  try {
+    await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha, dias_curado_aplicado: dias });
+    cerrarModal('modalCurado');
+    toast(`⏳ ${cant} unidades registradas en curado`);
+    await cargarTodo();
+  } finally {
+    _guardandoCurado = false;
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._txt || 'Guardar'; }
+  }
 }
 
 async function liberarCurado(despacho_id) {
@@ -2733,6 +2762,7 @@ function irA(screenId) {
     screenFuncionarios:'navFuncionarios'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
+  if (screenId === 'screenInventario') { calcularInventario(); renderInventario(document.getElementById('buscarProdDespacho')?.value || ''); }
   window.scrollTo(0,0);
 }
 
