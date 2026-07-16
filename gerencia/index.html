@@ -1521,10 +1521,11 @@ function renderCuradoDashboard() {
   const curados = G.curados || [];
   const proximos = curados.filter(c => {
     if (!c.fecha_liberacion_curado) return false;
-    const lib = new Date(c.fecha_liberacion_curado);
+    const lib = parseFecha(c.fecha_liberacion_curado);
+    if (!lib) return false;
     const dias = Math.ceil((lib - hoy) / 86400000);
     return dias <= 7;  // próximos 7 días
-  }).sort((a,b) => new Date(a.fecha_liberacion_curado) - new Date(b.fecha_liberacion_curado));
+  }).sort((a,b) => (parseFecha(a.fecha_liberacion_curado)||0) - (parseFecha(b.fecha_liberacion_curado)||0));
 
   if (!proximos.length) {
     cont.innerHTML = '<div style="text-align:center;color:#888;font-size:0.82rem;padding:1rem;">Sin lotes listos en los próximos 7 días</div>';
@@ -1532,8 +1533,8 @@ function renderCuradoDashboard() {
   }
 
   cont.innerHTML = proximos.map(c => {
-    const lib  = new Date(c.fecha_liberacion_curado);
-    const dias = Math.ceil((lib - hoy) / 86400000);
+    const lib  = parseFecha(c.fecha_liberacion_curado);
+    const dias = lib ? Math.ceil((lib - hoy) / 86400000) : 0;
     const color = dias <= 0 ? 'var(--verde)' : dias <= 2 ? 'var(--amarillo)' : 'var(--azul2)';
     const prod  = G.inventario?.find(p => String(p.tmcode) === String(c.tmcode));
     return `
@@ -1544,7 +1545,7 @@ function renderCuradoDashboard() {
       </div>
       <div style="flex:1;">
         <div style="font-size:.82rem;font-weight:700;">${prod ? prod.tmdescrip : 'COD '+c.tmcode}</div>
-        <div style="font-size:.70rem;color:#666;">${c.cant_en_curado} UND · Libre: ${new Date(c.fecha_liberacion_curado).toLocaleDateString('es-CO')}</div>
+        <div style="font-size:.70rem;color:#666;">${c.cant_en_curado} UND · Libre: ${lib ? lib.toLocaleDateString('es-CO') : (c.fecha_liberacion_curado||'?')}</div>
       </div>
     </div>`;
   }).join('');
@@ -1632,7 +1633,7 @@ function renderPrecios() {
   cont.innerHTML = G.precios.map(p => {
     const prod   = G.productos.find(x=>String(x.tmcode)===String(p.tmcode));
     const nombre = prod?prod.tmdescrip:`Código ${p.tmcode}`;
-    const fHasta = p.fecha_vigencia_fin ? new Date(p.fecha_vigencia_fin) : null;
+    const fHasta = parseFecha(p.fecha_vigencia_fin);
     const vigente= !fHasta || fHasta>=hoy;
     return `
     <div class="card" style="margin-bottom:.5rem;padding:1rem;">
@@ -1648,7 +1649,7 @@ function renderPrecios() {
             Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}
           </div>
           <div style="font-size:.68rem;color:#888;margin-top:2px;">
-            Vigente hasta: ${p.fecha_vigencia_fin||'Sin límite'}
+            Vigente hasta: ${fHasta ? fHasta.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}) : 'Sin límite'}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
