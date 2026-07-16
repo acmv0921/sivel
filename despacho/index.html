@@ -1744,7 +1744,7 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
     </div>
 
     <div class="btn-row" style="flex-direction:column;margin-top:1rem;">
-      <button class="btn btn-success" onclick="confirmarDespacho()">✅ Confirmar Despacho</button>
+      <button id="btnConfirmarDespacho" class="btn btn-success" onclick="confirmarDespacho()">✅ Confirmar Despacho</button>
       <button class="btn btn-outline" onclick="cerrarModal('modalDespacho')">Cancelar</button>
     </div>`;
 
@@ -1784,12 +1784,19 @@ async function guardarDetalleFlete(ap_id) {
   }
 }
 
+let _confirmandoDespacho = false;
 async function confirmarDespacho() {
+  if (_confirmandoDespacho) return;
   // Validar vehículo
   const placa = VEH_SELECCIONADO?.placa || '';
   if (!placa) { toast("⚠️ Selecciona o registra un vehículo"); return; }
   // Validar fotos mínimas
   if (FOTOS_DESP.length < 3) { toast("⚠️ Se requieren mínimo 3 fotos del despacho"); return; }
+
+  _confirmandoDespacho = true;
+  const _btnConfirmar = document.getElementById('btnConfirmarDespacho');
+  if (_btnConfirmar) { _btnConfirmar.disabled = true; _btnConfirmar.dataset._txt = _btnConfirmar.textContent; _btnConfirmar.textContent = 'Guardando...'; }
+  try {
 
   const { ap, lineas } = S.despachoActual;
   let todoCompleto = true;
@@ -1868,7 +1875,11 @@ async function confirmarDespacho() {
   await cargarTodo();
   setTimeout(() => abrirReporteWA(ap.ap_id, placa, conductorFinal), 600);
 
-borrarBorradorDespacho();
+  borrarBorradorDespacho();
+  } finally {
+    _confirmandoDespacho = false;
+    if (_btnConfirmar) { _btnConfirmar.disabled = false; _btnConfirmar.textContent = _btnConfirmar.dataset._txt || '✅ Confirmar Despacho'; }
+  }
 }
 
 // =============================================================================
