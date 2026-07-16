@@ -1518,7 +1518,7 @@ function renderCuradoDashboard() {
   const cont = document.getElementById('resumenCurado');
   if (!cont) return;
   const hoy  = new Date();
-  const curados = G.curados || [];
+  const curados = (G.patio || []).filter(c => (parseFloat(c.cant_en_curado)||0) > 0);
   const proximos = curados.filter(c => {
     if (!c.fecha_liberacion_curado) return false;
     const lib = parseFecha(c.fecha_liberacion_curado);
