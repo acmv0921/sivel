@@ -1700,6 +1700,13 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
 
     <div class="card-title" style="margin-top:0.5rem;">Cantidades a despachar</div>`;
 
+  // Unidades totales de la AP (todas las líneas) — el flete se prorratea por
+  // igual entre todas las unidades, misma lógica que usa Comercial al calcular
+  // el pedido (fletePorUnidad = flete / totalUnidades).
+  const totalUnidadesAP = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
+  const fleteAP = Number(ap.flete_valor) || 0;
+  const fletePorUnidadAP = totalUnidadesAP > 0 ? fleteAP / totalUnidadesAP : 0;
+
   lineas.forEach((l, i) => {
     const sol  = parseFloat(l.cantidad_solicitada) || 0;
     const desp = parseFloat(l.cantidad_despachada) || 0;
@@ -1716,10 +1723,20 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
           const dsctoSeg = parseFloat(prod.descuento_segunda_pct) || 10;
           const listaAplicable = (l.calidad||'PRIMERA').toUpperCase()==='SEGUNDA'
             ? Math.round(listaPrimera * (1 - dsctoSeg/100)) : listaPrimera;
-          const pactado = Number(l.precio_base) || 0;
+          // FIX: "pactado" antes era igual a l.precio_base (precio de lista) sin
+          // aplicar el descuento negociado — por eso nunca se veía distinto del
+          // precio de lista aunque hubiera descuento. Ahora sí resta el % de
+          // descuento guardado en la AP (l.descuento_aplicado), igual que lo
+          // calcula Comercial.
+          const precioBaseLinea = Number(l.precio_base) || 0;
+          const descuentoPct = Number(l.descuento_aplicado) || 0;
+          const pactado = Math.round(precioBaseLinea * (1 - descuentoPct));
+          const pactadoConFlete = Math.round(pactado + fletePorUnidadAP);
           let html = '';
           if (listaAplicable) html += `<br>🏷️ Precio de lista${(l.calidad||'PRIMERA').toUpperCase()==='SEGUNDA'?' (Segunda)':''}: $${listaAplicable.toLocaleString('es-CO')}/${und}`;
-          if (pactado) html += `<br>💲 Precio pactado: $${pactado.toLocaleString('es-CO')}/${und}${pactado < listaAplicable ? ' <span style="color:#b91c1c;font-weight:700;">(con descuento)</span>' : ''}`;
+          if (pactado) html += `<br>💲 Precio pactado (con descuento${descuentoPct?' '+(descuentoPct*100).toFixed(0)+'%':''}): $${pactado.toLocaleString('es-CO')}/${und}${pactado < listaAplicable ? ' <span style="color:#b91c1c;font-weight:700;">(con descuento)</span>' : ''}`;
+          if (fletePorUnidadAP > 0) html += `<br>🚚 Flete prorrateado: $${Math.round(fletePorUnidadAP).toLocaleString('es-CO')}/${und}`;
+          if (fletePorUnidadAP > 0 && pactado) html += `<br>💵 Precio con descuento + flete: $${pactadoConFlete.toLocaleString('es-CO')}/${und}`;
           return html;
         })()}
       </div>
