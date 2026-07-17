@@ -1074,11 +1074,17 @@ async function escribirGAS(body) {
   // abierto por defecto para apps públicas. Esto permite leer la respuesta
   // real del backend (incluyendo errores) en vez de asumir éxito siempre.
   try {
+    // Timeout explícito (25s): sin esto, una red inestable puede dejar el fetch
+    // esperando indefinidamente y el flujo que lo espera nunca se recupera.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     const resp = await fetch(GAS_URL, {
       method: 'POST',
       headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const resultado = await resp.json();
     return resultado;
   } catch (e) {
@@ -2517,14 +2523,22 @@ async function cerrarCesionYGenerarInforme(){
         y += 3;
       }
 
-      // Evidencia fotográfica DE ESTE PEDIDO (cada AP muestra solo sus propias fotos, nunca las de otro)
-      if (it.fotos && it.fotos.length) {
+      // Evidencia fotográfica: las fotos propias de ESTE pedido + las de la visita asociada.
+      // BUG CORREGIDO: antes solo se incluían it.fotos (fotos tomadas en el paso opcional
+      // "fotos del pedido"). Las fotos tomadas al registrar la VISITA (el paso que casi
+      // siempre se usa en campo, con mínimo 3 fotos obligatorias) nunca se agregaban al
+      // informe, aunque sí quedaban guardadas — por eso el informe salía "sin fotos" incluso
+      // cuando el vendedor sí las había tomado.
+      const _fotosPedido = (it.fotos || []).map(f => ({b64: f.b64, origen: 'Pedido'}));
+      const _fotosVisita = (_visitaAsociada && _visitaAsociada.fotos || []).map(f => ({b64: f.b64, origen: 'Visita'}));
+      const _fotosInforme = _fotosPedido.concat(_fotosVisita);
+      if (_fotosInforme.length) {
         _pdfFooter(doc, pageW, pageH);
         doc.addPage();
         y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id);
         const imgW = 85, imgH = 64, gap = 6;
         let col = 0, x = 14;
-        it.fotos.forEach(function(f){
+        _fotosInforme.forEach(function(f){
           if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id); col = 0; x = 14; }
           try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
           if (col === 0) { x = 14 + imgW + gap; col = 1; }
@@ -2544,8 +2558,19 @@ async function cerrarCesionYGenerarInforme(){
     // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
     await _guardarPDFEnDrive('venta', filename, blob);
 
+    // BUG CORREGIDO: navigator.share() estaba en el mismo try que abrirWAVenta() de abajo.
+    // Si el usuario cerraba/cancelaba la hoja para compartir (algo muy común — p.ej. solo
+    // quería ver el PDF), share() rechaza con AbortError, eso saltaba directo al catch de
+    // más abajo, y la línea que abre el modal de WhatsApp NUNCA se ejecutaba. Por eso el
+    // reporte "no enviaba WhatsApp": no fallaba exactamente, sino que se saltaba por completo
+    // cada vez que se cancelaba o fallaba el share nativo. Ahora el intento de compartir el
+    // PDF va en su propio try/catch, para que su resultado nunca bloquee el paso siguiente.
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+      try {
+        await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+      } catch (shareErr) {
+        console.warn('Compartir PDF cancelado o falló (no bloquea el envío por WhatsApp):', shareErr);
+      }
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
