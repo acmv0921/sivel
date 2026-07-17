@@ -927,12 +927,24 @@ async function escribirGAS(body) {
     toast('🟠 PRUEBA: ' + (body.accion || 'operación') + ' simulada (no guardada)');
     return; // NO escribe al Sheet
   }
-  // Si no es sandbox, llamar la función real
-  await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify(body)
-  });
+  // Si no es sandbox, llamar la función real.
+  // Se agrega un timeout explícito (25s): sin esto, si la red se cae o queda
+  // inestable a mitad de una escritura, el fetch puede quedar esperando
+  // indefinidamente y el botón de guardado nunca se recupera.
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+  } catch (e) {
+    console.error('escribirGAS: error o tiempo de espera agotado', e);
+    throw new Error('Sin conexión con el servidor — verifica tu internet e intenta de nuevo.');
+  }
   await new Promise(r => setTimeout(r, 900));
 }
 
@@ -1837,18 +1849,11 @@ async function confirmarDespacho() {
     precio_base: parseFloat(l.precio_base) || 0
   }));
 
-  // Generar informe individual del despacho (PDF + Excel) en Drive
-  await escribirGAS({
-    accion: 'generarInformeDespacho',
-    datos: JSON.stringify({
-      ap_id: ap.ap_id,
-      cliente: nombreCliente(ap.cliente_nit),
-      vendedor: ap.nombre_vendedor,
-      placa: placa,
-      conductor: conductorFinal,
-      lineas: lineasInforme
-    })
-  });
+  // NOTA: se eliminó una llamada a accion:'generarInformeDespacho' que existía aquí — el
+  // backend de Apps Script no tiene esa función implementada (generarInformeDespacho no
+  // existe en el proyecto GAS), así que esa llamada SIEMPRE fallaba en silencio y solo
+  // agregaba ~1.8s de espera sin ningún efecto. El informe real (PDF con fotos guardado
+  // en Drive) lo genera la función de abajo, que sí funciona correctamente.
 
   // Informe PDF con logo, datos del despacho y fotos — se comparte/descarga en el dispositivo
   generarInformePDFDespacho(ap, placa, conductorFinal, lineasInforme, nuevoEstado, FOTOS_DESP.slice());
@@ -1876,6 +1881,11 @@ async function confirmarDespacho() {
   setTimeout(() => abrirReporteWA(ap.ap_id, placa, conductorFinal), 600);
 
   borrarBorradorDespacho();
+  } catch (err) {
+    // Antes, un error aquí (ej. red inestable) dejaba el botón en "Guardando..."
+    // y no avisaba nada al despachador. Ahora siempre se ve un mensaje claro.
+    console.error('Error en confirmarDespacho:', err);
+    toast('⚠️ ' + (err.message || 'No se pudo guardar el despacho. Verifica tu conexión e intenta de nuevo.'));
   } finally {
     _confirmandoDespacho = false;
     if (_btnConfirmar) { _btnConfirmar.disabled = false; _btnConfirmar.textContent = _btnConfirmar.dataset._txt || '✅ Confirmar Despacho'; }
