@@ -3027,7 +3027,139 @@ async function guardarVisita(){
   escribirGAS(p).catch(e => console.warn('No se pudo sincronizar dirección/GPS del cliente (no bloquea el reporte de visita):', e));
   cerrarModal('modalVisita');
   toast('✅ Visita guardada — '+_VFOTOS.length+' fotos con MDA');renderVisitas();
-  setTimeout(()=>abrirWAVisita(reg),700);
+  // En vez de enviar el reporte de visita de inmediato, se pregunta si el
+  // vendedor va a crear un pedido (AP) para este cliente ahora mismo. Si sí,
+  // no se envía nada todavía — el informe de negociación (cerrarCesionYGenerarInforme)
+  // ya busca automáticamente la visita más reciente de este cliente por NIT
+  // (variable _visitaAsociada) y le agrega sus notas/fotos, así que la visita
+  // y el pedido terminan en UN SOLO informe. Si la respuesta es "no", se genera
+  // el informe de visita aparte (con sus fotos) como antes.
+  setTimeout(()=>mostrarDecisionPostVisita(reg),700);
+}
+
+let _REG_VISITA_PENDIENTE = null;
+function mostrarDecisionPostVisita(reg) {
+  _REG_VISITA_PENDIENTE = reg;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'modalDecisionVisita';
+  const nombreCliente = String(reg.cliente?.razon_social||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  overlay.innerHTML = `
+    <div class="modal-box" style="text-align:center;">
+      <div class="modal-title">✅ Visita guardada</div>
+      <p style="font-size:0.85rem;color:#555;margin:0.5rem 0 1.2rem;">¿Vas a registrar un pedido (AP) para <b>${nombreCliente}</b> ahora?</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="decisionPostVisita('pedido')">➕ Sí, crear pedido ahora</button>
+        <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="decisionPostVisita('solo_visita')">📋 No, solo fue visita — enviar reporte</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function decisionPostVisita(opcion) {
+  const reg = _REG_VISITA_PENDIENTE;
+  document.getElementById('modalDecisionVisita')?.remove();
+  if (!reg) return;
+  if (opcion === 'pedido') {
+    nuevoPedidoDesdeCliente(reg.cliente.cliente_nit);
+  } else {
+    generarInformeVisitaPDF(reg);
+  }
+  _REG_VISITA_PENDIENTE = null;
+}
+
+// Informe de visita EN SOLITARIO (sin pedido asociado): PDF con los datos de
+// la visita + evidencia fotográfica, guardado en Drive y compartido por
+// WhatsApp — mismo patrón ya probado que usa el informe de negociación.
+async function generarInformeVisitaPDF(reg) {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+
+    let y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial');
+    doc.setFontSize(9);
+    doc.text('Vendedor: ' + (reg.vendedor||''), 14, y);
+    doc.text('Fecha: ' + (reg.hora||''), pageW - 14, y, {align:'right'});
+    y += 6;
+    doc.text('Cliente: ' + (reg.cliente?.razon_social||'') + '   ·   NIT: ' + (reg.cliente?.cliente_nit||''), 14, y); y += 5;
+    doc.text('Canal: ' + (reg.canal||'Visita presencial'), 14, y); y += 5;
+    if (reg.gps) { doc.text('Ubicación GPS: ' + reg.gps.lat + ',' + reg.gps.lon, 14, y); y += 5; }
+    if (reg.direccion) { doc.text('Dirección: ' + reg.direccion, 14, y); y += 5; }
+    if (reg.contacto && (reg.contacto.nombre || reg.contacto.cel)) {
+      doc.text('Contacto: ' + (reg.contacto.nombre||'') + (reg.contacto.cel ? ' · Cel: '+reg.contacto.cel : ''), 14, y); y += 5;
+    }
+    y += 2;
+
+    const ensureSpace = (needed) => {
+      if (y + needed > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial'); }
+    };
+
+    if (reg.notas) {
+      ensureSpace(10);
+      doc.setFont(undefined,'bold'); doc.text('Notas de la visita:', 14, y); doc.setFont(undefined,'normal'); y += 5;
+      const lineasNota = doc.splitTextToSize(reg.notas, pageW - 28);
+      lineasNota.forEach(function(ln){ ensureSpace(5); doc.text(ln, 14, y); y += 4.5; });
+      y += 2;
+    }
+    if ((reg.productos_interes||[]).length) {
+      ensureSpace(6);
+      doc.text('Productos de interés: ' + reg.productos_interes.join(', '), 14, y); y += 5;
+    }
+    const compValida = (reg.competencia||[]).filter(cp=>cp.nombre||cp.producto||cp.precio);
+    if (compValida.length) {
+      ensureSpace(6);
+      doc.text('Competencia mencionada:', 14, y); y += 4.5;
+      compValida.forEach(function(cp){
+        ensureSpace(5);
+        const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+Number(cp.precio).toLocaleString('es-CO')) : ''].filter(Boolean).join(' — ');
+        doc.text('• ' + partes, 16, y); y += 4.5;
+      });
+    }
+
+    const fotos = (reg.fotos||[]);
+    if (fotos.length) {
+      _pdfFooter(doc, pageW, pageH);
+      doc.addPage();
+      y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — Visita');
+      const imgW = 85, imgH = 64, gap = 6;
+      let col = 0, x = 14;
+      fotos.forEach(function(f){
+        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — Visita'); col = 0; x = 14; }
+        try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
+        if (col === 0) { x = 14 + imgW + gap; col = 1; }
+        else { x = 14; col = 0; y += imgH + gap; }
+      });
+    }
+
+    _pdfFooter(doc, pageW, pageH);
+
+    const blob = doc.output('blob');
+    const filename = 'Informe_Visita_' + Date.now() + '.pdf';
+    const pdfFile = new File([blob], filename, {type:'application/pdf'});
+
+    // Se guarda con el mismo "tipo" ('venta') que ya usan los demás informes
+    // de Comercial, para reutilizar la carpeta/lógica de Drive ya probada en
+    // producción; el nombre del archivo (Informe_Visita_...) es lo que lo
+    // distingue de los informes de negociación. Sin await a propósito — no
+    // debe bloquear el envío del reporte por WhatsApp.
+    _guardarPDFEnDrive('venta', filename, blob);
+
+    if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+      try {
+        await navigator.share({files:[pdfFile], title:'Informe de visita', text:'Informe de visita — ' + (reg.cliente?.razon_social||'') + ' — POSTECSA DE COLOMBIA S.A.S.'});
+      } catch (shareErr) {
+        console.warn('Compartir PDF de visita cancelado o falló (no bloquea el reporte por WhatsApp):', shareErr);
+      }
+    }
+  } catch(e) {
+    console.error('Error generando informe PDF de visita', e);
+    toast('⚠️ No se pudo generar el PDF de la visita: ' + e.message);
+  } finally {
+    // El mensaje de texto de WhatsApp siempre se abre, con o sin PDF —
+    // mismo patrón confiable ya usado para el informe de negociación.
+    abrirWAVisita(reg);
+  }
 }
 
 function abrirWAVisita(registro) {
