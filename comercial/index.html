@@ -3017,8 +3017,27 @@ async function guardarVisita(){
     fotos:_VFOTOS.map(f=>({b64:f.b64,hora:f.hora})),
     notas:document.getElementById('visitaNotas')?.value.trim()||'',productos_interes:_VPRODINT.slice(),competencia:_VCOMP.filter(c=>c.nombre||c.producto||c.precio),
     hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
-  VISITAS_GUARDADAS.unshift(reg);if(VISITAS_GUARDADAS.length>50)VISITAS_GUARDADAS=VISITAS_GUARDADAS.slice(0,50);
-  localStorage.setItem('sivel_visitas',JSON.stringify(VISITAS_GUARDADAS));
+  // Se baja el tope de 50 a 20 visitas retenidas: 50 visitas con 3+ fotos
+  // cada una (fotos en base64) llenaban el almacenamiento local del celular
+  // con el paso de los días, causando que guardar una nueva visita fallara
+  // silenciosamente (ver manejo de error más abajo).
+  VISITAS_GUARDADAS.unshift(reg);if(VISITAS_GUARDADAS.length>20)VISITAS_GUARDADAS=VISITAS_GUARDADAS.slice(0,20);
+  // IMPORTANTE: esto puede fallar (QuotaExceededError) si el historial local
+  // de visitas con fotos ya llenó el almacenamiento del celular — eso NO debe
+  // impedir guardar la visita ni enviar el reporte. VISITAS_GUARDADAS (en
+  // memoria) ya tiene el registro nuevo sin importar si esto se persiste o no,
+  // así que la fusión con el informe de negociación sigue funcionando en esta
+  // misma sesión aunque el guardado en localStorage falle.
+  try {
+    localStorage.setItem('sivel_visitas',JSON.stringify(VISITAS_GUARDADAS));
+  } catch(e) {
+    console.warn('Espacio local lleno — se recorta el historial de visitas guardado en el dispositivo (no afecta esta visita ni el envío del reporte):', e);
+    let guardado = false;
+    for (const n of [15, 8, 3, 1]) {
+      try { localStorage.setItem('sivel_visitas', JSON.stringify(VISITAS_GUARDADAS.slice(0, n))); guardado = true; break; } catch(e2) {}
+    }
+    if (!guardado) { try { localStorage.removeItem('sivel_visitas'); } catch(e3) {} }
+  }
   // Sincronizar dirección/GPS del cliente en segundo plano (sin await): esta
   // llamada puede tardar mucho con red lenta, y no debe bloquear el guardado
   // local ni el envío del reporte por WhatsApp, que ya quedó guardado arriba.
