@@ -1189,7 +1189,12 @@ async function hacerLogin() {
     // Normalizar nombre
     const nombre = usuario.nombre_vendedor || usuario.nombre_completo || usuario.nombre || correo;
     usuario.nombre_vendedor = nombre;
-    
+
+    // Normalizar id_vendedor — cuando el usuario viene de USUARIOS_MAESTRO, el
+    // identificador se llama "cedula" (no "id_vendedor" como en VENDEDORES).
+    // Sin este fallback, todo AP creado quedaba sin vendedor_id asignado.
+    usuario.id_vendedor = usuario.id_vendedor || usuario.cedula || '';
+
     // Asignar estado global
     STATE.usuario  = correo;
     STATE.vendedor = usuario;
@@ -1261,6 +1266,7 @@ async function restaurarSesionGuardada() {
 
     const nombre = usuario.nombre_vendedor || usuario.nombre_completo || usuario.nombre || guardada.correo;
     usuario.nombre_vendedor = nombre;
+    usuario.id_vendedor = usuario.id_vendedor || usuario.cedula || '';
 
     STATE.usuario  = guardada.correo;
     STATE.vendedor = usuario;
