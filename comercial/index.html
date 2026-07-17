@@ -2470,6 +2470,13 @@ async function cerrarCesionYGenerarInforme(){
       doc.line(14, y, pageW - 14, y);
       y += 4;
 
+      // NUEVO: flete prorrateado por unidad de ESTE pedido (mismo cálculo que ya usan
+      // Despacho y el detalle de "Mis APs" — flete / total de unidades del pedido) para
+      // poder mostrar, por cada producto, el precio con descuento y con descuento+flete.
+      const _totalUnidadesPedido = (it.detalle_lineas||[]).reduce((acc,l)=>acc+(parseFloat(l.cantidad_solicitada)||0),0);
+      const _fletePedido = it.totales ? (Number(it.totales.flete)||0) : 0;
+      const _fletePorUnidadPedido = _totalUnidadesPedido > 0 ? _fletePedido / _totalUnidadesPedido : 0;
+
       // NOTA (corrección): antes, cuando "flete incorporado" estaba marcado, esta
       // tabla mostraba un precio unitario "resultante" (l._precioUnitResultante)
       // que mezclaba descuento + flete prorrateado + IVA en un solo número. Ese
@@ -2482,7 +2489,7 @@ async function cerrarCesionYGenerarInforme(){
       // Descuentos de más abajo. El flete se muestra aparte con su valor real,
       // igual que ya lo hace la app de Despacho.
       (it.detalle_lineas||[]).forEach(function(l){
-        ensureSpace(6);
+        ensureSpace(9);
         const base = l.cantidad_solicitada * l.precio_base;
         const desc = base * (l.descuento_aplicado||0);
         const neto = base - desc;
@@ -2495,7 +2502,18 @@ async function cerrarCesionYGenerarInforme(){
         doc.text('$'+fmtN(l.precio_base), colX.precio, y);
         doc.text(((l.descuento_aplicado||0)*100).toFixed(0)+'%', colX.desc, y);
         doc.text('$'+fmtN(totalLinea), colX.total, y);
-        y += 5;
+        y += 4.3;
+
+        // NUEVO: desglose de precio unitario (con descuento / con descuento+flete),
+        // mismo dato que ya se muestra en Despacho y en "Mis APs" de Comercial.
+        const _precioConDescuentoU = Math.round((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
+        const _precioConDescuentoYFleteU = Math.round(_precioConDescuentoU + _fletePorUnidadPedido);
+        doc.setFontSize(6.8); doc.setTextColor(120);
+        let _nota = 'P. unit. con desc.: $' + fmtN(_precioConDescuentoU);
+        if (_fletePorUnidadPedido > 0) _nota += '  ·  Flete/u: $' + fmtN(_fletePorUnidadPedido) + '  ·  Con desc.+flete: $' + fmtN(_precioConDescuentoYFleteU);
+        doc.text(_nota, colX.prod, y);
+        doc.setFontSize(8); doc.setTextColor(0);
+        y += 4.7;
       });
 
       y += 2;
@@ -2629,6 +2647,23 @@ function abrirWAVenta(items) {
   let detalle = '';
   items.forEach((it, i) => {
     detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
+
+    // NUEVO: desglose de precio por producto (lista / con descuento / con descuento+flete),
+    // mismo dato que ya se ve en el detalle de la AP y en el PDF de negociación.
+    const _totalUnidadesPedido = (it.detalle_lineas||[]).reduce((acc,l)=>acc+(parseFloat(l.cantidad_solicitada)||0),0);
+    const _fletePedido = it.totales ? (Number(it.totales.flete)||0) : 0;
+    const _fletePorUnidadPedido = _totalUnidadesPedido > 0 ? _fletePedido / _totalUnidadesPedido : 0;
+    (it.detalle_lineas||[]).forEach(l => {
+      const listaU = Number(l.precio_base)||0;
+      if (!listaU) return;
+      const descPct = Number(l.descuento_aplicado)||0;
+      const pactadoU = Math.round(listaU * (1 - descPct));
+      const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadPedido);
+      let nota = `     • ${l.tmdescrip||''}: 🏷️ $${fmtN(listaU)}`;
+      if (descPct) nota += ` · 💲 c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
+      if (_fletePorUnidadPedido > 0) nota += ` · 🚚 flete/u: $${fmtN(_fletePorUnidadPedido)} · 💵 c/desc+flete: $${fmtN(pactadoConFleteU)}`;
+      detalle += `\n${nota}`;
+    });
   });
   const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
