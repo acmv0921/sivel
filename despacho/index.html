@@ -341,9 +341,16 @@ table       { min-width: 480px; }
 .sandbox-banner .sb-left{display:flex;align-items:center;gap:8px;}
 .sandbox-banner .sb-badge{background:rgba(0,0,0,.25);border-radius:20px;padding:2px 8px;font-size:.68rem;}
 body.sandbox-active{padding-top:calc(56px + 34px) !important;}
-body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
+/* El ajuste de "top" del nav SOLO aplica en la barra lateral de escritorio
+   (donde .nav-bottom ya es top+bottom fijo por diseño). En móvil .nav-bottom
+   es una barra inferior sin "top" propio — agregarle top aquí la estiraba
+   a pantalla completa (top:90px hasta bottom:0), tapando todo el contenido
+   con un rectángulo blanco. Por eso este ajuste se mueve dentro del media
+   query de escritorio, donde sí corresponde. BUG que causaba pantalla en
+   blanco en modo admin/prueba en móvil — corregido.*/
 @media(min-width:768px){
   body.sandbox-active{padding-top:0;padding-left:240px;}
+  body.sandbox-active .nav-bottom{top:calc(56px + 34px);}
   .sandbox-banner{top:60px;}
 }
 
