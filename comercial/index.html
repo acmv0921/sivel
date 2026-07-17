@@ -1286,7 +1286,10 @@ function iniciarApp() {
   document.getElementById('userInitial').textContent = nombre.charAt(0).toUpperCase();
 
   mostrarBienvenidaApp(nombre, STATE.vendedor.rol || STATE.vendedor.cargo || '', '#1a3a5c', 'SIVIL Comercial', 'tu app de Ventas');
-  cargarTodo();
+  cargarTodo().catch(e => {
+    console.error('Error en carga inicial:', e);
+    toast('⚠️ ' + (e.message || 'No se pudo cargar la información. Verifica tu conexión y recarga la página.'));
+  });
 }
 
 function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
@@ -1331,7 +1334,16 @@ function cerrarSesion() {
 // =============================================================================
 async function leerGVIZ(hoja) {
   const url  = GVIZ + encodeURIComponent(hoja);
-  const resp = await fetch(url);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    throw new Error('Sin conexión al leer "' + hoja + '" — verifica tu internet e intenta de nuevo.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const txt  = await resp.text();
   // gviz devuelve: google.visualization.Query.setResponse({...})
   const json = JSON.parse(txt.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
