@@ -1399,6 +1399,23 @@ function nombreCliente(nit) {
   const c = S.clientes.find(x => String(x.cliente_nit) === String(nit));
   return c ? c.razon_social : nit;
 }
+function nombreVendedor(id) {
+  if (!id) return '';
+  const v = (S.vendedores||[]).find(x => String(x.id_vendedor) === String(id));
+  return v ? (v.nombre_vendedor||v.nombre||id) : id;
+}
+// Arma un resumen de "todo lo que se negoció" con el cliente (condiciones,
+// cotización, orden de compra, obra) para que Despacho tenga el mismo
+// contexto que tuvo el vendedor al cerrar la AP — evita que el despachador
+// tenga que llamar a Comercial para preguntar detalles ya acordados.
+function notaNegociacionAP(ap) {
+  const partes = [];
+  if (ap.condiciones_pago) partes.push('Condiciones de pago: ' + ap.condiciones_pago);
+  if (ap.cotizacion_ref) partes.push('Cotización: ' + ap.cotizacion_ref);
+  if (ap.orden_compra_cliente) partes.push('Orden de compra: ' + ap.orden_compra_cliente);
+  if (ap.nombre_obra) partes.push('Obra: ' + ap.nombre_obra);
+  return partes;
+}
 function nombreProducto(code) {
   const p = S.productos.find(x => String(x.tmcode) === String(code));
   return p ? p.tmdescrip : `Código ${code}`;
@@ -1475,6 +1492,7 @@ function renderAPs() {
             <span>📅 ${fmtFecha(ap.fecha_creacion)}</span>
             <span>${ap.tipo_entrega||''}</span>
           </div>
+          ${ap.vendedor_id ? `<div style="font-size:0.70rem;color:#7c3200;margin-top:2px;font-weight:700;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
           ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:3px;">🗓️ Entrega: ${ap.fecha_entrega}</div>` : ''}
           ${ap.obs_entrega ? `<div style="font-size:0.70rem;color:#555;margin-top:2px;">💬 ${ap.obs_entrega}</div>` : ''}
           ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
@@ -1648,12 +1666,17 @@ function abrirDespacho(ap_id) {
     <div style="background:var(--gris);border-radius:8px;padding:10px 12px;margin-bottom:1rem;">
       <div style="font-weight:700;">${nombreCliente(ap.cliente_nit)}</div>
       <div style="font-size:0.75rem;color:#666;">${ap.tipo_entrega} · ${ap.estado_ap}</div>
+      ${ap.vendedor_id ? `<div style="font-size:0.72rem;color:#7c3200;font-weight:700;margin-top:4px;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
       ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:4px;">🗓️ Entrega solicitada: <b>${ap.fecha_entrega}</b></div>` : ''}
       ${ap.obs_entrega ? `<div style="font-size:0.71rem;color:#555;margin-top:3px;">💬 ${ap.obs_entrega}</div>` : ''}
       ${ap.direccion_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:3px;">📍 Obra: ${ap.direccion_obra}</div>` : ''}
       ${ap.contacto_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">👤 Contacto: ${ap.contacto_obra}${ap.cel_contacto ? ' — <a href="tel:'+ap.cel_contacto+'" style="color:var(--verde);">'+ap.cel_contacto+'</a>' : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#0a5c36;margin-top:4px;font-weight:700;">🚚 Destino: ${ap.destino}</div>
 <div style="font-size:0.71rem;color:#333;margin-top:2px;">💰 Flete acordado: $${Number(ap.flete_valor||0).toLocaleString('es-CO')}${ap.flete_sugerido ? ' (tarifa sugerida: $'+Number(ap.flete_sugerido).toLocaleString('es-CO')+')' : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' <span style="color:#b45309;font-weight:700;">⚡ negociado</span>' : ''}</div>${ap.transportista_flete ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">🚛 Transportista: ${ap.transportista_flete}</div>` : ''}` : ''}
+      ${notaNegociacionAP(ap).length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #ccc;">
+        <div style="font-size:0.68rem;font-weight:700;color:#7c3200;letter-spacing:0.5px;">📝 NOTA DE NEGOCIACIÓN (Comercial)</div>
+        ${notaNegociacionAP(ap).map(p => `<div style="font-size:0.71rem;color:#444;margin-top:2px;">• ${p}</div>`).join('')}
+      </div>` : ''}
     </div>
 
     <!-- VEHÍCULO -->
@@ -1952,10 +1975,25 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     let y = header('Informe de Despacho');
     doc.setFontSize(9);
     doc.text('AP #' + ap.ap_id + '   ·   Cliente: ' + nombreCliente(ap.cliente_nit), 14, y); y += 5;
+    doc.text('Vendedor: ' + (nombreVendedor(ap.vendedor_id) || 'N/A'), 14, y); y += 5;
     doc.text('Vehículo: ' + placa + '   ·   Conductor: ' + (conductor||'N/A'), 14, y); y += 5;
     doc.text('Tipo de entrega: ' + (ap.tipo_entrega||''), 14, y); y += 5;
     doc.text('Estado: ' + estado, 14, y); y += 5;
-    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), 14, y); y += 8;
+    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), 14, y); y += 6;
+
+    // Nota de negociación: condiciones acordadas por Comercial que Despacho
+    // debe conocer (mismo dato que ahora se muestra también en la tarjeta
+    // de la AP y en el mensaje de WhatsApp).
+    const _notaPdf = notaNegociacionAP(ap);
+    if (_notaPdf.length) {
+      doc.setFont(undefined, 'bold'); doc.text('Nota de negociación (Comercial):', 14, y); doc.setFont(undefined, 'normal'); y += 4.5;
+      _notaPdf.forEach(p => {
+        const lns = doc.splitTextToSize('• ' + p, pageW - 28);
+        lns.forEach(ln => { doc.text(ln, 16, y); y += 4.3; });
+      });
+      y += 2;
+    }
+    y += 2;
 
     doc.setFont(undefined, 'bold'); doc.setFontSize(8);
     doc.text('Producto', 14, y);
@@ -2559,19 +2597,23 @@ function abrirReporteWA(ap_id, placa, conductor) {
     detalleProd += `  • ${nombreProducto(l.tmcode)}: ${desp} ${undProducto(l.tmcode)}\n`;
   });
 
+  const notaNeg = notaNegociacionAP(ap||{});
+  const notaTxt = notaNeg.length ? `\n📝 *NOTA DE NEGOCIACIÓN (Comercial):*\n` + notaNeg.map(p => `  • ${p}`).join('\n') + '\n' : '';
+
   const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━━━
 📋 *REPORTE DE DESPACHO*
 ━━━━━━━━━━━━━━━━━━━━
 📦 *AP #${ap_id}*
-👤 Cliente: ${cliente}
+🏢 Cliente: ${cliente}
+👤 Vendedor: ${nombreVendedor(ap?.vendedor_id) || 'N/A'}
 📅 Fecha: ${fecha}
 🚛 Vehículo: ${placa}
 👷 Conductor: ${conductor||'N/A'}
 🏭 Tipo: ${ap?.tipo_entrega||''}
 
 📦 *PRODUCTOS DESPACHADOS:*
-${detalleProd}
+${detalleProd}${notaTxt}
 ━━━━━━━━━━━━━━━━━━━━
 _Generado por SIVIL · POSTECSA_`;
 
