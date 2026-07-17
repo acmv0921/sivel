@@ -995,11 +995,12 @@ async function hacerLogin() {
       card.style.display = 'block';
     }
     
-    // ADMIN entra en modo NORMAL (no sandbox)
-    // El sandbox está disponible solo si lo activa manualmente
-    if (correo === 'acmv0921@gmail.com') {
-      // No activar sandbox por defecto — el admin trabaja con datos reales
-      console.log('ADMIN logueado — modo producción normal');
+    // ADMIN entra automáticamente en MODO PRUEBA (igual que Comercial y Despacho),
+    // para poder hacer ejercicios completos sin afectar datos reales.
+    // Puede salir del modo prueba manualmente con el botón "Salir del modo prueba".
+    if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
+      activarSandbox();
+      console.log('ADMIN logueado — modo prueba activado automáticamente');
     }
 
     // Persistir sesión (fix BUG-02): así el reload automático del Service
@@ -1058,6 +1059,10 @@ async function restaurarSesionGuardada() {
 
     G.usuario  = guardada.correo;
     G.vendedor = usuario;
+
+    if (guardada.correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
+      activarSandbox();
+    }
 
     iniciarApp();
   } catch(e) {
