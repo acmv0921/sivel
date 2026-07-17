@@ -1679,6 +1679,12 @@ ${extraInfo}
 
 let total = 0;
 let iva = 0;
+const flete = parseFloat(ap.flete_valor) || 0;
+// Flete prorrateado por unidad — misma lógica usada al calcular el pedido
+// (fletePorUnidad = flete / total de unidades de la AP) y la misma que ahora
+// también muestra Despacho, para que ambas apps digan exactamente lo mismo.
+const totalUnidadesAP = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
+const fletePorUnidadAP = totalUnidadesAP > 0 ? flete / totalUnidadesAP : 0;
 lineas.forEach((l,i) => {
 const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
 const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
@@ -1688,18 +1694,19 @@ const cant = parseFloat(l.cantidad_solicitada) || 0;
 const sub = cant * precio * (1 - desc);
 total += sub;
 if (prod && prod.tipo_iva === 'G') iva += sub * 0.19;
+const precioConDescuento = Math.round(precio * (1 - desc));
+const precioConDescuentoYFlete = Math.round(precioConDescuento + fletePorUnidadAP);
 html += `
 <div class="linea-item">
 <div class="linea-num">${i+1}</div>
 <div class="linea-info">
 <div class="linea-prod">${nombre}</div>
 <div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${l.cantidad_despachada||0}</div>
+<div class="linea-cant" style="margin-top:2px;">🏷️ Sin descuento: ${fmt(precio)}/u · 💲 Con descuento: ${fmt(precioConDescuento)}/u${fletePorUnidadAP>0 ? ' · 🚚 Flete: '+fmt(fletePorUnidadAP)+'/u · 💵 Con desc. + flete: '+fmt(precioConDescuentoYFlete)+'/u' : ''}</div>
 </div>
 <div class="linea-precio">${fmt(sub)}</div>
 </div>`;
 });
-
-const flete = parseFloat(ap.flete_valor) || 0;
 html += `
 <div style="margin-top:1rem;padding-top:0.75rem;border-top:2px solid var(--borde);">
 <div class="resumen-row"><span>Subtotal</span><span>${fmt(total)}</span></div>
