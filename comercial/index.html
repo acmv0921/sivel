@@ -2463,33 +2463,33 @@ async function cerrarCesionYGenerarInforme(){
       doc.line(14, y, pageW - 14, y);
       y += 4;
 
-      const fleteProrrateadoPedido = !!(it.totales && it.totales.flete_prorrateado);
+      // NOTA (corrección): antes, cuando "flete incorporado" estaba marcado, esta
+      // tabla mostraba un precio unitario "resultante" (l._precioUnitResultante)
+      // que mezclaba descuento + flete prorrateado + IVA en un solo número. Ese
+      // cálculo resultó no ser confiable (se detectó un caso real, AP #1968,
+      // donde daba $7.511/u y $751.100 de total línea, cuando el total real
+      // cobrado — verificado contra el detalle de la AP guardada — era $551.100).
+      // Ahora la tabla SIEMPRE muestra precio de lista, % descuento y el total
+      // después de descuento (sin flete ni IVA mezclados), que son los mismos
+      // valores ya usados —y verificados correctos— en el bloque de Subtotal/
+      // Descuentos de más abajo. El flete se muestra aparte con su valor real,
+      // igual que ya lo hace la app de Despacho.
       (it.detalle_lineas||[]).forEach(function(l){
         ensureSpace(6);
         const base = l.cantidad_solicitada * l.precio_base;
         const desc = base * (l.descuento_aplicado||0);
         const neto = base - desc;
         const ivaLinea = (l.tipo_iva||'E')==='G' ? neto * 0.19 : 0;
-        // Cuando el flete está incorporado al precio, se usa el precio unitario resultante
-        // (ya incluye flete prorrateado + IVA si aplica) para no listar el flete dos veces.
-        const unitMostrado = (fleteProrrateadoPedido && typeof l._precioUnitResultante === 'number') ? l._precioUnitResultante : null;
-        const totalLinea = unitMostrado !== null ? unitMostrado * (l.cantidad_solicitada||0) : (neto + ivaLinea);
+        const totalLinea = neto + ivaLinea;
         const nombre = (l.tmdescrip||'').length > 44 ? l.tmdescrip.substring(0,41)+'...' : (l.tmdescrip||'');
         doc.text(nombre, colX.prod, y);
         doc.text(l.calidad||'', colX.cal, y);
         doc.text(String(l.cantidad_solicitada||0) + ' ' + (l.tmund||''), colX.cant, y);
-        doc.text('$'+fmtN(unitMostrado !== null ? unitMostrado : l.precio_base), colX.precio, y);
+        doc.text('$'+fmtN(l.precio_base), colX.precio, y);
         doc.text(((l.descuento_aplicado||0)*100).toFixed(0)+'%', colX.desc, y);
         doc.text('$'+fmtN(totalLinea), colX.total, y);
         y += 5;
       });
-      if (fleteProrrateadoPedido) {
-        ensureSpace(5);
-        doc.setFontSize(7); doc.setTextColor(120);
-        doc.text('* Precio unitario y total de línea incluyen el flete prorrateado.', 14, y);
-        doc.setFontSize(8); doc.setTextColor(0);
-        y += 4;
-      }
 
       y += 2;
       doc.setDrawColor(200);
@@ -2500,13 +2500,9 @@ async function cerrarCesionYGenerarInforme(){
         const t = it.totales;
         doc.text('Subtotal: $' + fmtN(t.subtotal), pageW - 14, y, {align:'right'}); y += 5;
         doc.text('Descuentos: -$' + fmtN(t.descuentos), pageW - 14, y, {align:'right'}); y += 5;
-        // Si el flete está incorporado al precio, ya quedó reflejado en el valor de cada
-        // producto (ver tabla arriba) — no se lista aparte para no duplicarlo en el neto.
-        if (t.flete_prorrateado) {
-          doc.text('Flete: incorporado al precio de los productos', pageW - 14, y, {align:'right'}); y += 5;
-        } else {
-          doc.text('Flete: $' + fmtN(t.flete), pageW - 14, y, {align:'right'}); y += 5;
-        }
+        // El flete siempre se muestra por separado con su valor real (igual que
+        // en Despacho) — nunca mezclado dentro del precio unitario del producto.
+        doc.text('Flete: $' + fmtN(t.flete), pageW - 14, y, {align:'right'}); y += 5;
         doc.text('IVA: $' + fmtN(t.iva), pageW - 14, y, {align:'right'}); y += 5;
         doc.setFont(undefined, 'bold');
         doc.text('TOTAL: $' + fmtN(t.total), pageW - 14, y, {align:'right'});
