@@ -3007,9 +3007,13 @@ async function guardarVisita(){
     hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
   VISITAS_GUARDADAS.unshift(reg);if(VISITAS_GUARDADAS.length>50)VISITAS_GUARDADAS=VISITAS_GUARDADAS.slice(0,50);
   localStorage.setItem('sivel_visitas',JSON.stringify(VISITAS_GUARDADAS));
+  // Sincronizar dirección/GPS del cliente en segundo plano (sin await): esta
+  // llamada puede tardar mucho con red lenta, y no debe bloquear el guardado
+  // local ni el envío del reporte por WhatsApp, que ya quedó guardado arriba.
   const p={accion:'actualizarCliente',cliente_nit:_VCLI.cliente_nit};
   if(_VGPS)p.coordenadas_home=_VGPS.lat+','+_VGPS.lon;if(dir)p.direccion=dir;
-  await escribirGAS(p);cerrarModal('modalVisita');
+  escribirGAS(p).catch(e => console.warn('No se pudo sincronizar dirección/GPS del cliente (no bloquea el reporte de visita):', e));
+  cerrarModal('modalVisita');
   toast('✅ Visita guardada — '+_VFOTOS.length+' fotos con MDA');renderVisitas();
   setTimeout(()=>abrirWAVisita(reg),700);
 }
