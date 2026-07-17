@@ -1999,11 +1999,20 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     const filename = 'Informe_Despacho_AP' + ap.ap_id + '_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
-    // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
-    await _guardarPDFEnDrive('despacho', filename, blob);
+    // Guardar copia del PDF en la carpeta de Drive de Gerencia — SIN await a propósito
+    // (misma corrección aplicada hoy en Comercial): _guardarPDFEnDrive reintenta 2 veces
+    // con hasta 25s de timeout cada una y podía dejar el informe "colgado" casi un minuto.
+    // Corre en segundo plano; ya maneja sus propios errores con un toast.
+    _guardarPDFEnDrive('despacho', filename, blob);
 
+    // share() en su propio try/catch: si el usuario cancela la hoja de compartir, no debe
+    // marcarse como si hubiera fallado la generación del PDF (que sí se generó bien).
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
-      await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.'});
+      try {
+        await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.'});
+      } catch (shareErr) {
+        console.warn('Compartir PDF de despacho cancelado o falló (no es un error real):', shareErr);
+      }
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
