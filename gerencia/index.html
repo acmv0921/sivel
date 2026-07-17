@@ -1925,7 +1925,16 @@ function toast(msg,dur=2800){
   setTimeout(()=>t.classList.remove('show'),dur);
 }
 
-document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();
+// FIX CRÍTICO: a este manejador le faltaba el "});" de cierre — sin él, TODO el
+// código que sigue (Promociones, Consecutivo de AP, verificarPermisoReset,
+// desactivarSandbox, ejecutarResetAdmin, y el hook de navegación de "Promos"/
+// "Inventario") quedaba atrapado dentro de esta función de tecla, en vez de ser
+// código global. Como esta función solo se ejecuta si el usuario presiona una
+// tecla en el campo de PIN de login, ese bloque de código prácticamente nunca
+// llegaba a inicializarse — por eso, entre otras cosas, el botón de reset nunca
+// aparecía para GERENTE/ADMIN aunque el código para mostrarlo estuviera bien
+// escrito. Se cierra aquí mismo, inmediatamente, como debía ser desde el inicio.
+document.getElementById('loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')hacerLogin();});
 
 // =============================================================================
 // PROMOCIONES
@@ -2153,8 +2162,6 @@ document.addEventListener('DOMContentLoaded', () => {
       cargarCarpetasInformes();
     };
   }
-});
-
 });
 
 // ═══════════════════════════════════════════════════════════
