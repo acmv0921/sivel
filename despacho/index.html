@@ -1897,12 +1897,22 @@ async function confirmarDespacho() {
   await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete });
 
   const conductorFinal = document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '';
+  // Mismo prorrateo de flete que usa abrirDespacho() y Comercial: flete / total de
+  // unidades solicitadas en la AP. NUEVO: se agrega descuento_aplicado y flete_unidad
+  // a cada línea para poder mostrar el desglose sin descuento/con descuento/con flete
+  // en el WhatsApp y el PDF de despacho (antes solo se veía en la pantalla, no quedaba
+  // registrado en lo que se comparte).
+  const _totalUnidadesInforme = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
+  const _fleteInforme = Number(ap.flete_valor) || 0;
+  const _fletePorUnidadInforme = _totalUnidadesInforme > 0 ? _fleteInforme / _totalUnidadesInforme : 0;
   const lineasInforme = lineas.map(l => ({
     tmcode: l.tmcode,
     nombre: nombreProducto(l.tmcode),
     unidad: undProducto(l.tmcode),
     cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0),
-    precio_base: parseFloat(l.precio_base) || 0
+    precio_base: parseFloat(l.precio_base) || 0,
+    descuento_aplicado: parseFloat(l.descuento_aplicado) || 0,
+    flete_unidad: _fletePorUnidadInforme
   }));
 
   // NOTA: se eliminó una llamada a accion:'generarInformeDespacho' que existía aquí — el
@@ -2023,17 +2033,32 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
 
     let totalInforme = 0;
     lineasInforme.forEach(l => {
-      if (y > pageH - 20) { footer(); doc.addPage(); y = header('Informe de Despacho'); }
+      if (y > pageH - 26) { footer(); doc.addPage(); y = header('Informe de Despacho'); }
       const nombre = (l.nombre||'').length > 40 ? l.nombre.substring(0,37)+'...' : (l.nombre||'');
-      const precioU = Number(l.precio_base||0);
-      const valorL = precioU * Number(l.cantidad||0);
+      // FIX (mismo del detalle de la AP): "Precio unit." antes mostraba la lista sin
+      // descontar — ahora resta descuento_aplicado, igual que ya se corrigió en la
+      // pantalla de "Cantidades a despachar" y en el detalle de AP de Comercial.
+      const listaU = Number(l.precio_base||0);
+      const descPct = Number(l.descuento_aplicado||0);
+      const pactadoU = Math.round(listaU * (1 - descPct));
+      const fleteU = Number(l.flete_unidad||0);
+      const pactadoConFleteU = Math.round(pactadoU + fleteU);
+      const valorL = pactadoU * Number(l.cantidad||0);
       totalInforme += valorL;
       doc.text(nombre, 14, y);
       doc.text(String(l.cantidad||0), 108, y);
       doc.text(l.unidad||'', 130, y);
-      doc.text(precioU ? '$' + precioU.toLocaleString('es-CO') : '-', 150, y);
+      doc.text(pactadoU ? '$' + pactadoU.toLocaleString('es-CO') : '-', 150, y);
       doc.text(valorL ? '$' + valorL.toLocaleString('es-CO') : '-', 180, y);
-      y += 5;
+      y += 4.3;
+      // NUEVO: desglose de precio unitario (lista / con descuento / con descuento+flete)
+      doc.setFontSize(6.8); doc.setTextColor(120);
+      let nota = 'Lista: $' + listaU.toLocaleString('es-CO');
+      if (descPct) nota += '  ·  Dcto: ' + (descPct*100).toFixed(0) + '%';
+      if (fleteU > 0) nota += '  ·  Flete/u: $' + Math.round(fleteU).toLocaleString('es-CO') + '  ·  Con desc.+flete: $' + pactadoConFleteU.toLocaleString('es-CO');
+      doc.text(nota, 14, y);
+      doc.setFontSize(8); doc.setTextColor(0);
+      y += 4.7;
     });
     if (totalInforme > 0) {
       y += 2; doc.setDrawColor(200); doc.line(140, y, pageW - 14, y); y += 5;
@@ -2607,11 +2632,29 @@ function abrirReporteWA(ap_id, placa, conductor) {
   const cliente = nombreCliente(ap?.cliente_nit);
   const fecha   = new Date().toLocaleString('es-CO');
 
+  // Mismo prorrateo de flete que usa abrirDespacho()/confirmarDespacho() — flete / total
+  // de unidades solicitadas en la AP. NUEVO: se agrega el desglose de precio por unidad
+  // (lista / con descuento / con descuento+flete) al mensaje de WhatsApp.
+  const _totalUnidadesWA = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
+  const _fleteWA = Number(ap?.flete_valor) || 0;
+  const _fletePorUnidadWA = _totalUnidadesWA > 0 ? _fleteWA / _totalUnidadesWA : 0;
+
   let detalleProd = '';
   lineas.forEach(l => {
     const sol  = parseFloat(l.cantidad_solicitada)||0;
     const desp = parseFloat(l.cantidad_despachada)||0;
-    detalleProd += `  • ${nombreProducto(l.tmcode)}: ${desp} ${undProducto(l.tmcode)}\n`;
+    const und  = undProducto(l.tmcode);
+    detalleProd += `  • ${nombreProducto(l.tmcode)}: ${desp} ${und}\n`;
+    const listaU = Number(l.precio_base) || 0;
+    if (listaU) {
+      const descPct = Number(l.descuento_aplicado) || 0;
+      const pactadoU = Math.round(listaU * (1 - descPct));
+      const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadWA);
+      let nota = `     🏷️ Lista: $${listaU.toLocaleString('es-CO')}/${und}`;
+      if (descPct) nota += `  ·  💲 Con desc. (${(descPct*100).toFixed(0)}%): $${pactadoU.toLocaleString('es-CO')}/${und}`;
+      if (_fletePorUnidadWA > 0) nota += `  ·  🚚 Flete/u: $${Math.round(_fletePorUnidadWA).toLocaleString('es-CO')}  ·  💵 Con desc.+flete: $${pactadoConFleteU.toLocaleString('es-CO')}/${und}`;
+      detalleProd += nota + '\n';
+    }
   });
 
   const notaNeg = notaNegociacionAP(ap||{});
