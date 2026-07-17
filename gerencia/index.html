@@ -1087,6 +1087,11 @@ function iniciarApp() {
   document.getElementById('userNombre').textContent=n.split(' ')[0];
   mostrarBienvenidaApp(n, G.vendedor.rol || G.vendedor.cargo || '', '#14532d', 'SIVIL Gerencia', 'Panel de Dirección');
   cargarDatos();
+  // FIX: mismo problema — verificarPermisoReset() nunca se llamaba, así que la
+  // sección de reset quedaba oculta para GERENTE/ADMIN aunque tuvieran permiso.
+  // Se llama también aquí (además del hook de "Promos") para que quede correcta
+  // desde que se inicia sesión, sin depender de a qué pantalla navegue primero.
+  if (typeof verificarPermisoReset === 'function') verificarPermisoReset();
 }
 
 function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
@@ -2132,6 +2137,11 @@ document.addEventListener('DOMContentLoaded', () => {
       irA('screenPromociones');
       cargarPromociones();
       cargarConsecutivo();
+      // FIX: verificarPermisoReset() estaba definida pero nunca se llamaba en
+      // ningún lado del archivo — por eso la sección "Borrar datos de prueba y
+      // arrancar en real" nunca se mostraba, ni siquiera para GERENTE/ADMIN
+      // (se quedaba en el display:none por defecto del HTML para siempre).
+      verificarPermisoReset();
     };
   }
   // Inventario Drive: cargar cuando se abre la tab
