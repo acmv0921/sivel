@@ -2069,9 +2069,22 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     }
 
     if (fotos && fotos.length) {
-      footer(); doc.addPage();
-      y = header('Evidencia Fotográfica del Despacho');
       const imgW = 85, imgH = 64, gap = 6;
+      // FIX (mismo ajuste ya aplicado al informe de visita): antes SIEMPRE se forzaba
+      // salto de página aquí, sin importar cuánto espacio quedara libre en la página
+      // actual. Con despachos de pocos productos eso dejaba media página en blanco y
+      // las fotos empezando solas en la página 2. Ahora solo se salta de página si de
+      // verdad no cabe el título de la sección + la primera fila de fotos.
+      if (y + 10 + imgH > pageH - 16) {
+        footer(); doc.addPage();
+        y = header('Evidencia Fotográfica del Despacho');
+      } else {
+        y += 4;
+        doc.setFont(undefined, 'bold'); doc.setFontSize(9);
+        doc.text('Evidencia Fotográfica del Despacho', 14, y);
+        doc.setFont(undefined, 'normal'); doc.setFontSize(8);
+        y += 6;
+      }
       let col = 0, x = 14;
       fotos.forEach(f => {
         if (y + imgH > pageH - 16) { footer(); doc.addPage(); y = header('Evidencia Fotográfica del Despacho'); col = 0; x = 14; }
