@@ -3027,49 +3027,18 @@ async function guardarVisita(){
   escribirGAS(p).catch(e => console.warn('No se pudo sincronizar dirección/GPS del cliente (no bloquea el reporte de visita):', e));
   cerrarModal('modalVisita');
   toast('✅ Visita guardada — '+_VFOTOS.length+' fotos con MDA');renderVisitas();
-  // En vez de enviar el reporte de visita de inmediato, se pregunta si el
-  // vendedor va a crear un pedido (AP) para este cliente ahora mismo. Si sí,
-  // no se envía nada todavía — el informe de negociación (cerrarCesionYGenerarInforme)
-  // ya busca automáticamente la visita más reciente de este cliente por NIT
-  // (variable _visitaAsociada) y le agrega sus notas/fotos, así que la visita
-  // y el pedido terminan en UN SOLO informe. Si la respuesta es "no", se genera
-  // el informe de visita aparte (con sus fotos) como antes.
-  setTimeout(()=>mostrarDecisionPostVisita(reg),700);
-}
-
-let _REG_VISITA_PENDIENTE = null;
-function mostrarDecisionPostVisita(reg) {
-  _REG_VISITA_PENDIENTE = reg;
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay show';
-  overlay.id = 'modalDecisionVisita';
-  const nombreCliente = String(reg.cliente?.razon_social||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  overlay.innerHTML = `
-    <div class="modal-box" style="text-align:center;">
-      <div class="modal-title">✅ Visita guardada</div>
-      <p style="font-size:0.85rem;color:#555;margin:0.5rem 0 1.2rem;">¿Vas a registrar un pedido (AP) para <b>${nombreCliente}</b> ahora?</p>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="decisionPostVisita('pedido')">➕ Sí, crear pedido ahora</button>
-        <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="decisionPostVisita('solo_visita')">📋 No, solo fue visita — enviar reporte</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-}
-function decisionPostVisita(opcion) {
-  const reg = _REG_VISITA_PENDIENTE;
-  document.getElementById('modalDecisionVisita')?.remove();
-  if (!reg) return;
-  if (opcion === 'pedido') {
-    nuevoPedidoDesdeCliente(reg.cliente.cliente_nit);
-  } else {
-    generarInformeVisitaPDF(reg);
-  }
-  _REG_VISITA_PENDIENTE = null;
+  // El reporte de WhatsApp se envía siempre de inmediato, sin ningún paso
+  // adicional que pueda bloquear al vendedor en campo (ver nota más abajo
+  // en abrirWAVisita: ahí se ofrecen, como botones OPCIONALES y descartables,
+  // "generar PDF con fotos" y "crear pedido ahora" — nunca de forma obligatoria).
+  setTimeout(()=>abrirWAVisita(reg),700);
 }
 
 // Informe de visita EN SOLITARIO (sin pedido asociado): PDF con los datos de
 // la visita + evidencia fotográfica, guardado en Drive y compartido por
 // WhatsApp — mismo patrón ya probado que usa el informe de negociación.
+// Se invoca de forma OPCIONAL desde un botón dentro del modal de WhatsApp
+// de la visita (abrirWAVisita) — nunca bloquea ni reemplaza ese flujo.
 async function generarInformeVisitaPDF(reg) {
   try {
     const { jsPDF } = window.jspdf;
@@ -3144,21 +3113,18 @@ async function generarInformeVisitaPDF(reg) {
     // distingue de los informes de negociación. Sin await a propósito — no
     // debe bloquear el envío del reporte por WhatsApp.
     _guardarPDFEnDrive('venta', filename, blob);
+    toast('✅ PDF de la visita generado y guardado en Drive');
 
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       try {
         await navigator.share({files:[pdfFile], title:'Informe de visita', text:'Informe de visita — ' + (reg.cliente?.razon_social||'') + ' — POSTECSA DE COLOMBIA S.A.S.'});
       } catch (shareErr) {
-        console.warn('Compartir PDF de visita cancelado o falló (no bloquea el reporte por WhatsApp):', shareErr);
+        console.warn('Compartir PDF de visita cancelado o falló (el PDF ya quedó guardado en Drive):', shareErr);
       }
     }
   } catch(e) {
     console.error('Error generando informe PDF de visita', e);
     toast('⚠️ No se pudo generar el PDF de la visita: ' + e.message);
-  } finally {
-    // El mensaje de texto de WhatsApp siempre se abre, con o sin PDF —
-    // mismo patrón confiable ya usado para el informe de negociación.
-    abrirWAVisita(reg);
   }
 }
 
@@ -3194,16 +3160,22 @@ _SIVIL · POSTECSA v1.0_`;
       </div>
       <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
         ${funcs.map(f => `
-          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''} 
+          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''}
                   onclick="waEnviar('${f.wa}','${encodeURIComponent(msg)}')">
             📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
           </button>`).join('')}
       </div>
       ${!funcs.length ? '<p style="color:#888;font-size:0.78rem;text-align:center;">No hay funcionarios activos configurados.<br>Agrégalos en la sección Clientes → Funcionarios.</p>' : ''}
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee;display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="generarInformeVisitaPDF(_ultimaVisitaWA)">📄 Generar PDF con fotos (opcional)</button>
+        <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="document.getElementById('modalWAVisita').remove();nuevoPedidoDesdeCliente('${String(registro.cliente.cliente_nit).replace(/'/g,"\\'")}')">➕ Crear pedido para este cliente</button>
+      </div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+  _ultimaVisitaWA = registro;
 }
+let _ultimaVisitaWA = null;
 
 function waEnviar(numero, msgEnc) {
   if (!numero) { toast("Sin número WhatsApp"); return; }
