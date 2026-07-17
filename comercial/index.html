@@ -2573,8 +2573,13 @@ async function cerrarCesionYGenerarInforme(){
     const filename = 'Informe_Negociacion_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
-    // Guardar copia del PDF en la carpeta de Drive de Gerencia (no bloquea el flujo de compartir)
-    await _guardarPDFEnDrive('venta', filename, blob);
+    // Guardar copia del PDF en la carpeta de Drive de Gerencia — SIN await a propósito.
+    // BUG CORREGIDO: aunque el comentario decía "no bloquea el flujo de compartir", el
+    // código sí tenía `await` aquí. _guardarPDFEnDrive reintenta 2 veces con hasta 25s de
+    // timeout cada una — en el peor caso bloqueaba el informe (y el WhatsApp) casi un
+    // minuto entero, o indefinidamente si Drive no respondía. Ahora corre en segundo plano;
+    // ya maneja sus propios errores y avisa con un toast si no logra copiar el PDF a Drive.
+    _guardarPDFEnDrive('venta', filename, blob);
 
     // BUG CORREGIDO: navigator.share() estaba en el mismo try que abrirWAVenta() de abajo.
     // Si el usuario cerraba/cancelaba la hoja para compartir (algo muy común — p.ej. solo
