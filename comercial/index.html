@@ -3066,54 +3066,117 @@ async function generarInformeVisitaPDF(reg) {
     const pageH = doc.internal.pageSize.getHeight();
 
     let y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial');
-    doc.setFontSize(9);
-    doc.text('Vendedor: ' + (reg.vendedor||''), 14, y);
-    doc.text('Fecha: ' + (reg.hora||''), pageW - 14, y, {align:'right'});
-    y += 6;
-    doc.text('Cliente: ' + (reg.cliente?.razon_social||'') + '   ·   NIT: ' + (reg.cliente?.cliente_nit||''), 14, y); y += 5;
-    doc.text('Canal: ' + (reg.canal||'Visita presencial'), 14, y); y += 5;
-    if (reg.gps) { doc.text('Ubicación GPS: ' + reg.gps.lat + ',' + reg.gps.lon, 14, y); y += 5; }
-    if (reg.direccion) { doc.text('Dirección: ' + reg.direccion, 14, y); y += 5; }
-    if (reg.contacto && (reg.contacto.nombre || reg.contacto.cel)) {
-      doc.text('Contacto: ' + (reg.contacto.nombre||'') + (reg.contacto.cel ? ' · Cel: '+reg.contacto.cel : ''), 14, y); y += 5;
-    }
-    y += 2;
 
     const ensureSpace = (needed) => {
       if (y + needed > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial'); }
     };
 
+    // Banda de título con el cliente — mismo lenguaje visual que el informe
+    // de negociación (banda azul con texto blanco), para que se vea como
+    // parte de la misma familia de documentos.
+    doc.setFillColor(37, 99, 168);
+    doc.rect(14, y, pageW - 28, 8, 'F');
+    doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(11);
+    doc.text(String(reg.cliente?.razon_social||'').toUpperCase(), 17, y + 5.5);
+    doc.setFont(undefined, 'normal'); doc.setTextColor(0); doc.setFontSize(9);
+    y += 12;
+
+    // Caja de datos generales (fondo gris claro): agrupa todo el contexto de
+    // la visita en un solo bloque compacto en vez de líneas sueltas — evita
+    // que la primera página se vea vacía y se corta bien con las secciones
+    // de abajo (fotos incluidas, en la misma página cuando hay espacio).
+    const filasBox = [
+      ['Vendedor', reg.vendedor || ''],
+      ['NIT', reg.cliente?.cliente_nit || ''],
+      ['Fecha', reg.hora || ''],
+      ['Canal', reg.canal || 'Visita presencial'],
+    ];
+    if (reg.direccion) filasBox.push(['Dirección', reg.direccion]);
+    if (reg.gps) filasBox.push(['Ubicación GPS', reg.gps.lat + ',' + reg.gps.lon]);
+    if (reg.contacto && (reg.contacto.nombre || reg.contacto.cel || reg.contacto.correo)) {
+      filasBox.push(['Contacto', [reg.contacto.nombre, reg.contacto.cel ? 'Cel: '+reg.contacto.cel : '', reg.contacto.correo].filter(Boolean).join('  —  ')]);
+    }
+    doc.setFontSize(9);
+    const rowH = 5.6, labelW = 32;
+    let filasAltura = 0;
+    const filasWrapped = filasBox.map(([label, val]) => {
+      const lineas = doc.splitTextToSize(String(val), pageW - 28 - labelW - 6);
+      filasAltura += rowH * Math.max(1, lineas.length);
+      return [label, lineas];
+    });
+    const boxTop = y, boxH = filasAltura + 5;
+    ensureSpace(boxH);
+    doc.setFillColor(245, 247, 250);
+    doc.rect(14, y, pageW - 28, boxH, 'F');
+    let yy = y + 6.5;
+    filasWrapped.forEach(([label, lineas]) => {
+      doc.setFont(undefined, 'bold'); doc.text(label + ':', 18, yy);
+      doc.setFont(undefined, 'normal'); doc.text(lineas, 18 + labelW, yy);
+      yy += rowH * Math.max(1, lineas.length);
+    });
+    y += boxH + 6;
+
+    const seccion = (titulo) => {
+      ensureSpace(11);
+      doc.setFillColor(230, 236, 245);
+      doc.rect(14, y, pageW - 28, 6.5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(8.5); doc.setTextColor(37, 99, 168);
+      doc.text(titulo.toUpperCase(), 17, y + 4.5);
+      doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+      y += 10;
+    };
+
+    let huboContenido = false;
     if (reg.notas) {
-      ensureSpace(10);
-      doc.setFont(undefined,'bold'); doc.text('Notas de la visita:', 14, y); doc.setFont(undefined,'normal'); y += 5;
-      const lineasNota = doc.splitTextToSize(reg.notas, pageW - 28);
-      lineasNota.forEach(function(ln){ ensureSpace(5); doc.text(ln, 14, y); y += 4.5; });
-      y += 2;
+      huboContenido = true;
+      seccion('Notas de la visita');
+      const lineasNota = doc.splitTextToSize(reg.notas, pageW - 32);
+      lineasNota.forEach(function(ln){ ensureSpace(5); doc.text(ln, 18, y); y += 4.8; });
+      y += 4;
     }
     if ((reg.productos_interes||[]).length) {
-      ensureSpace(6);
-      doc.text('Productos de interés: ' + reg.productos_interes.join(', '), 14, y); y += 5;
+      huboContenido = true;
+      seccion('Productos de interés discutidos');
+      const lineasProd = doc.splitTextToSize(reg.productos_interes.join('   •   '), pageW - 32);
+      lineasProd.forEach(function(ln){ ensureSpace(5); doc.text(ln, 18, y); y += 4.8; });
+      y += 4;
     }
     const compValida = (reg.competencia||[]).filter(cp=>cp.nombre||cp.producto||cp.precio);
     if (compValida.length) {
-      ensureSpace(6);
-      doc.text('Competencia mencionada:', 14, y); y += 4.5;
+      huboContenido = true;
+      seccion('Competencia mencionada por el cliente');
       compValida.forEach(function(cp){
         ensureSpace(5);
-        const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+Number(cp.precio).toLocaleString('es-CO')) : ''].filter(Boolean).join(' — ');
-        doc.text('• ' + partes, 16, y); y += 4.5;
+        const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+Number(cp.precio).toLocaleString('es-CO')) : ''].filter(Boolean).join('   —   ');
+        doc.text('•  ' + partes, 18, y); y += 4.8;
       });
+      y += 4;
+    }
+    if (!huboContenido) {
+      ensureSpace(8);
+      doc.setTextColor(140);
+      doc.text('El vendedor no registró notas, productos de interés ni competencia en esta visita.', 14, y);
+      doc.setTextColor(0);
+      y += 8;
     }
 
+    // Fotos: se mantienen en la MISMA página si hay espacio para la banda +
+    // al menos una fila de fotos juntas — solo se salta de página cuando de
+    // verdad no cabe, evitando el hueco en blanco que se veía antes (siempre
+    // se forzaba una página nueva exclusiva para las fotos).
     const fotos = (reg.fotos||[]);
     if (fotos.length) {
-      _pdfFooter(doc, pageW, pageH);
-      doc.addPage();
-      y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — Visita');
       const imgW = 85, imgH = 64, gap = 6;
+      ensureSpace(10 + imgH);
+      doc.setFillColor(230, 236, 245);
+      doc.rect(14, y, pageW - 28, 6.5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(8.5); doc.setTextColor(37, 99, 168);
+      doc.text('EVIDENCIA FOTOGRÁFICA (' + fotos.length + (fotos.length>1 ? ' FOTOS)' : ' FOTO)'), 17, y + 4.5);
+      doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+      y += 10;
       let col = 0, x = 14;
       fotos.forEach(function(f){
-        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — Visita'); col = 0; x = 14; }
+        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial'); col = 0; x = 14; }
         try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
         if (col === 0) { x = 14 + imgW + gap; col = 1; }
         else { x = 14; col = 0; y += imgH + gap; }
