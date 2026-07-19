@@ -868,6 +868,11 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="detallePostes" class="form-control" type="number" min="0" placeholder="0" oninput="calcularLineaModal()">
     </div>
     <div class="form-group">
+      <label class="form-label">Peso unitario (kg) — opcional, mientras Gerencia entrega la tabla oficial</label>
+      <input id="detallePeso" class="form-control" type="number" min="0" step="0.1" placeholder="Ej: 25.5" oninput="calcularLineaModal()">
+      <div style="font-size:.68rem;color:#888;margin-top:3px;">Si lo conoces, úsalo para que el flete se reparta según el peso real de cada producto (no en partes iguales). Si el producto ya tiene peso registrado por Gerencia, este campo se ignora.</div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Precio unitario</label>
       <input id="detallePrecio" class="form-control" type="text" disabled>
       <div id="detallePrecioInfo" style="font-size:.68rem;color:#888;margin-top:3px;"></div>
@@ -1872,6 +1877,24 @@ function abrirDetalleProducto(tmcode) {
   document.getElementById('detalleDescAlert').textContent = '';
   document.getElementById('detallePrecioInfo').textContent = '';
 
+  // Peso: si Gerencia ya cargó el peso oficial del producto (peso_kg_unitario
+  // en PRODUCTOS_MAESTRO), se usa ese y el campo manual queda deshabilitado.
+  // Mientras esa tabla no exista, el campo manual queda libre para que el
+  // vendedor lo escriba (temporal, según lo acordado).
+  const pesoInput = document.getElementById('detallePeso');
+  const pesoMaestro = parseFloat(p.peso_kg_unitario) || 0;
+  if (pesoInput) {
+    if (pesoMaestro > 0) {
+      pesoInput.value = pesoMaestro;
+      pesoInput.disabled = true;
+      pesoInput.title = 'Peso oficial de Gerencia para este producto';
+    } else {
+      pesoInput.value = '';
+      pesoInput.disabled = false;
+      pesoInput.title = '';
+    }
+  }
+
   // Configurar botones de calidad
   const semFmt = (prod, badge) => {
     if (!prod) return `<span style="color:#aaa;font-size:.7rem;">Sin stock</span>`;
@@ -1939,11 +1962,13 @@ const precioBase = calidad==='SEGUNDA'
   ? Math.round(p.precio_base*(1-dsctoSeg/100))
   : p.precio_base;
 
-if (desc > p.desc_max && p.desc_max > 0) {
-  alert.textContent = '⚠️ Máximo permitido: ' + (p.desc_max*100).toFixed(0) + '%. Requiere aprobación de gerencia.';
-} else {
-  alert.textContent = '';
-}
+// FIX (2026-07-19): se elimina el tope de descuento a nivel de vendedor —
+// confirmado con el backend real (Backend.gs, validarDescuento(), regla
+// global del 2026-07-14): el vendedor tiene libertad total, ya no requiere
+// aprobación de gerencia. Este aviso quedaba desactualizado y solo generaba
+// confusión, así que se retira. No afecta Promociones (módulo aparte, no
+// pasa por aquí).
+alert.textContent = '';
 
 const estiba = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
 const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
@@ -1978,6 +2003,15 @@ const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
 const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
 const estibaFinal = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
 const postesFinal = parseFloat(document.getElementById('detallePostes')?.value) || 0;
+
+// Peso para prorrateo de flete: prioridad al peso oficial de Gerencia
+// (PRODUCTOS_MAESTRO.peso_kg_unitario) si ya existe; si no, el que haya
+// escrito el vendedor manualmente en el campo temporal.
+const pesoMaestroFinal = parseFloat(p.peso_kg_unitario) || 0;
+const pesoManualFinal  = parseFloat(document.getElementById('detallePeso')?.value) || 0;
+const pesoFinal   = pesoMaestroFinal > 0 ? pesoMaestroFinal : pesoManualFinal;
+const pesoOrigen  = pesoMaestroFinal > 0 ? 'MAESTRO' : (pesoManualFinal > 0 ? 'MANUAL' : '');
+
 STATE.pedido.lineas.push({
 tmcode: p.tmcode,
 tmdescrip: p.tmdescrip,
@@ -1992,7 +2026,9 @@ tipo_iva: p.tipo_iva || 'E',
 valor_estiba: estibaFinal,
 valor_postes: postesFinal,
 flete_a: p.flete_a,
-flete_b: p.flete_b
+flete_b: p.flete_b,
+peso_kg_unitario: pesoFinal,
+peso_origen: pesoOrigen
 });
 
 cerrarModal('modalDetalle');
@@ -2019,11 +2055,14 @@ function renderLineasAP() {
       ? '<span style="background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥈 2a</span>'
       : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 1a</span>';
     const unitResultante = (typeof l._precioUnitResultante === "number") ? l._precioUnitResultante : null;
+    const fletePesoTxt = (typeof l._fletePorUnidadPeso === "number")
+      ? ' · 🚚 Flete (por peso): $' + fmt(l._fletePorUnidadPeso) + '/u'
+      : (l.peso_kg_unitario > 0 ? '' : '');
     return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
       <div class="linea-info">
         <div class="linea-prod">${l.tmdescrip} ${calidadBadge}</div>
-        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%${unitResultante !== null ? ' · Unit. resultante: $' + fmt(unitResultante) + '/u' : ''}</div>
+        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%${unitResultante !== null ? ' · Unit. resultante: $' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
         <div class="linea-precio">${fmt(l.cantidad_solicitada * l.precio_base * (1-l.descuento_aplicado))}</div>
@@ -2108,11 +2147,23 @@ const fletePorratear = !!(document.getElementById('fleteIncorporadoCheck') && do
 const totalUnidades = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
 const fletePorUnidad = fletePorratear && totalUnidades > 0 ? flete / totalUnidades : 0;
 
+// NUEVO — prorrateo de flete por PESO (solo informativo/desglose por línea;
+// NO cambia el total del pedido ni el IVA, que siguen calculándose exacto
+// igual que antes con fletePorUnidad). Se activa únicamente cuando TODAS las
+// líneas del pedido tienen peso_kg_unitario > 0 (de Gerencia o escrito a
+// mano); si falta el peso de cualquier producto, no se calcula nada aquí y
+// las pantallas que lo muestren deben caer de vuelta al reparto por unidades.
+const todasConPeso = lineas.length > 0 && lineas.every(l => (parseFloat(l.peso_kg_unitario) || 0) > 0);
+const pesoTotalPedido = todasConPeso
+  ? lineas.reduce((acc, l) => acc + l.cantidad_solicitada * l.peso_kg_unitario, 0)
+  : 0;
+let _fleteAsignadoPeso = 0;
+
 let subtotal = 0;
 let descuentos = 0;
 let iva = 0;
 
-lineas.forEach(l => {
+lineas.forEach((l, idx) => {
 const base = l.cantidad_solicitada * l.precio_base;
 const desc = base * l.descuento_aplicado;
 const neto = base - desc;
@@ -2133,6 +2184,24 @@ l._precioUnitResultante = gravado ? unitAntesIva * 1.19 : unitAntesIva;
 
 const netoConFlete = l.cantidad_solicitada * unitAntesIva;
 if (gravado) iva += netoConFlete * 0.19;
+
+// Desglose de flete por peso — misma técnica de "residuo a la última línea"
+// que ya se usa en el informe de negociación, para que la suma de las
+// líneas cuadre exacto con el flete total cobrado.
+if (todasConPeso && flete > 0 && pesoTotalPedido > 0) {
+  const pesoLinea = l.cantidad_solicitada * l.peso_kg_unitario;
+  const esUltima = idx === lineas.length - 1;
+  if (!esUltima) {
+    l._fleteLineaPeso = Math.round(flete * (pesoLinea / pesoTotalPedido));
+    _fleteAsignadoPeso += l._fleteLineaPeso;
+  } else {
+    l._fleteLineaPeso = flete - _fleteAsignadoPeso;
+  }
+  l._fletePorUnidadPeso = l.cantidad_solicitada > 0 ? Math.round(l._fleteLineaPeso / l.cantidad_solicitada) : 0;
+} else {
+  l._fleteLineaPeso = null;
+  l._fletePorUnidadPeso = null;
+}
 });
 
 // El flete SIEMPRE forma parte del total (esté prorrateado o aparte) — lo
