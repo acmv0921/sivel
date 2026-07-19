@@ -1186,7 +1186,7 @@ async function hacerLogin() {
     
     // Validar PIN individual (con fallback a PINs anteriores)
     const pinGuardado = String(usuario.pin_individual || usuario.pin || '').trim();
-    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(correo) >= 0;
+    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com","despachos@postecsa.com"].indexOf(correo) >= 0;
     if (pin !== pinGuardado) {
       err.textContent = '❌ PIN incorrecto'; return;
     }
@@ -1272,7 +1272,7 @@ async function restaurarSesionGuardada() {
     if (estado !== 'ACTIVO' && estado !== 'Activo') { localStorage.removeItem('sivil_sesion_comercial'); return; }
 
     const rol = String(usuario.rol || usuario.cargo || '').trim();
-    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(guardada.correo) >= 0;
+    const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com","despachos@postecsa.com"].indexOf(guardada.correo) >= 0;
     const rolesPermitidos = ["VENDEDOR","JEFE_VENTAS","ADMIN","GERENTE"];
     if (!esSuperusuario && rolesPermitidos.indexOf(rol) === -1) { localStorage.removeItem('sivil_sesion_comercial'); return; }
 
@@ -2810,11 +2810,14 @@ async function guardarAP() {
 if (_guardandoAP) { toast("⏳ Ya se está guardando este pedido..."); return; }
 if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
 if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
+const apManual = parseInt(document.getElementById('inputApId')?.value);
+if (!apManual || apManual < 1) { toast("⚠️ Escribe el número de AP del libro físico"); return; }
 _guardandoAP = true;
 try {
 
 const body = {
 accion: 'crearPreventa',
+ap_manual: apManual,
 cliente_nit: STATE.pedido.cliente.cliente_nit,
 vendedor_id: STATE.vendedor.id_vendedor,
 modo_prueba: MODO_PRUEBA,
