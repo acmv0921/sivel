@@ -1838,23 +1838,56 @@ function abrirModalProducto() {
 function filtrarProdModal(filtro="") {
   const q    = (filtro || document.getElementById('buscarProdModal')?.value || '').toLowerCase();
   const cont = document.getElementById('listaProdModal');
-  const lista = STATE.inventario.filter(p =>
+  const filtrados = STATE.inventario.filter(p =>
     !q || String(p.tmdescrip).toLowerCase().includes(q) || String(p.tmcode).includes(q)
   );
 
-  cont.innerHTML = lista.map(p => `
+  // FIX (2026-07-19): antes cada tmcode con Primera Y Segunda aparecía DOS VECES
+  // en esta lista, con filas idénticas y sin ninguna etiqueta de calidad — el
+  // vendedor no tenía forma de distinguirlas al mirar el listado. Se agrupa por
+  // tmcode (un solo renglón por producto, igual que ya hace abrirDetalleProducto
+  // internamente) y se agrega una insignia visible con las calidades disponibles,
+  // para que el vendedor vea la calidad "todo el tiempo" sin tener que abrir el detalle.
+  const porCodigo = {};
+  filtrados.forEach(p => {
+    const tc = String(p.tmcode);
+    if (!porCodigo[tc]) porCodigo[tc] = { base: p, primera: null, segunda: null };
+    const cal = (p.calidad || 'PRIMERA').toUpperCase();
+    if (cal === 'SEGUNDA') porCodigo[tc].segunda = p;
+    else porCodigo[tc].primera = p;
+  });
+
+  const badgeCalidad = (g) => {
+    if (g.primera && g.segunda) {
+      return `<span style="display:inline-flex;gap:3px;">
+        <span style="font-size:.62rem;font-weight:600;background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;">🥇 1ª</span>
+        <span style="font-size:.62rem;font-weight:600;background:#fffbeb;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;">🥈 2ª</span>
+      </span>`;
+    } else if (g.segunda) {
+      return `<span style="font-size:.62rem;font-weight:600;background:#fffbeb;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;">🥈 Solo 2ª</span>`;
+    }
+    return `<span style="font-size:.62rem;font-weight:600;background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;">🥇 1ª</span>`;
+  };
+
+  cont.innerHTML = Object.values(porCodigo).map(g => {
+    const p = g.primera || g.segunda; // para mostrar código/nombre/unidad
+    // Disponibilidad y precio: se muestra el de PRIMERA si existe, si no el de SEGUNDA
+    const pRef = g.primera || g.segunda;
+    return `
     <div class="producto-item" onclick="abrirDetalleProducto('${p.tmcode}')">
       <div class="prod-info">
         <div class="prod-code">COD ${p.tmcode}</div>
         <div class="prod-name">${p.tmdescrip}</div>
         <div class="prod-und">${p.tmund}</div>
+        <div style="margin-top:4px;">${badgeCalidad(g)}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;">
-        <div class="semaforo sem-${p.semaforo.toLowerCase()} " style="font-size:0.68rem;">${p.disponible} disp.</div>
-        ${p.precio_base ? `<div style="font-size:0.72rem;color:#666;margin-top:3px;">${fmt(p.precio_base)}</div>` : ''}
+        <div class="semaforo sem-${pRef.semaforo.toLowerCase()} " style="font-size:0.68rem;">${pRef.disponible} disp.</div>
+        ${pRef.precio_base ? `<div style="font-size:0.72rem;color:#666;margin-top:3px;">${fmt(pRef.precio_base)}</div>` : `<div style="font-size:0.62rem;color:#b91c1c;font-weight:600;margin-top:3px;">⚠️ Sin precio</div>`}
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function abrirDetalleProducto(tmcode) {
