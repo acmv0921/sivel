@@ -2856,25 +2856,47 @@ function abrirWAVenta(items) {
     const lineaVendedor = it.es_apoyo
       ? `\n   Vendedor: *${it.vendedor_nombre}* · gestionada por ${it.apoyo_por}`
       : '';
-    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})${lineaVendedor}\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
+    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})${lineaVendedor}`;
 
-    // Desglose de precio por producto (lista / con descuento / con descuento+flete),
-    // mismo dato que ya se ve en el detalle de la AP y en el PDF de negociación.
-    // NOTA: se evitan emojis pictográficos a color (🏷️💲🚚💵) — WhatsApp Desktop
-    // en Windows no siempre tiene la fuente de emoji completa y los muestra como ◆.
-    // Se usa texto simple + los símbolos ━ • · que sí son Unicode básico universal.
+    // Entrega: tipo, destino/zona, dirección de obra si hay transporte,
+    // contacto en obra, fecha solicitada, nombre de la obra, observaciones.
+    // Antes se omitían del mensaje — el vendedor los escribe en el pedido
+    // pero no llegaban al reporte de WhatsApp.
+    const tipoEntregaTxt = it.tipo_entrega === 'PLANTA' || !it.tipo_entrega
+      ? 'Recoge en planta'
+      : `Con transporte${it.destino ? ' — ' + it.destino : ''}`;
+    detalle += `\n   Entrega: ${tipoEntregaTxt}`;
+    if (it.nombre_obra)      detalle += `\n   Obra: ${it.nombre_obra}`;
+    if (it.direccion_obra)   detalle += `\n   Dirección: ${it.direccion_obra}`;
+    if (it.contacto_obra || it.cel_contacto) {
+      detalle += `\n   Contacto: ${it.contacto_obra||''}${it.cel_contacto ? ' · ' + it.cel_contacto : ''}`;
+    }
+    if (it.fecha_entrega)    detalle += `\n   Fecha entrega solicitada: ${it.fecha_entrega}`;
+    if (it.obs_entrega)      detalle += `\n   Observaciones: ${it.obs_entrega}`;
+    if (it.orden_compra_cliente) detalle += `\n   Orden de compra: ${it.orden_compra_cliente}`;
+    if (it.condiciones_pago) detalle += `\n   Condiciones de pago: ${it.condiciones_pago}`;
+
+    detalle += `\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
+
+    // Desglose por producto — SIEMPRE se muestra el nombre y cantidad,
+    // aunque no tenga precio_base configurado (antes se omitía el producto
+    // completo si el precio era 0, dejando el mensaje sin decir qué se vendió).
     const _totalUnidadesPedido = (it.detalle_lineas||[]).reduce((acc,l)=>acc+(parseFloat(l.cantidad_solicitada)||0),0);
     const _fletePedido = it.totales ? (Number(it.totales.flete)||0) : 0;
     const _fletePorUnidadPedido = _totalUnidadesPedido > 0 ? _fletePedido / _totalUnidadesPedido : 0;
     (it.detalle_lineas||[]).forEach(l => {
+      const cant = fmtN(l.cantidad_solicitada||0);
+      const calidadTxt = (l.calidad||'PRIMERA')==='SEGUNDA' ? ' (2a calidad)' : '';
+      let nota = `     • ${l.tmdescrip||''} — ${cant} ${l.tmund||'und'}${calidadTxt}`;
       const listaU = Number(l.precio_base)||0;
-      if (!listaU) return;
-      const descPct = Number(l.descuento_aplicado)||0;
-      const pactadoU = Math.round(listaU * (1 - descPct));
-      const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadPedido);
-      let nota = `     • ${l.tmdescrip||''}: Lista $${fmtN(listaU)}`;
-      if (descPct) nota += ` · c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
-      if (_fletePorUnidadPedido > 0) nota += ` · Flete/u: $${fmtN(_fletePorUnidadPedido)} · c/desc+flete: $${fmtN(pactadoConFleteU)}`;
+      if (listaU) {
+        const descPct = Number(l.descuento_aplicado)||0;
+        const pactadoU = Math.round(listaU * (1 - descPct));
+        const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadPedido);
+        nota += `: Lista $${fmtN(listaU)}`;
+        if (descPct) nota += ` · c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
+        if (_fletePorUnidadPedido > 0) nota += ` · Flete/u: $${fmtN(_fletePorUnidadPedido)} · c/desc+flete: $${fmtN(pactadoConFleteU)}`;
+      }
       detalle += `\n${nota}`;
     });
   });
