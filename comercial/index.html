@@ -534,6 +534,23 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         </div>
       </div>
 
+      <!-- VENTA DE APOYO — solo visible para usuarios habilitados (ej. Valentina/Despacho) -->
+      <div id="bloqueVentaApoyo" style="display:none;background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:.75rem 1rem;margin-bottom:.75rem;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;font-weight:700;color:#1a3a5c;">
+          <input type="checkbox" id="checkVentaApoyo" onchange="toggleVentaApoyo()" style="width:18px;height:18px;">
+          🤝 Es una venta de apoyo (cliente de otro vendedor)
+        </label>
+        <div id="selectorVendedorApoyado" style="display:none;margin-top:.6rem;">
+          <label class="form-label">Vendedor al que apoyas</label>
+          <select id="vendedorApoyadoSelect" class="form-control">
+            <option value="">Selecciona el vendedor...</option>
+          </select>
+          <div style="font-size:.7rem;color:#1a3a5c;margin-top:4px;">
+            La AP quedará registrada a nombre de este vendedor. Se guardará la nota de que tú la gestionaste como apoyo.
+          </div>
+        </div>
+      </div>
+
       <!-- PASO 1: Cliente -->
       <div id="paso1">
         <div class="form-group">
@@ -1220,7 +1237,11 @@ async function hacerLogin() {
       if (ucR) ucR.textContent = rol;
       card.style.display = 'block';
     }
-    
+
+    // Venta de apoyo: solo habilitado para cuentas explícitamente autorizadas
+    STATE.puedeApoyar = ["despachos@postecsa.com"].indexOf(correo) >= 0;
+    if (STATE.puedeApoyar) cargarVendedoresParaApoyo();
+
     // Activar sandbox si es admin
     if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
       activarSandbox();
@@ -1282,6 +1303,9 @@ async function restaurarSesionGuardada() {
 
     STATE.usuario  = guardada.correo;
     STATE.vendedor = usuario;
+
+    STATE.puedeApoyar = ["despachos@postecsa.com"].indexOf(guardada.correo) >= 0;
+    if (STATE.puedeApoyar) cargarVendedoresParaApoyo();
 
     if (guardada.correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
       activarSandbox();
@@ -1421,6 +1445,59 @@ async function cargarTodo() {
 restaurarBorradorPedido();
 }
 
+// ═══════════════════════════════════════════════════════════
+// VENTA DE APOYO — Valentina (Despacho) apoyando a un vendedor
+// ═══════════════════════════════════════════════════════════
+async function cargarVendedoresParaApoyo() {
+  try {
+    let usuarios;
+    try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
+    catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+
+    const vendedoresReales = usuarios.filter(u => {
+      const rol = String(u.rol || u.cargo || '').trim().toUpperCase();
+      const estado = String(u.estado || '').trim().toUpperCase();
+      return (rol === 'VENDEDOR' || rol === 'JEFE_VENTAS') && estado === 'ACTIVO';
+    });
+
+    STATE.vendedoresParaApoyo = vendedoresReales.map(u => ({
+      id_vendedor: u.id_vendedor || u.cedula || '',
+      nombre: u.nombre_vendedor || u.nombre_completo || u.nombre || ''
+    })).filter(v => v.id_vendedor && v.nombre);
+
+    const sel = document.getElementById('vendedorApoyadoSelect');
+    if (sel) {
+      sel.innerHTML = '<option value="">Selecciona el vendedor...</option>' +
+        STATE.vendedoresParaApoyo.map(v => `<option value="${v.id_vendedor}">${v.nombre}</option>`).join('');
+    }
+  } catch(e) {
+    console.error('Error cargando vendedores para apoyo:', e);
+  }
+}
+
+function toggleVentaApoyo() {
+  const check = document.getElementById('checkVentaApoyo');
+  const selectorDiv = document.getElementById('selectorVendedorApoyado');
+  if (selectorDiv) selectorDiv.style.display = check?.checked ? 'block' : 'none';
+  if (!check?.checked) {
+    const sel = document.getElementById('vendedorApoyadoSelect');
+    if (sel) sel.value = '';
+  }
+}
+
+// Muestra u oculta el bloque de venta de apoyo según el usuario logueado.
+// Se llama cada vez que se abre el formulario de nueva AP.
+function actualizarVisibilidadVentaApoyo() {
+  const bloque = document.getElementById('bloqueVentaApoyo');
+  if (!bloque) return;
+  bloque.style.display = STATE.puedeApoyar ? 'block' : 'none';
+  if (!STATE.puedeApoyar) {
+    const check = document.getElementById('checkVentaApoyo');
+    if (check) check.checked = false;
+    toggleVentaApoyo();
+  }
+}
+
 // Consulta el consecutivo sugerido y lo compara contra las APs REALMENTE
 // registradas (de cualquier vendedor). Si el número sugerido ya está
 // ocupado (por cualquiera, no solo por el vendedor actual), avanza al
@@ -1459,6 +1536,7 @@ async function cargarProximaAP() {
 
 function usarProximaAP() {
   irA('screenPedido');
+  actualizarVisibilidadVentaApoyo();
   setTimeout(async () => {
     const badge = document.getElementById('apReservadaBadge');
     const input = document.getElementById('inputApId');
@@ -1639,6 +1717,10 @@ function cardAP(ap) {
   const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
   const nombreC = cliente ? cliente.razon_social : ap.cliente_nit;
   const fecha   = fmtFecha(ap.fecha_creacion);
+  const esApoyo = String(ap.es_apoyo).toUpperCase() === 'TRUE' || ap.es_apoyo === true;
+  const badgeApoyo = esApoyo
+    ? `<div style="margin-top:3px;"><span style="background:#dbeafe;color:#1a3a5c;border:1px solid #3b82f6;border-radius:4px;padding:1px 6px;font-size:.65rem;font-weight:700;">🤝 Apoyo — gestionada por ${ap.creado_por_apoyo || 'Despacho'}</span></div>`
+    : '';
   return `
     <div class="ap-card ${est}" onclick="verAP('${ap.ap_id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -1649,6 +1731,7 @@ function cardAP(ap) {
             <span>📅 ${fecha}</span>
             <span>${ap.tipo_entrega || ''}</span>
           </div>
+          ${badgeApoyo}
         </div>
         <span class="ap-estado estado-${est}">${ap.estado_ap}</span>
       </div>
@@ -1822,6 +1905,8 @@ renderLineasAP();
 _TANDAS=[];seleccionarModoEntrega('unica');
 calcularTotales();
 initFotosPedido();
+const checkApoyo = document.getElementById('checkVentaApoyo');
+if (checkApoyo) { checkApoyo.checked = false; toggleVentaApoyo(); }
 
 borrarBorradorPedido();
 }
@@ -2349,6 +2434,7 @@ toast('✅ Pedido restaurado');
 async function iniciarNuevaAP() {
   // 1. Ir al formulario
   irA('screenPedido');
+  actualizarVisibilidadVentaApoyo();
 
   // 2. Obtener el siguiente número de AP REALMENTE disponible
   //    (salta automáticamente cualquier número ya ocupado por otro vendedor)
@@ -2432,7 +2518,7 @@ function calcularPlanEntregas(){
   STATE.pedido.plan_entregas = validas.length ? JSON.stringify(validas) : '';
 }
 
-function registrarApEnCesion(){
+function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre){
   try{
     const apId=document.getElementById('inputApId')?.value||'';
     const cliente=STATE.pedido.cliente;
@@ -2444,6 +2530,10 @@ function registrarApEnCesion(){
       lineas:STATE.pedido.lineas.length,
       total:totalTxt,
       hora:new Date().toLocaleString('es-CO'),
+      // Vendedor real dueño de la AP + info de venta de apoyo (si aplica)
+      vendedor_nombre: vendedorNombre || STATE.vendedor?.nombre_vendedor || '',
+      es_apoyo: !!esApoyo,
+      apoyo_por: apoyoPorNombre || '',
       // Datos completos de la negociación para el informe PDF
       detalle_lineas: JSON.parse(JSON.stringify(STATE.pedido.lineas||[])),
       totales: STATE.pedido._totales || null,
@@ -2520,7 +2610,8 @@ async function cerrarCesionYGenerarInforme(){
 
     let y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial');
     doc.setFontSize(9);
-    doc.text('Vendedor: ' + (STATE.vendedor?.nombre_vendedor||''), 14, y);
+    const _hayApoyoPDF = CESION_ACTUAL.some(it => it.es_apoyo);
+    doc.text((_hayApoyoPDF ? 'Gestionado por: ' : 'Vendedor: ') + (STATE.vendedor?.nombre_vendedor||'') + (_hayApoyoPDF ? ' (apoyo a vendedor)' : ''), 14, y);
     doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), pageW - 14, y, {align:'right'});
     y += 4;
     doc.text('Pedido(s) en esta visita: ' + CESION_ACTUAL.length, 14, y);
@@ -2544,6 +2635,7 @@ async function cerrarCesionYGenerarInforme(){
 
       doc.setFontSize(9);
       doc.text('Cliente: ' + (it.cliente_nombre||'') + '   ·   NIT: ' + (it.cliente_nit||''), 14, y); y += 5;
+      if (it.es_apoyo) { doc.text('Vendedor: ' + (it.vendedor_nombre||'') + '   ·   Gestionada por: ' + (it.apoyo_por||'') + ' (apoyo)', 14, y); y += 5; }
       const entrega = (it.tipo_entrega==='PLANTA') ? 'Venta en planta (recoge cliente)' : ('Con transporte — ' + (it.destino||''));
       doc.text('Entrega: ' + entrega, 14, y); y += 5;
       if (it.direccion_obra) { doc.text('Dirección de entrega: ' + it.direccion_obra, 14, y); y += 5; }
@@ -2747,8 +2839,12 @@ function abrirWAVenta(items) {
   if (!items || !items.length) return;
   const fmtN = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
   let detalle = '';
+  const hayApoyo = items.some(it => it.es_apoyo);
   items.forEach((it, i) => {
-    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
+    const lineaVendedor = it.es_apoyo
+      ? `\n   👤 Vendedor: *${it.vendedor_nombre}* · 🤝 gestionada por ${it.apoyo_por}`
+      : '';
+    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})${lineaVendedor}\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
 
     // NUEVO: desglose de precio por producto (lista / con descuento / con descuento+flete),
     // mismo dato que ya se ve en el detalle de la AP y en el PDF de negociación.
@@ -2767,11 +2863,14 @@ function abrirWAVenta(items) {
       detalle += `\n${nota}`;
     });
   });
+  const lineaCabeceraVendedor = hayApoyo
+    ? `🤝 Gestionado por: ${STATE.vendedor?.nombre_vendedor||''} (apoyo a vendedor)`
+    : `👤 Vendedor: ${STATE.vendedor?.nombre_vendedor||''}`;
   const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
 📋 *REPORTE DE VENTA — PEDIDO(S)*
 ━━━━━━━━━━━━━━━━━━
-👤 Vendedor: ${STATE.vendedor?.nombre_vendedor||''}
+${lineaCabeceraVendedor}
 🕐 Fecha: ${new Date().toLocaleString('es-CO')}
 📦 Pedido(s): ${items.length}
 ${detalle}
@@ -2812,6 +2911,25 @@ if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
 if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
 const apManual = parseInt(document.getElementById('inputApId')?.value);
 if (!apManual || apManual < 1) { toast("⚠️ Escribe el número de AP del libro físico"); return; }
+
+// Venta de apoyo: si el checkbox está marcado, la AP debe quedar a nombre
+// del vendedor real (para que sus métricas no se pierdan), con nota de
+// quién la gestionó como apoyo.
+let vendedorFinalId     = STATE.vendedor.id_vendedor;
+let vendedorFinalNombre = STATE.vendedor.nombre_vendedor;
+let esApoyo = false;
+let apoyoPorNombre = '';
+if (STATE.puedeApoyar && document.getElementById('checkVentaApoyo')?.checked) {
+  const selApoyado = document.getElementById('vendedorApoyadoSelect');
+  const idApoyado   = selApoyado?.value;
+  const nombreApoyado = selApoyado?.selectedOptions?.[0]?.textContent || '';
+  if (!idApoyado) { toast("⚠️ Selecciona a qué vendedor apoyas"); return; }
+  vendedorFinalId     = idApoyado;
+  vendedorFinalNombre = nombreApoyado;
+  esApoyo = true;
+  apoyoPorNombre = STATE.vendedor.nombre_vendedor;
+}
+
 _guardandoAP = true;
 try {
 
@@ -2819,7 +2937,9 @@ const body = {
 accion: 'crearPreventa',
 ap_manual: apManual,
 cliente_nit: STATE.pedido.cliente.cliente_nit,
-vendedor_id: STATE.vendedor.id_vendedor,
+vendedor_id: vendedorFinalId,
+es_apoyo: esApoyo,
+creado_por_apoyo: apoyoPorNombre,
 modo_prueba: MODO_PRUEBA,
 tipo_entrega: STATE.pedido.tipo_entrega,
 destino: STATE.pedido.destino || '',
@@ -2861,7 +2981,7 @@ if (!resultado || resultado.ok === false) {
 
 toast("✅ AP guardada correctamente");
 
-registrarApEnCesion();
+registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre);
 
 limpiarPedido();
 await cargarMisAPs();
