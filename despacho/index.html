@@ -234,6 +234,7 @@ table       { min-width: 480px; }
 @media (min-width: 480px) and (max-width: 767px) {
   .screen         { max-width: 540px; margin: 0 auto; padding: 1rem; }
   .nav-bottom     { max-width: 540px; left: 50%; transform: translateX(-50%); }
+  #barReparto     { max-width: 516px; left: 50%; right: auto; transform: translateX(-50%); }
   .kpi-grid       { grid-template-columns: repeat(2, 1fr); }
   .apps-grid      { grid-template-columns: repeat(2, 1fr); }
 }
@@ -274,6 +275,7 @@ table       { min-width: 480px; }
 
   /* Contenido más ancho */
   .screen         { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+  #barReparto     { left: 232px; right: 20px; max-width: 900px; bottom: 20px; }
 
   /* KPIs en 4 columnas */
   .kpi-grid       { grid-template-columns: repeat(4, 1fr); }
@@ -483,7 +485,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <button class="btn btn-outline btn-sm" id="btnModoReparto" onclick="toggleModoReparto()">🔗 Modo Reparto (combinar pedidos en un viaje)</button>
       </div>
     </div>
-    <div id="barReparto" class="card" style="display:none;background:#f5f0ff;border:1px solid #7c3aed;">
+    <div id="barReparto" class="card" style="display:none;background:#f5f0ff;border:2px solid #7c3aed;position:fixed;left:12px;right:12px;bottom:70px;z-index:9999;max-height:60vh;overflow-y:auto;box-shadow:0 -4px 20px rgba(124,58,237,.35);">
       <div class="card-title" style="color:#7c3aed;">🔗 Viaje Compartido (Modalidad de Reparto)</div>
       <div id="repartoResumen" style="font-size:0.82rem;margin-bottom:8px;color:#444;"></div>
       <div class="form-group">
@@ -494,7 +496,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <label class="form-label">Notas (opcional)</label>
         <input id="repartoNotas" class="form-control" type="text" placeholder="Ej: pedidos pequenos, mismo destino">
       </div>
-      <button class="btn btn-morado" onclick="confirmarViajeCompartido()">🔗 Confirmar Viaje Compartido</button>
+      <button class="btn btn-morado" onclick="confirmarViajeCompartido()" style="font-weight:800;">🔗 Confirmar Viaje Compartido</button>
       <button class="btn btn-outline" onclick="toggleModoReparto()" style="margin-left:6px;">Cancelar</button>
     </div>
     <div id="listaAPs">
@@ -1586,8 +1588,10 @@ function toggleModoReparto() {
   SELECCION_REPARTO.clear();
   const btn = document.getElementById('btnModoReparto');
   const bar = document.getElementById('barReparto');
+  const lista = document.getElementById('listaAPs');
   if (btn) btn.classList.toggle('btn-primary', MODO_REPARTO);
   if (bar) bar.style.display = 'none';
+  if (lista) lista.style.paddingBottom = MODO_REPARTO ? '420px' : '0';
   if (MODO_REPARTO) {
     const sel = document.getElementById('repartoVehiculo');
     if (sel) {
