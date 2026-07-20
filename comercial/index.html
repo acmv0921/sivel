@@ -2854,12 +2854,15 @@ function abrirWAVenta(items) {
   const hayApoyo = items.some(it => it.es_apoyo);
   items.forEach((it, i) => {
     const lineaVendedor = it.es_apoyo
-      ? `\n   👤 Vendedor: *${it.vendedor_nombre}* · 🤝 gestionada por ${it.apoyo_por}`
+      ? `\n   Vendedor: *${it.vendedor_nombre}* · gestionada por ${it.apoyo_por}`
       : '';
     detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})${lineaVendedor}\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
 
-    // NUEVO: desglose de precio por producto (lista / con descuento / con descuento+flete),
+    // Desglose de precio por producto (lista / con descuento / con descuento+flete),
     // mismo dato que ya se ve en el detalle de la AP y en el PDF de negociación.
+    // NOTA: se evitan emojis pictográficos a color (🏷️💲🚚💵) — WhatsApp Desktop
+    // en Windows no siempre tiene la fuente de emoji completa y los muestra como ◆.
+    // Se usa texto simple + los símbolos ━ • · que sí son Unicode básico universal.
     const _totalUnidadesPedido = (it.detalle_lineas||[]).reduce((acc,l)=>acc+(parseFloat(l.cantidad_solicitada)||0),0);
     const _fletePedido = it.totales ? (Number(it.totales.flete)||0) : 0;
     const _fletePorUnidadPedido = _totalUnidadesPedido > 0 ? _fletePedido / _totalUnidadesPedido : 0;
@@ -2869,25 +2872,25 @@ function abrirWAVenta(items) {
       const descPct = Number(l.descuento_aplicado)||0;
       const pactadoU = Math.round(listaU * (1 - descPct));
       const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadPedido);
-      let nota = `     • ${l.tmdescrip||''}: 🏷️ $${fmtN(listaU)}`;
-      if (descPct) nota += ` · 💲 c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
-      if (_fletePorUnidadPedido > 0) nota += ` · 🚚 flete/u: $${fmtN(_fletePorUnidadPedido)} · 💵 c/desc+flete: $${fmtN(pactadoConFleteU)}`;
+      let nota = `     • ${l.tmdescrip||''}: Lista $${fmtN(listaU)}`;
+      if (descPct) nota += ` · c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
+      if (_fletePorUnidadPedido > 0) nota += ` · Flete/u: $${fmtN(_fletePorUnidadPedido)} · c/desc+flete: $${fmtN(pactadoConFleteU)}`;
       detalle += `\n${nota}`;
     });
   });
   const lineaCabeceraVendedor = hayApoyo
-    ? `🤝 Gestionado por: ${STATE.vendedor?.nombre_vendedor||''} (apoyo a vendedor)`
-    : `👤 Vendedor: ${STATE.vendedor?.nombre_vendedor||''}`;
-  const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
+    ? `Gestionado por: ${STATE.vendedor?.nombre_vendedor||''} (apoyo a vendedor)`
+    : `Vendedor: ${STATE.vendedor?.nombre_vendedor||''}`;
+  const msg = `*POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
-📋 *REPORTE DE VENTA — PEDIDO(S)*
+*REPORTE DE VENTA — PEDIDO(S)*
 ━━━━━━━━━━━━━━━━━━
 ${lineaCabeceraVendedor}
-🕐 Fecha: ${new Date().toLocaleString('es-CO')}
-📦 Pedido(s): ${items.length}
+Fecha: ${new Date().toLocaleString('es-CO')}
+Pedido(s): ${items.length}
 ${detalle}
 ━━━━━━━━━━━━━━━━━━
-📄 Informe PDF con el detalle completo generado — adjúntalo en este chat.
+Informe PDF con el detalle completo generado — adjúntalo en este chat.
 ━━━━━━━━━━━━━━━━━━
 _SIVIL · POSTECSA v1.0_`;
 
@@ -3488,18 +3491,21 @@ async function generarInformeVisitaPDF(reg) {
 function abrirWAVisita(registro) {
   const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
   const gpsLink = registro.gps ? linkMaps(registro.gps.lat, registro.gps.lon) : 'Sin GPS';
-  const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
+  // NOTA: sin emojis pictográficos a color (🏭📋👤🏢📄🕐📍📝📞📷) — WhatsApp
+  // Desktop en Windows no siempre tiene la fuente de emoji completa y los
+  // muestra como ◆. Se usa texto simple + ━ • que sí son Unicode básico universal.
+  const msg = `*POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━
-📋 *REPORTE DE VISITA COMERCIAL*
+*REPORTE DE VISITA COMERCIAL*
 ━━━━━━━━━━━━━━━━━━
-👤 Vendedor: ${registro.vendedor}
-🏢 Cliente: ${registro.cliente.razon_social}
-📄 NIT: ${registro.cliente.cliente_nit}
-🕐 Hora: ${registro.hora}
-📍 Ubicación: ${gpsLink}
-${registro.notas ? '📝 Notas: ' + registro.notas : ''}
-📞 Canal: ${registro.canal||'Visita presencial'}
-📷 Fotos: ${registro.fotos.length > 0 ? registro.fotos.length+' foto(s) registrada(s)' : 'Sin fotos (contacto remoto)'}
+Vendedor: ${registro.vendedor}
+Cliente: ${registro.cliente.razon_social}
+NIT: ${registro.cliente.cliente_nit}
+Hora: ${registro.hora}
+Ubicación: ${gpsLink}
+${registro.notas ? 'Notas: ' + registro.notas : ''}
+Canal: ${registro.canal||'Visita presencial'}
+Fotos: ${registro.fotos.length > 0 ? registro.fotos.length+' foto(s) registrada(s)' : 'Sin fotos (contacto remoto)'}
 ━━━━━━━━━━━━━━━━━━
 _SIVIL · POSTECSA v1.0_`;
 

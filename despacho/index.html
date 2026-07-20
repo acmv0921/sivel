@@ -2684,21 +2684,24 @@ function abrirReporteWA(ap_id, placa, conductor) {
   });
 
   const notaNeg = notaNegociacionAP(ap||{});
-  const notaTxt = notaNeg.length ? `\n📝 *NOTA DE NEGOCIACIÓN (Comercial):*\n` + notaNeg.map(p => `  • ${p}`).join('\n') + '\n' : '';
+  const notaTxt = notaNeg.length ? `\n*NOTA DE NEGOCIACIÓN (Comercial):*\n` + notaNeg.map(p => `  • ${p}`).join('\n') + '\n' : '';
 
-  const msg = `🏭 *POSTECSA DE COLOMBIA S.A.S.*
+  // NOTA: sin emojis pictográficos a color (🏭📋📦🏢👤📅🚛👷) — WhatsApp Desktop
+  // en Windows no siempre tiene la fuente de emoji completa y los muestra como ◆.
+  // Se usa texto simple + ━ • que sí son Unicode básico universal.
+  const msg = `*POSTECSA DE COLOMBIA S.A.S.*
 ━━━━━━━━━━━━━━━━━━━━
-📋 *REPORTE DE DESPACHO*
+*REPORTE DE DESPACHO*
 ━━━━━━━━━━━━━━━━━━━━
-📦 *AP #${ap_id}*
-🏢 Cliente: ${cliente}
-👤 Vendedor: ${nombreVendedor(ap?.vendedor_id) || 'N/A'}
-📅 Fecha: ${fecha}
-🚛 Vehículo: ${placa}
-👷 Conductor: ${conductor||'N/A'}
-🏭 Tipo: ${ap?.tipo_entrega||''}
+*AP #${ap_id}*
+Cliente: ${cliente}
+Vendedor: ${nombreVendedor(ap?.vendedor_id) || 'N/A'}
+Fecha: ${fecha}
+Vehículo: ${placa}
+Conductor: ${conductor||'N/A'}
+Tipo: ${ap?.tipo_entrega||''}
 
-📦 *PRODUCTOS DESPACHADOS:*
+*PRODUCTOS DESPACHADOS:*
 ${detalleProd}${notaTxt}
 ━━━━━━━━━━━━━━━━━━━━
 _Generado por SIVIL · POSTECSA_`;
@@ -2801,21 +2804,23 @@ function generarPreviewNovedad() {
   const hora    = ahora.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
   const fechaHoy = ahora.toLocaleDateString('es-CO');
 
-  let msg = `⚠️ *NOVEDAD DE DESPACHO — POSTEC*
+  // NOTA: sin emojis pictográficos a color (⚠️📋🚚📅📆) — WhatsApp Desktop en
+  // Windows no siempre tiene la fuente de emoji completa y los muestra como ◆.
+  let msg = `*NOVEDAD DE DESPACHO — POSTEC*
 `;
   msg += `━━━━━━━━━━━━━━━━━━━━
 `;
-  msg += `📋 *AP #${ap_id}* — ${cliente}
+  msg += `*AP #${ap_id}* — ${cliente}
 `;
-  msg += `🚚 ${ap.tipo_entrega || ''}
+  msg += `${ap.tipo_entrega || ''}
 `;
-  msg += `📅 ${fechaHoy} a las ${hora}
+  msg += `${fechaHoy} a las ${hora}
 `;
   msg += `━━━━━━━━━━━━━━━━━━━━
 `;
   msg += `*Novedad:* ${tipo}
 `;
-  if (fecha) msg += `📆 *Nueva fecha:* ${fecha}
+  if (fecha) msg += `*Nueva fecha:* ${fecha}
 `;
   msg += `
 *Detalle:*
