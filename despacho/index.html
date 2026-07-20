@@ -470,7 +470,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <!-- DESPACHO -->
   <div id="screenDespacho" class="screen">
     <div class="card">
-      <div class="card-title">APs Pendientes de Despacho</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="card-title" style="margin-bottom:0;">APs Pendientes de Despacho</div>
+        <button class="btn btn-outline btn-sm" id="btnRefrescarAPs" onclick="refrescarDatosDespacho()" style="font-size:0.72rem;padding:5px 10px;">🔄 Actualizar</button>
+      </div>
       <div class="tabs">
         <button class="tab active" onclick="filtrarAPs('Pendiente',this)">Pendientes</button>
         <button class="tab" onclick="filtrarAPs('Despachado Parcial',this)">Con Saldo</button>
@@ -1155,6 +1158,20 @@ function iniciarApp() {
   // Agregar automáticamente al funcionario logueado si no existe
   if (S.funcionarios.length === 0) agregarFuncionariosDefault();
   cargarTodo();
+  iniciarAutoRefresh();
+}
+
+// Refresca los datos automáticamente cada 90s mientras la pantalla esté
+// visible y activa (no gasta batería/datos si el celular está bloqueado
+// o el usuario cambió de app). Así, si un vendedor crea una AP nueva
+// mientras Valentina tiene Despacho abierto, aparece sola sin que ella
+// tenga que recordar tocar "Actualizar".
+function iniciarAutoRefresh() {
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && !MODO_REPARTO) {
+      cargarTodo();
+    }
+  }, 90000);
 }
 
 function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
@@ -1259,6 +1276,20 @@ function sincronizarFuncionariosBackend(datos) {
     guardarFuncionariosLocal();
   } else if (S.funcionarios.length === 0) {
     agregarFuncionariosDefault();
+  }
+}
+
+async function refrescarDatosDespacho() {
+  const btn = document.getElementById('btnRefrescarAPs');
+  const textoOriginal = btn?.innerHTML;
+  if (btn) { btn.innerHTML = '⏳ Actualizando...'; btn.disabled = true; }
+  try {
+    await cargarTodo();
+    toast('✅ Datos actualizados — ' + S.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap)).length + ' AP(s) pendiente(s)');
+  } catch(e) {
+    toast('❌ Error al actualizar: ' + e.message);
+  } finally {
+    if (btn) { btn.innerHTML = textoOriginal; btn.disabled = false; }
   }
 }
 
