@@ -953,24 +953,31 @@ async function escribirGAS(body) {
     return; // NO escribe al Sheet
   }
   // Si no es sandbox, llamar la función real.
-  // Se agrega un timeout explícito (25s): sin esto, si la red se cae o queda
-  // inestable a mitad de una escritura, el fetch puede quedar esperando
-  // indefinidamente y el botón de guardado nunca se recupera.
+  // FIX BUG-01 (replicado desde Comercial — nunca se había aplicado aquí):
+  // antes se usaba mode:'no-cors', lo que hace la respuesta OPACA — el
+  // código no podía leer si el backend aceptó o rechazó la operación, y
+  // la función ni siquiera tenía un 'return'. Por eso TODAS las acciones
+  // de Despacho (confirmar despacho, registrar novedad, viaje compartido)
+  // asumían éxito siempre, aunque el backend hubiera devuelto un error real
+  // (ej: 'AP ya pertenece a otro viaje'). Content-Type 'text/plain' evita
+  // el preflight CORS, así que sigue siendo una "simple request" y Apps
+  // Script Web App responde con Access-Control abierto por defecto.
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000);
-    await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
       headers: {'Content-Type': 'text/plain'},
       body: JSON.stringify(body),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+    const resultado = await resp.json();
+    return resultado;
   } catch (e) {
-    console.error('escribirGAS: error o tiempo de espera agotado', e);
-    throw new Error('Sin conexión con el servidor — verifica tu internet e intenta de nuevo.');
+    console.error('escribirGAS: error de red o respuesta no válida', e);
+    return { ok: false, error: 'Error de conexión con el servidor: ' + e.message };
   }
-  await new Promise(r => setTimeout(r, 900));
 }
 
 function verLogSandbox() {
@@ -1670,8 +1677,30 @@ async function confirmarViajeCompartido() {
   const u = S.usuario || {};
   const usuario = u.nombre || u.nombre_completo || u.correo || '';
   if (!confirm(`Combinar ${ids.length} pedidos en un solo viaje compartido con el vehiculo ${placa}?`)) return;
-  await escribirGAS({ accion:'registrarViajeCompartido', ap_ids: ids, placa_vehiculo: placa, notas, usuario });
-  toast('Viaje compartido registrado');
+
+  const _btnConfirmarViaje = document.querySelector('#barReparto button.btn-morado');
+  if (_btnConfirmarViaje) { _btnConfirmarViaje.disabled = true; _btnConfirmarViaje.textContent = 'Guardando...'; }
+
+  let resultado;
+  try {
+    resultado = await escribirGAS({ accion:'registrarViajeCompartido', ap_ids: ids, placa_vehiculo: placa, notas, usuario });
+  } catch(e) {
+    resultado = { ok:false, error: e.message };
+  }
+
+  // FIX CRÍTICO: antes se mostraba 'Viaje compartido registrado' SIEMPRE,
+  // sin importar si el backend realmente lo guardó. Si una AP ya pertenecía
+  // a otro viaje (u otro error de validación), el backend respondía con
+  // ok:false pero el usuario veía un mensaje de éxito de todas formas —
+  // creyendo que el reparto quedó armado cuando en realidad no se guardó
+  // nada. Ahora se revisa la respuesta real antes de confirmar el éxito.
+  if (!resultado || resultado.ok === false) {
+    toast('❌ No se pudo registrar el viaje: ' + (resultado?.error || 'error desconocido del servidor'));
+    if (_btnConfirmarViaje) { _btnConfirmarViaje.disabled = false; _btnConfirmarViaje.textContent = '🔗 Confirmar Viaje Compartido'; }
+    return; // Se mantiene el modo reparto y la selección para que el usuario pueda corregir
+  }
+
+  toast('✅ Viaje compartido registrado correctamente');
   MODO_REPARTO = false;
   SELECCION_REPARTO.clear();
   const bar = document.getElementById('barReparto');
@@ -1925,7 +1954,7 @@ async function confirmarDespacho() {
           const tipo  = document.getElementById(`tipoProd_${l.detalle_id}`)?.value || 'A';
     if (carga < pend) todoCompleto = false;
 
-    await escribirGAS({
+    const resDesp = await escribirGAS({
       accion:             'registrarDespacho',
       ap_id:              ap.ap_id,
       detalle_id:         l.detalle_id,
@@ -1938,11 +1967,23 @@ async function confirmarDespacho() {
       conductor:          document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '',
       evidencia_carga_url: ''
     });
+    // FIX BUG-01: antes esto se ignoraba siempre (no-cors ciego). Si el
+    // backend rechaza el registro de una línea, se detiene aquí en vez de
+    // seguir despachando el resto y marcar la AP como completa sin serlo.
+    if (!resDesp || resDesp.ok === false) {
+      toast('❌ No se pudo registrar el despacho de ' + (l.tmcode||'') + ': ' + (resDesp?.error || 'error desconocido del servidor'));
+      _confirmandoDespacho = false;
+      if (_btnConfirmar) { _btnConfirmar.disabled = false; _btnConfirmar.textContent = _btnConfirmar.dataset._txt || 'Confirmar Despacho'; }
+      return;
+    }
   }
 
   const nuevoEstado = todoCompleto ? 'Despachado Total' : 'Despachado Parcial';
   const detalleFlete = document.getElementById('despDetalleFlete')?.value.trim() || '';
-  await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete });
+  const resEstado = await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete });
+  if (!resEstado || resEstado.ok === false) {
+    toast('⚠️ Los productos se registraron, pero no se pudo actualizar el estado de la AP: ' + (resEstado?.error || 'error desconocido'));
+  }
 
   const conductorFinal = document.getElementById('despConductor')?.value.trim() || VEH_SELECCIONADO?.conductor_nombre || '';
   // Mismo prorrateo de flete que usa abrirDespacho() y Comercial: flete / total de
