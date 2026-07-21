@@ -983,10 +983,27 @@ const _LOGO_SRC="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgIC
 const _logoEl=new Image();_logoEl.src=_LOGO_SRC;
 async function procesarFotoMDA(file,gps,quien){
   return new Promise(resolve=>{
+    // FIX: antes esta Promise no tenía manejo de error — si el archivo venía
+    // en un formato que el navegador no puede decodificar como imagen (ej.
+    // HEIC/HEIF, el formato por defecto de fotos en iPhone), img.onload NUNCA
+    // se disparaba y la Promise quedaba COLGADA PARA SIEMPRE. Como
+    // agregarFotoPedido() espera cada foto con 'await' dentro de un bucle,
+    // una sola foto de la galería en formato no soportado bloqueaba TODO el
+    // procesamiento del lote sin ningún mensaje de error — exactamente el
+    // reporte de 'no deja subir fotos de la galería' (Eduardo, comercial).
+    // Ahora se resuelve con null en caso de error, y se agrega un timeout
+    // de seguridad de 12s por si el navegador tampoco dispara el evento
+    // de error en algún caso extremo.
+    let resuelto=false;
+    const resolverUnaVez=(v)=>{ if(resuelto) return; resuelto=true; resolve(v); };
+    const timeoutSeguridad=setTimeout(()=>resolverUnaVez(null),12000);
     const reader=new FileReader();
+    reader.onerror=()=>{ clearTimeout(timeoutSeguridad); resolverUnaVez(null); };
     reader.onload=e=>{
       const img=new Image();
+      img.onerror=()=>{ clearTimeout(timeoutSeguridad); resolverUnaVez(null); };
       img.onload=()=>{
+        clearTimeout(timeoutSeguridad);
         const MAX=1200;let w=img.width,h=img.height;
         if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
         const cv=document.createElement('canvas');cv.width=w;cv.height=h;
@@ -1002,7 +1019,7 @@ async function procesarFotoMDA(file,gps,quien){
         const gT=gps?gps.lat+','+gps.lon+' (±'+gps.acc+'m)':'GPS N/D';
         ctx.font='bold '+fs+'px Arial';ctx.fillText(fecha+' '+hora+(quien?' · '+quien:''),w-10,h-bH+bH*.30);
         ctx.font=(Math.max(10,fs-2))+'px Arial';ctx.fillText('📍 '+gT,w-10,h-bH+bH*.70);
-        resolve(cv.toDataURL('image/jpeg',.78));
+        resolverUnaVez(cv.toDataURL('image/jpeg',.78));
       };img.src=e.target.result;
     };reader.readAsDataURL(file);
   });
@@ -1025,8 +1042,18 @@ function agregarFotoPedido(input){
   const files=Array.from(input.files);if(!files.length)return;
   toast('⏳ Procesando '+files.length+' foto(s)...');
   obtenerGPS().then(async gps=>{const quien=STATE.vendedor?.nombre_vendedor||'';
-    for(const file of files){const b64=await procesarFotoMDA(file,gps,quien);FOTOS_PEDIDO.push({b64,hora:new Date().toLocaleTimeString('es-CO')});}
-    input.value='';_renderFP();_cntFP();toast('✅ '+FOTOS_PEDIDO.length+' foto(s) del pedido con MDA POSTECSA');
+    let fallidas=0;
+    for(const file of files){
+      const b64=await procesarFotoMDA(file,gps,quien);
+      if(!b64){ fallidas++; continue; } // Foto en formato no soportado — se salta sin bloquear las demás
+      FOTOS_PEDIDO.push({b64,hora:new Date().toLocaleTimeString('es-CO')});
+    }
+    input.value='';_renderFP();_cntFP();
+    if(fallidas>0){
+      toast('⚠️ '+FOTOS_PEDIDO.length+' foto(s) agregada(s) — '+fallidas+' no se pudo(eron) procesar (formato no soportado, ej. HEIC de iPhone: cambia a JPG en Ajustes > Cámara > Formatos > Más compatible)');
+    } else {
+      toast('✅ '+FOTOS_PEDIDO.length+' foto(s) del pedido con MDA POSTECSA');
+    }
   });
 }
 
@@ -2530,9 +2557,16 @@ function calcularPlanEntregas(){
   STATE.pedido.plan_entregas = validas.length ? JSON.stringify(validas) : '';
 }
 
-function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre){
+function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre, apIdReal){
   try{
-    const apId=document.getElementById('inputApId')?.value||'';
+    // FIX: antes se leía SIEMPRE del campo del formulario
+    // (document.getElementById('inputApId').value), que puede estar vacío
+    // o desincronizado del número que el backend realmente guardó —
+    // causaba que el informe PDF mostrara 'Pedido 1 de 2 · AP #' sin
+    // ningún número. Ahora se usa el ap_id que devuelve el backend al
+    // crear la AP (fuente de verdad real), con el campo del formulario
+    // solo como respaldo si por algún motivo no llegara.
+    const apId = apIdReal || document.getElementById('inputApId')?.value || '';
     const cliente=STATE.pedido.cliente;
     const totalTxt=document.getElementById('rTotal')?.textContent||'0';
     const item={
@@ -3018,7 +3052,7 @@ if (!resultado || resultado.ok === false) {
 
 toast("✅ AP guardada correctamente");
 
-registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre);
+registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre, resultado.ap_id);
 
 limpiarPedido();
 await cargarMisAPs();
@@ -3270,8 +3304,18 @@ function agregarFotoVisita(input){
   const files=Array.from(input.files);if(!files.length)return;
   toast('⏳ Procesando '+files.length+' foto(s)...');
   obtenerGPS().then(async gps=>{_VGPS=gps||_VGPS;const quien=STATE.vendedor?.nombre_vendedor||'';
-    for(const file of files){const b64=await procesarFotoMDA(file,_VGPS,quien);_VFOTOS.push({b64,hora:new Date().toLocaleTimeString('es-CO')});}
-    input.value='';_renderVF();_cntF();toast('✅ '+_VFOTOS.length+' foto(s) con MDA POSTECSA');
+    let fallidas=0;
+    for(const file of files){
+      const b64=await procesarFotoMDA(file,_VGPS,quien);
+      if(!b64){ fallidas++; continue; }
+      _VFOTOS.push({b64,hora:new Date().toLocaleTimeString('es-CO')});
+    }
+    input.value='';_renderVF();_cntF();
+    if(fallidas>0){
+      toast('⚠️ '+_VFOTOS.length+' foto(s) agregada(s) — '+fallidas+' no se pudo(eron) procesar (formato no soportado)');
+    } else {
+      toast('✅ '+_VFOTOS.length+' foto(s) con MDA POSTECSA');
+    }
   });
 }
 

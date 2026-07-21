@@ -776,8 +776,17 @@ _logoImg.src = LOGO_B64;
 
 async function aplicarMarcaDeAgua(base64src, gps, funcionario) {
   return new Promise(resolve => {
+    // FIX: mismo patrón de bug que procesarFoto — sin manejo de error,
+    // esta Promise podía quedar colgada para siempre. Timeout de seguridad
+    // + onerror para nunca bloquear el flujo de despacho (que requiere
+    // mínimo 3 fotos para confirmar).
+    let resuelto = false;
+    const resolverUnaVez = (v) => { if (resuelto) return; resuelto = true; resolve(v); };
+    const timeoutSeguridad = setTimeout(() => resolverUnaVez(null), 12000);
     const img = new Image();
+    img.onerror = () => { clearTimeout(timeoutSeguridad); resolverUnaVez(null); };
     img.onload = () => {
+      clearTimeout(timeoutSeguridad);
       const canvas = document.createElement('canvas');
       canvas.width  = img.width;
       canvas.height = img.height;
@@ -819,7 +828,7 @@ async function aplicarMarcaDeAgua(base64src, gps, funcionario) {
       ctx.font = `${Math.max(10, fs-2)}px Arial`;
       ctx.fillText(linea2, margen, barY + barH * 0.68);
 
-      resolve(canvas.toDataURL('image/jpeg', 0.72));
+      resolverUnaVez(canvas.toDataURL('image/jpeg', 0.72));
     };
     img.src = base64src;
   });
@@ -828,10 +837,21 @@ async function aplicarMarcaDeAgua(base64src, gps, funcionario) {
 // Captura foto, comprime y aplica marca de agua
 async function procesarFoto(file, gps, funcionario) {
   return new Promise(resolve => {
+    // FIX: mismo bug — sin onerror ni timeout, un archivo en formato no
+    // soportado (ej. HEIC de iPhone elegido desde galería) dejaba esta
+    // Promise colgada para siempre, bloqueando el resto de fotos del lote
+    // y, en Despacho, impidiendo llegar al mínimo de 3 fotos requeridas
+    // para poder confirmar el despacho — sin ningún mensaje de error.
+    let resuelto = false;
+    const resolverUnaVez = (v) => { if (resuelto) return; resuelto = true; resolve(v); };
+    const timeoutSeguridad = setTimeout(() => resolverUnaVez(null), 12000);
     const reader = new FileReader();
+    reader.onerror = () => { clearTimeout(timeoutSeguridad); resolverUnaVez(null); };
     reader.onload = async e => {
       const img = new Image();
+      img.onerror = () => { clearTimeout(timeoutSeguridad); resolverUnaVez(null); };
       img.onload = async () => {
+        clearTimeout(timeoutSeguridad);
         // Comprimir a 1200px max (más alta que antes para que la MDA se vea)
         const MAX = 1200;
         let w = img.width, h = img.height;
@@ -843,7 +863,7 @@ async function procesarFoto(file, gps, funcionario) {
         const comprimida = c.toDataURL('image/jpeg', 0.75);
         // Aplicar marca de agua
         const conMDA = await aplicarMarcaDeAgua(comprimida, gps, funcionario);
-        resolve(conMDA);
+        resolverUnaVez(conMDA);
       };
       img.src = e.target.result;
     };
@@ -2704,14 +2724,20 @@ async function agregarFotosDespacho(input) {
   GPS_DESP    = gps;
   const quien = S.vendedor?.nombre_vendedor||'Patio';
 
+  let fallidas = 0;
   for (const file of files) {
     const b64 = await procesarFoto(file, gps, quien);
+    if (!b64) { fallidas++; continue; } // Foto en formato no soportado — se salta sin bloquear las demás
     FOTOS_DESP.push({ b64, gps, hora: new Date().toLocaleTimeString('es-CO') });
   }
   input.value='';
   renderFotosDespacho();
   actualizarCntFotos();
-  toast(`✅ ${FOTOS_DESP.length} foto(s) con marca de agua`);
+  if (fallidas > 0) {
+    toast(`⚠️ ${FOTOS_DESP.length} foto(s) agregada(s) — ${fallidas} no se pudo(eron) procesar (formato no soportado, ej. HEIC de iPhone)`);
+  } else {
+    toast(`✅ ${FOTOS_DESP.length} foto(s) con marca de agua`);
+  }
 }
 
 function renderFotosDespacho() {
