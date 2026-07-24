@@ -349,6 +349,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   padding:2px 8px;border-radius:12px;margin-top:2px;
   background:#dbeafe;color:#1e40af;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -640,6 +641,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn"        onclick="irA('screenPromociones')"  id="navPromociones"><span class="icon">🔥</span>Promos</button>
   <button class="nav-btn"        onclick="irA('screenUsuarios')"     id="navUsuarios">   <span class="icon">👥</span>Usuarios</button>
     <button class="nav-btn" id="navInventDrive" onclick="irA('screenInventDrive')"><span class="icon">📥</span>Inventario</button>
+  <button class="nav-btn" id="navInformes" onclick="irA('screenInformes')"><span class="icon">📋</span>Informes</button>
 </nav>
 
 <!-- PANTALLA: IMPORTAR INVENTARIO DRIVE -->
@@ -723,6 +725,61 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- INFORME DE VENTAS (AP / vendedor / producto / cantidad / descuento / valor / flete) -->
+<div id="screenInformes" class="screen">
+  <div class="card">
+    <div class="card-title">📋 Informe de Ventas</div>
+    <p style="font-size:.72rem;color:#666;margin:0 0 10px;">
+      Un renglón por producto vendido. El flete mostrado es el de la AP completa (no se reparte por producto).
+    </p>
+
+    <div class="form-group">
+      <label class="form-label">Vendedor</label>
+      <select id="infFiltroVendedor" class="form-control" onchange="renderInformeGerencia()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Desde</label>
+        <input id="infFiltroDesde" type="date" class="form-control" onchange="renderInformeGerencia()">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">Hasta</label>
+        <input id="infFiltroHasta" type="date" class="form-control" onchange="renderInformeGerencia()">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Buscar (AP, cliente o producto)</label>
+      <input id="infFiltroTexto" class="form-control" placeholder="Ej: 1968, Felipe, bloque..." oninput="renderInformeGerencia()">
+    </div>
+
+    <div style="display:flex;gap:8px;margin:10px 0;">
+      <button class="btn btn-outline btn-sm" onclick="limpiarFiltrosInforme()">🔄 Limpiar filtros</button>
+      <button class="btn btn-primary btn-sm" onclick="exportarInformeExcel()">📥 Descargar Excel</button>
+    </div>
+
+    <div id="infResumen" style="font-size:.78rem;color:#444;margin-bottom:8px;font-weight:600;"></div>
+
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:680px;">
+        <thead>
+          <tr style="background:#14532d;color:#fff;text-align:left;">
+            <th style="padding:6px 8px;">AP</th>
+            <th style="padding:6px 8px;">Vendedor</th>
+            <th style="padding:6px 8px;">Producto</th>
+            <th style="padding:6px 8px;text-align:right;">Cant.</th>
+            <th style="padding:6px 8px;text-align:right;">Dcto %</th>
+            <th style="padding:6px 8px;text-align:right;">Valor Total</th>
+            <th style="padding:6px 8px;text-align:right;">Flete AP</th>
+          </tr>
+        </thead>
+        <tbody id="infTablaBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -1206,6 +1263,7 @@ async function cargarDatos() {
     renderPrecios();
     renderVendedores();
     renderFlota();
+    renderInformeGerencia();
     poblarSelectProductos();
   } catch(e) { toast("Error cargando datos: "+e.message); }
 }
@@ -1761,6 +1819,143 @@ async function actualizarPrecio() {
 // =============================================================================
 // VENDEDORES
 // =============================================================================
+// =============================================================================
+// INFORME DE VENTAS — AP / vendedor / producto / cantidad / descuento / valor / flete
+// =============================================================================
+const fmtNInf = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
+
+function _nombreVendedorInf(vendedor_id) {
+  const v = G.vendedores.find(x => String(x.id_vendedor) === String(vendedor_id) || String(x.cedula) === String(vendedor_id));
+  return v ? (v.nombre_vendedor || v.nombre_completo || '') : ('ID ' + vendedor_id);
+}
+
+function _nombreProductoInf(tmcode) {
+  const p = G.productos.find(x => String(x.tmcode) === String(tmcode));
+  return p ? p.tmdescrip : ('COD ' + tmcode);
+}
+
+// Combina DETALLE_AP (línea de producto) con PREVENTAS_AP (vendedor, fecha, flete)
+// una sola vez por carga de datos — se recalcula solo cuando cambian los filtros,
+// no en cada tecla, para no recorrer todo en cada render si la lista es grande.
+function _construirFilasInforme() {
+  const apsPorId = {};
+  G.aps.forEach(a => { apsPorId[String(a.ap_id)] = a; });
+
+  return G.detalles
+    .filter(d => apsPorId[String(d.ap_id)] && apsPorId[String(d.ap_id)].estado_ap !== 'Cancelado')
+    .map(d => {
+      const ap = apsPorId[String(d.ap_id)];
+      const cant = parseFloat(d.cantidad_solicitada) || 0;
+      const precioBase = parseFloat(d.precio_base) || 0;
+      const descuento = parseFloat(d.descuento_aplicado) || 0;
+      const valorTotal = cant * precioBase * (1 - descuento);
+      return {
+        ap_id: d.ap_id,
+        vendedor_id: ap.vendedor_id,
+        vendedor_nombre: _nombreVendedorInf(ap.vendedor_id),
+        cliente_nit: ap.cliente_nit,
+        producto: _nombreProductoInf(d.tmcode),
+        tmcode: d.tmcode,
+        cantidad: cant,
+        descuento_pct: descuento * 100,
+        valor_total: valorTotal,
+        flete_ap: parseFloat(ap.flete_valor) || 0,
+        fecha_creacion: ap.fecha_creacion
+      };
+    });
+}
+
+function poblarFiltroVendedorInforme() {
+  const sel = document.getElementById('infFiltroVendedor');
+  if (!sel) return;
+  const nombresUnicos = [...new Set(G.aps.map(a => _nombreVendedorInf(a.vendedor_id)).filter(Boolean))].sort();
+  const valorActual = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + nombresUnicos.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.value = valorActual; // conservar selección si sigue existiendo
+}
+
+function _filasInformeFiltradas() {
+  const filas = _construirFilasInforme();
+  const filtroVend = document.getElementById('infFiltroVendedor')?.value || '';
+  const desde = document.getElementById('infFiltroDesde')?.value || '';
+  const hasta = document.getElementById('infFiltroHasta')?.value || '';
+  const texto = (document.getElementById('infFiltroTexto')?.value || '').toLowerCase().trim();
+
+  return filas.filter(f => {
+    if (filtroVend && f.vendedor_nombre !== filtroVend) return false;
+    if (desde || hasta) {
+      const fechaFila = f.fecha_creacion ? new Date(f.fecha_creacion) : null;
+      if (fechaFila) {
+        if (desde && fechaFila < new Date(desde)) return false;
+        if (hasta && fechaFila > new Date(hasta + 'T23:59:59')) return false;
+      }
+    }
+    if (texto) {
+      const hay = String(f.ap_id).includes(texto) ||
+                  f.vendedor_nombre.toLowerCase().includes(texto) ||
+                  f.producto.toLowerCase().includes(texto);
+      if (!hay) return false;
+    }
+    return true;
+  });
+}
+
+function renderInformeGerencia() {
+  poblarFiltroVendedorInforme();
+  const filas = _filasInformeFiltradas();
+  const tbody = document.getElementById('infTablaBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = filas.map((f, i) => `
+    <tr style="border-bottom:1px solid #e5e7eb;background:${i%2===0?'#f9fafb':'#fff'};">
+      <td style="padding:5px 8px;font-weight:700;color:#14532d;">#${f.ap_id}</td>
+      <td style="padding:5px 8px;">${f.vendedor_nombre}</td>
+      <td style="padding:5px 8px;">${f.producto}</td>
+      <td style="padding:5px 8px;text-align:right;">${fmtNInf(f.cantidad)}</td>
+      <td style="padding:5px 8px;text-align:right;">${f.descuento_pct?f.descuento_pct.toFixed(0)+'%':'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:600;">$${fmtNInf(f.valor_total)}</td>
+      <td style="padding:5px 8px;text-align:right;color:#7c3200;">$${fmtNInf(f.flete_ap)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" style="padding:20px;text-align:center;color:#999;">Sin resultados para estos filtros</td></tr>';
+
+  const totalValor = filas.reduce((s,f)=>s+f.valor_total, 0);
+  const apsUnicas = new Set(filas.map(f=>f.ap_id)).size;
+  const resumen = document.getElementById('infResumen');
+  if (resumen) resumen.textContent = `${filas.length} línea(s) de producto · ${apsUnicas} AP(s) · Total: $${fmtNInf(totalValor)}`;
+}
+
+function limpiarFiltrosInforme() {
+  document.getElementById('infFiltroVendedor').value = '';
+  document.getElementById('infFiltroDesde').value = '';
+  document.getElementById('infFiltroHasta').value = '';
+  document.getElementById('infFiltroTexto').value = '';
+  renderInformeGerencia();
+}
+
+function exportarInformeExcel() {
+  const filas = _filasInformeFiltradas();
+  if (!filas.length) { toast('No hay datos para exportar con estos filtros'); return; }
+
+  const datosExcel = filas.map(f => ({
+    'AP': f.ap_id,
+    'Vendedor': f.vendedor_nombre,
+    'Producto': f.producto,
+    'Cantidad': f.cantidad,
+    'Descuento %': f.descuento_pct,
+    'Valor Total': Math.round(f.valor_total),
+    'Costo de Transporte (AP)': f.flete_ap
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(datosExcel);
+  ws['!cols'] = [{wch:8},{wch:26},{wch:36},{wch:10},{wch:12},{wch:16},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Informe de Ventas');
+
+  const fechaHoy = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `SIVIL_Informe_Ventas_${fechaHoy}.xlsx`);
+  toast('✅ Excel descargado — ' + filas.length + ' línea(s)');
+}
+
 function renderVendedores() {
   const cont = document.getElementById('listaVendedores');
 
@@ -1921,8 +2116,10 @@ function irA(screenId) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
-    screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios'};
+    screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
+  if (screenId === 'screenInformes') renderInformeGerencia();
   window.scrollTo(0,0);
 }
 
