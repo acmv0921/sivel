@@ -3293,7 +3293,9 @@ function capturarGPS() {
   );
 }
 
+let _guardandoCliente = false;
 async function guardarCliente() {
+  if (_guardandoCliente) return;
   const nit    = document.getElementById('ncNit').value.trim();
   const nombre = document.getElementById('ncNombre').value.trim();
   const gps    = document.getElementById('ncGps').value.trim();
@@ -3314,8 +3316,17 @@ async function guardarCliente() {
     foto_fachada_url:  ''
   };
 
+  _guardandoCliente = true;
+  const btnCliente = document.querySelector('button[onclick="guardarCliente()"]');
+  if (btnCliente) { btnCliente.disabled = true; btnCliente.dataset._txt = btnCliente.textContent; btnCliente.textContent = 'Guardando...'; }
   err.textContent = "Guardando...";
-  const resultadoCliente = await escribirGAS(body);
+  let resultadoCliente;
+  try {
+    resultadoCliente = await escribirGAS(body);
+  } finally {
+    _guardandoCliente = false;
+    if (btnCliente) { btnCliente.disabled = false; btnCliente.textContent = btnCliente.dataset._txt || '💾 Guardar Cliente'; }
+  }
 
   if (!resultadoCliente || resultadoCliente.ok === false) {
     err.textContent = "❌ " + (resultadoCliente && resultadoCliente.error ? resultadoCliente.error : "No se pudo guardar el cliente");
