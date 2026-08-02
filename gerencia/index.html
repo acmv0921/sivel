@@ -1551,12 +1551,19 @@ function renderAlertas() {
     </div>`;
 }
 
+let _guardandoStockMin = {};
 async function guardarStockMinimo(tmcode) {
+  if (_guardandoStockMin[tmcode]) return;
   const input = document.getElementById('stockMin_' + tmcode);
   const val = parseFloat(input.value);
   if (isNaN(val) || val < 0) { alert('Valor invalido'); return; }
-  await escribirGAS({ accion:'actualizarStockMinimo', tmcode, stock_minimo: val });
-  await cargarDatos();
+  _guardandoStockMin[tmcode] = true;
+  try {
+    await escribirGAS({ accion:'actualizarStockMinimo', tmcode, stock_minimo: val });
+    await cargarDatos();
+  } finally {
+    _guardandoStockMin[tmcode] = false;
+  }
 }
 
 // =============================================================================
@@ -1769,7 +1776,9 @@ function abrirModalPrecio() {
   document.getElementById('modalPrecio').classList.add('show');
 }
 
+let _guardandoPrecio = false;
 async function guardarPrecio() {
+  if (_guardandoPrecio) return;
   const tmcode = document.getElementById('precioProducto').value;
   const base   = parseFloat(document.getElementById('precioBase').value)||0;
   const descMax= (parseFloat(document.getElementById('precioDescMax').value)||0)/100;
@@ -1779,13 +1788,18 @@ async function guardarPrecio() {
   const hasta  = document.getElementById('precioHasta').value;
   const err    = document.getElementById('precioErr');
   if (!tmcode||!base) { err.textContent="Producto y precio base requeridos"; return; }
+  _guardandoPrecio = true;
   err.textContent="Guardando...";
-  await escribirGAS({accion:'crearPrecio',tmcode,precio_base_planta:base,descuento_max_vendedor:descMax,
-    costo_flete_unidad_zonaA:fleteA,costo_flete_unidad_zonaB:fleteB,
-    fecha_vigencia_inicio:desde,fecha_vigencia_fin:hasta});
-  cerrarModal('modalPrecio');
-  toast("✅ Política de precio guardada");
-  await cargarDatos();
+  try {
+    await escribirGAS({accion:'crearPrecio',tmcode,precio_base_planta:base,descuento_max_vendedor:descMax,
+      costo_flete_unidad_zonaA:fleteA,costo_flete_unidad_zonaB:fleteB,
+      fecha_vigencia_inicio:desde,fecha_vigencia_fin:hasta});
+    cerrarModal('modalPrecio');
+    toast("✅ Política de precio guardada");
+    await cargarDatos();
+  } finally {
+    _guardandoPrecio = false;
+  }
 }
 
 function abrirEditPrecio(p) {
@@ -2037,7 +2051,9 @@ function editarVendedor(v) {
   abrirModalVendedor(vend);
 }
 
+let _guardandoVendedor = false;
 async function guardarVendedor() {
+  if (_guardandoVendedor) return;
   if (!_esAdmin) { toast("⛔ Solo el Administrador puede gestionar usuarios"); return; }
   const id     = document.getElementById('vendId').value.trim();
   const nombre = document.getElementById('vendNombre').value.trim();
@@ -2046,16 +2062,21 @@ async function guardarVendedor() {
   const err    = document.getElementById('vendErr');
   if (!id||!nombre||!correo) { err.textContent="Todos los campos son obligatorios"; return; }
   const editId = document.getElementById('modalVendedor').dataset.editId;
+  _guardandoVendedor = true;
   err.textContent="Guardando...";
-  if (editId) {
-    await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
-    toast("✅ Vendedor actualizado");
-  } else {
-    await escribirGAS({accion:'crearVendedor',id_vendedor:id,nombre_vendedor:nombre,correo_usuario:correo,estado});
-    toast("✅ Vendedor creado");
+  try {
+    if (editId) {
+      await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
+      toast("✅ Vendedor actualizado");
+    } else {
+      await escribirGAS({accion:'crearVendedor',id_vendedor:id,nombre_vendedor:nombre,correo_usuario:correo,estado});
+      toast("✅ Vendedor creado");
+    }
+    cerrarModal('modalVendedor');
+    await cargarDatos();
+  } finally {
+    _guardandoVendedor = false;
   }
-  cerrarModal('modalVendedor');
-  await cargarDatos();
 }
 
 async function toggleVendedor(id, nuevoEstado) {
@@ -2214,7 +2235,9 @@ function abrirNuevaPromo() {
   document.getElementById('modalPromo').classList.add('show');
 }
 
+let _guardandoPromo = false;
 async function guardarPromo() {
+  if (_guardandoPromo) return;
   const titulo  = document.getElementById('promoTitulo')?.value.trim();
   const desc    = document.getElementById('promoDescTxt')?.value.trim();
   const tmcode  = document.getElementById('promoTmcode')?.value.trim();
@@ -2225,19 +2248,27 @@ async function guardarPromo() {
   if (!titulo || !ini || !fin) { toast('⚠️ Título y fechas son obligatorios'); return; }
   if (new Date(fin) < new Date(ini)) { toast('⚠️ La fecha fin debe ser posterior al inicio'); return; }
 
-  const r = await escribirGAS({
-    accion: 'crearPromocion',
-    titulo, descripcion: desc, tmcode, descuento_pct: pct,
-    fecha_inicio: ini, fecha_fin: fin,
-    creado_por: G.usuario?.nombre_vendedor || 'Gerencia'
-  });
+  _guardandoPromo = true;
+  const btnPromo = document.querySelector('button[onclick="guardarPromo()"]');
+  if (btnPromo) { btnPromo.disabled = true; btnPromo.dataset._txt = btnPromo.textContent; btnPromo.textContent = 'Guardando...'; }
+  try {
+    const r = await escribirGAS({
+      accion: 'crearPromocion',
+      titulo, descripcion: desc, tmcode, descuento_pct: pct,
+      fecha_inicio: ini, fecha_fin: fin,
+      creado_por: G.usuario?.nombre_vendedor || 'Gerencia'
+    });
 
-  if (r?.ok) {
-    toast(`🔥 Promoción "${titulo}" activada`);
-    cerrarModal('modalPromo');
-    await cargarPromociones();
-  } else {
-    toast('❌ Error al crear la promoción');
+    if (r?.ok) {
+      toast(`🔥 Promoción "${titulo}" activada`);
+      cerrarModal('modalPromo');
+      await cargarPromociones();
+    } else {
+      toast('❌ Error al crear la promoción');
+    }
+  } finally {
+    _guardandoPromo = false;
+    if (btnPromo) { btnPromo.disabled = false; btnPromo.textContent = btnPromo.dataset._txt || '🔥 Activar Promoción'; }
   }
 }
 
