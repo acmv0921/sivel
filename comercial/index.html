@@ -2778,7 +2778,7 @@ function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre, apIdReal){
       transportista_flete: STATE.pedido.transportista_flete||'',
       // Fotos propias de ESTE pedido — no las de la visita, para que cada AP muestre solo sus propias fotos
       fotos: FOTOS_PEDIDO.map(f=>({b64:f.b64,hora:f.hora})),
-      archivos_adjuntos: ARCHIVOS_PEDIDO.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano}))
+      archivos_adjuntos: ARCHIVOS_PEDIDO.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano,b64:f.b64}))
     };
     CESION_ACTUAL.push(item);
     localStorage.setItem('sivel_cesion_actual', JSON.stringify(CESION_ACTUAL));
@@ -3000,19 +3000,42 @@ async function cerrarCesionYGenerarInforme(){
       const _fotosPedido = (it.fotos || []).map(f => ({b64: f.b64, origen: 'Pedido'}));
       const _fotosVisita = (_visitaAsociada && _visitaAsociada.fotos || []).map(f => ({b64: f.b64, origen: 'Visita'}));
       const _fotosInforme = _fotosPedido.concat(_fotosVisita);
-      if (_fotosInforme.length) {
+      // Archivos adjuntos (no-fotos) del pedido + de la visita asociada — mismo
+      // criterio que las fotos: se juntan ambos orígenes en un solo informe.
+      const _archivosPedido = (it.archivos_adjuntos || []);
+      const _archivosVisitaAsoc = (_visitaAsociada && _visitaAsociada.archivos_adjuntos || []);
+      const _archivosInforme = _archivosPedido.concat(_archivosVisitaAsoc);
+      const _archivosImgInforme = _archivosInforme.filter(a => a.b64 && /^data:image\//.test(a.b64));
+      const _archivosOtrosInforme = _archivosInforme.filter(a => !(a.b64 && /^data:image\//.test(a.b64)));
+      if (_fotosInforme.length || _archivosInforme.length) {
         _pdfFooter(doc, pageW, pageH);
         doc.addPage();
         y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id);
         const imgW = 85, imgH = 64, gap = 6;
         let col = 0, x = 14;
-        _fotosInforme.forEach(function(f){
+        const _todasImgsInforme = _fotosInforme.concat(_archivosImgInforme);
+        _todasImgsInforme.forEach(function(f){
           if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id); col = 0; x = 14; }
           try{ doc.addImage(f.b64, 'JPEG', x, y, imgW, imgH); }catch(e){}
           if (col === 0) { x = 14 + imgW + gap; col = 1; }
           else { x = 14; col = 0; y += imgH + gap; }
         });
         if (col === 1) y += imgH + gap;
+        if (_archivosOtrosInforme.length) {
+          if (y + 12 > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id); }
+          doc.setFillColor(230, 236, 245);
+          doc.rect(14, y, pageW - 28, 6.5, 'F');
+          doc.setFont(undefined, 'bold'); doc.setFontSize(8.5); doc.setTextColor(37, 99, 168);
+          doc.text('OTROS ARCHIVOS ADJUNTOS (' + _archivosOtrosInforme.length + ')', 17, y + 4.5);
+          doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+          y += 10;
+          _archivosOtrosInforme.forEach(function(f){
+            if (y + 5.5 > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Evidencia Fotográfica — AP #' + it.ap_id); }
+            const kb = f.tamano ? (f.tamano < 1024*1024 ? Math.round(f.tamano/1024)+' KB' : (f.tamano/(1024*1024)).toFixed(1)+' MB') : '';
+            doc.text('•  ' + f.nombre + (kb ? '  (' + kb + ')' : ''), 18, y);
+            y += 4.8;
+          });
+        }
         if (idx < CESION_ACTUAL.length - 1) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial'); }
       }
     });
@@ -3541,7 +3564,7 @@ async function guardarVisita(){
     cel:document.getElementById('visitaContCel')?.value.trim()||'',
     correo:document.getElementById('visitaContCorreo')?.value.trim()||''},
     fotos:_VFOTOS.map(f=>({b64:f.b64,hora:f.hora})),
-    archivos_adjuntos:_VARCHIVOS.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano})),
+    archivos_adjuntos:_VARCHIVOS.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano,b64:f.b64})),
     notas:document.getElementById('visitaNotas')?.value.trim()||'',productos_interes:_VPRODINT.slice(),competencia:_VCOMP.filter(c=>c.nombre||c.producto||c.precio),
     hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
   // Se baja el tope de 50 a 20 visitas retenidas: 50 visitas con 3+ fotos
@@ -3708,6 +3731,49 @@ async function generarInformeVisitaPDF(reg) {
         if (col === 0) { x = 14 + imgW + gap; col = 1; }
         else { x = 14; col = 0; y += imgH + gap; }
       });
+      if (col === 1) y += imgH + gap;
+    }
+
+    // Archivos adjuntos de la visita (cotizaciones, RUT, planos, etc.): las
+    // imágenes se embeben igual que las fotos; el resto de tipos (PDF, Word,
+    // Excel...) se listan por nombre y tamaño, porque un PDF no puede
+    // "incrustar" visualmente el contenido de otro tipo de documento.
+    const archivosVisita = (reg.archivos_adjuntos || []);
+    const archivosVisitaImg = archivosVisita.filter(a => a.b64 && /^data:image\//.test(a.b64));
+    const archivosVisitaOtros = archivosVisita.filter(a => !(a.b64 && /^data:image\//.test(a.b64)));
+    if (archivosVisitaImg.length) {
+      const imgW = 85, imgH = 64, gap = 6;
+      ensureSpace(10 + imgH);
+      doc.setFillColor(230, 236, 245);
+      doc.rect(14, y, pageW - 28, 6.5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(8.5); doc.setTextColor(37, 99, 168);
+      doc.text('ARCHIVOS ADJUNTOS — IMÁGENES (' + archivosVisitaImg.length + ')', 17, y + 4.5);
+      doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+      y += 10;
+      let col2 = 0, x2 = 14;
+      archivosVisitaImg.forEach(function(f){
+        if (y + imgH > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Visita Comercial'); col2 = 0; x2 = 14; }
+        try{ doc.addImage(f.b64, 'JPEG', x2, y, imgW, imgH); }catch(e){}
+        if (col2 === 0) { x2 = 14 + imgW + gap; col2 = 1; }
+        else { x2 = 14; col2 = 0; y += imgH + gap; }
+      });
+      if (col2 === 1) y += imgH + gap;
+    }
+    if (archivosVisitaOtros.length) {
+      ensureSpace(10);
+      doc.setFillColor(230, 236, 245);
+      doc.rect(14, y, pageW - 28, 6.5, 'F');
+      doc.setFont(undefined, 'bold'); doc.setFontSize(8.5); doc.setTextColor(37, 99, 168);
+      doc.text('OTROS ARCHIVOS ADJUNTOS (' + archivosVisitaOtros.length + ')', 17, y + 4.5);
+      doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+      y += 10;
+      archivosVisitaOtros.forEach(function(f){
+        ensureSpace(5.5);
+        const kb = f.tamano ? (f.tamano < 1024*1024 ? Math.round(f.tamano/1024)+' KB' : (f.tamano/(1024*1024)).toFixed(1)+' MB') : '';
+        doc.text('•  ' + f.nombre + (kb ? '  (' + kb + ')' : ''), 18, y);
+        y += 4.8;
+      });
+      y += 3;
     }
 
     _pdfFooter(doc, pageW, pageH);
