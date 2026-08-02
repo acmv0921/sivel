@@ -1937,7 +1937,10 @@ function verificarSaldo(detalle_id, pendiente, und) {
   else           cont.innerHTML = '';
 }
 
+let _guardandoDetalleFlete = false;
 async function guardarDetalleFlete(ap_id) {
+  if (_guardandoDetalleFlete) return;
+  _guardandoDetalleFlete = true;
   const val = document.getElementById('despDetalleFlete')?.value.trim() || '';
   try {
     await escribirGAS({ accion:'actualizarEstadoAP', ap_id, detalle_flete_despacho: val });
@@ -1946,6 +1949,8 @@ async function guardarDetalleFlete(ap_id) {
     toast('💾 Detalle del flete guardado');
   } catch(e) {
     toast('⚠️ No se pudo guardar el detalle del flete: ' + e.message);
+  } finally {
+    _guardandoDetalleFlete = false;
   }
 }
 
@@ -2381,7 +2386,9 @@ const ETIQUETAS_NOVEDAD = {
   reposicion: 'reposición (cortesía)', merma_segunda: 'merma / saldo de segunda'
 };
 
+let _guardandoAveria = false;
 async function guardarAveria() {
+  if (_guardandoAveria) return;
   const categoria = document.getElementById('averiaCategoria').value;
   const tmcode = document.getElementById('averiaProducto').value;
   const cant   = parseFloat(document.getElementById('averiaCant').value) || 0;
@@ -2395,16 +2402,26 @@ async function guardarAveria() {
     : ' Esto NO resta del stock disponible — solo reclasifica la unidad.';
   if (!confirm(`⚠️ ¿Registrar ${etiqueta} de ${cant} unidades de ${nombreProducto(tmcode)}?${advertencia}`)) return;
 
-  await escribirGAS({ accion:'registrarNovedad', categoria, tmcode, cantidad: cant, ap_id: ap_id || 0 });
-  toast(`✅ ${etiqueta} registrada — ${cant} unidades`);
-  document.getElementById('averiaCant').value = '';
-  document.getElementById('averiaAP').value   = '';
-  document.getElementById('averiaDesc').value = '';
-  document.getElementById('previewAv').style.display = 'none';
-  await cargarTodo();
+  _guardandoAveria = true;
+  const btnAveria = document.querySelector('button[onclick="guardarAveria()"]');
+  if (btnAveria) { btnAveria.disabled = true; btnAveria.dataset._txt = btnAveria.textContent; btnAveria.textContent = 'Guardando...'; }
+  try {
+    await escribirGAS({ accion:'registrarNovedad', categoria, tmcode, cantidad: cant, ap_id: ap_id || 0 });
+    toast(`✅ ${etiqueta} registrada — ${cant} unidades`);
+    document.getElementById('averiaCant').value = '';
+    document.getElementById('averiaAP').value   = '';
+    document.getElementById('averiaDesc').value = '';
+    document.getElementById('previewAv').style.display = 'none';
+    await cargarTodo();
+  } finally {
+    _guardandoAveria = false;
+    if (btnAveria) { btnAveria.disabled = false; btnAveria.textContent = btnAveria.dataset._txt || '⚠️ Registrar Novedad'; }
+  }
 }
 
+let _guardandoNovedadLog = false;
 async function guardarNovedadLogistica() {
+  if (_guardandoNovedadLog) return;
   const categoria = document.getElementById('novedadLogCategoria').value;
   const ap_id = document.getElementById('novedadLogAP').value || '';
   const placa_vehiculo = document.getElementById('novedadLogPlaca').value || '';
@@ -2413,11 +2430,19 @@ async function guardarNovedadLogistica() {
   const u = S.usuario || {};
   const usuario = u.nombre || u.nombre_completo || u.correo || '';
   if (!confirm("Registrar esta novedad de logistica?")) return;
-  await escribirGAS({ accion:'registrarNovedadLogistica', categoria, ap_id, descripcion, usuario, placa_vehiculo });
-  toast("Novedad de logistica registrada");
-  document.getElementById('novedadLogAP').value = '';
-  document.getElementById('novedadLogPlaca').value = '';
-  document.getElementById('novedadLogDesc').value = '';
+  _guardandoNovedadLog = true;
+  const btnNovLog = document.querySelector('button[onclick="guardarNovedadLogistica()"]');
+  if (btnNovLog) { btnNovLog.disabled = true; btnNovLog.dataset._txt = btnNovLog.textContent; btnNovLog.textContent = 'Guardando...'; }
+  try {
+    await escribirGAS({ accion:'registrarNovedadLogistica', categoria, ap_id, descripcion, usuario, placa_vehiculo });
+    toast("Novedad de logistica registrada");
+    document.getElementById('novedadLogAP').value = '';
+    document.getElementById('novedadLogPlaca').value = '';
+    document.getElementById('novedadLogDesc').value = '';
+  } finally {
+    _guardandoNovedadLog = false;
+    if (btnNovLog) { btnNovLog.disabled = false; btnNovLog.textContent = btnNovLog.dataset._txt || 'Registrar Novedad de Logistica'; }
+  }
 }
 
 // =============================================================================
@@ -2657,7 +2682,9 @@ async function eliminarVehiculo(vehiculo_id, placa) {
   }
 }
 
+let _guardandoVehiculo = false;
 async function guardarNuevoVehiculo() {
+  if (_guardandoVehiculo) return;
   const placa     = document.getElementById('nvPlaca')?.value.trim().toUpperCase();
   const conductor = document.getElementById('nvConductor')?.value.trim();
   const cel       = document.getElementById('nvCel')?.value.trim();
@@ -2673,26 +2700,33 @@ async function guardarNuevoVehiculo() {
     estado:           'Activo'
   };
 
-  if (VEH_EDITANDO_ID) {
-    const vehActualizado = { vehiculo_id: VEH_EDITANDO_ID, ...datosVeh };
-    await escribirGAS({ accion:'actualizarVehiculo', ...vehActualizado });
-    const idx = VEHICULOS_SHEET.findIndex(v => String(v.vehiculo_id) === String(VEH_EDITANDO_ID));
-    if (idx >= 0) VEHICULOS_SHEET[idx] = vehActualizado;
-    VEH_EDITANDO_ID = null;
-    const btn = document.querySelector('#formNuevoVeh .btn-primary');
-    if (btn) btn.textContent = '💾 Guardar vehículo';
-    renderSelectorVehiculo('selectorVehiculo');
-    toast("✅ Vehículo actualizado");
-  } else {
-    const nuevoVeh = { vehiculo_id: Date.now(), ...datosVeh };
-    await escribirGAS({ accion:'crearVehiculo', ...nuevoVeh });
-    VEHICULOS_SHEET.push(nuevoVeh);
-    VEH_SELECCIONADO = nuevoVeh;
-    seleccionarVehiculo(nuevoVeh);
-    toast("✅ Vehículo registrado");
+  _guardandoVehiculo = true;
+  const btnVeh = document.querySelector('#formNuevoVeh .btn-primary');
+  const _txtVehOriginal = btnVeh ? btnVeh.textContent : '';
+  if (btnVeh) { btnVeh.disabled = true; btnVeh.textContent = 'Guardando...'; }
+  try {
+    if (VEH_EDITANDO_ID) {
+      const vehActualizado = { vehiculo_id: VEH_EDITANDO_ID, ...datosVeh };
+      await escribirGAS({ accion:'actualizarVehiculo', ...vehActualizado });
+      const idx = VEHICULOS_SHEET.findIndex(v => String(v.vehiculo_id) === String(VEH_EDITANDO_ID));
+      if (idx >= 0) VEHICULOS_SHEET[idx] = vehActualizado;
+      VEH_EDITANDO_ID = null;
+      renderSelectorVehiculo('selectorVehiculo');
+      toast("✅ Vehículo actualizado");
+    } else {
+      const nuevoVeh = { vehiculo_id: Date.now(), ...datosVeh };
+      await escribirGAS({ accion:'crearVehiculo', ...nuevoVeh });
+      VEHICULOS_SHEET.push(nuevoVeh);
+      VEH_SELECCIONADO = nuevoVeh;
+      seleccionarVehiculo(nuevoVeh);
+      toast("✅ Vehículo registrado");
+    }
+    document.getElementById('formNuevoVeh').style.display = 'none';
+    ['nvPlaca','nvMarca','nvColor','nvConductor','nvCel','nvTonelaje'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+  } finally {
+    _guardandoVehiculo = false;
+    if (btnVeh) { btnVeh.disabled = false; btnVeh.textContent = _txtVehOriginal || '💾 Guardar vehículo'; }
   }
-  document.getElementById('formNuevoVeh').style.display = 'none';
-  ['nvPlaca','nvMarca','nvColor','nvConductor','nvCel','nvTonelaje'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
 }
 
 // =============================================================================
