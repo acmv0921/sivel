@@ -481,7 +481,7 @@ async function hacerLogin() {
     const todos = data.data || [];
 
     // También buscar en todos los usuarios (incluyendo Suministros)
-    const respU = await fetch(GVIZ + 'USUARIOS_MAESTRO');
+    const respU = await fetch(GVIZ + 'USUARIOS_MAESTRO&_=' + Date.now(), { cache: 'no-store' });
     const txtU  = await respU.text();
     const jU    = JSON.parse(txtU.slice(txtU.indexOf('(')+1, txtU.lastIndexOf(')')));
     const usuarios = (jU.table?.rows || []).map(row => {
@@ -531,7 +531,7 @@ async function cargarTodo() {
   toast('⏳ Cargando productos...');
   try {
     // Leer PRODUCTOS_MAESTRO vía gviz (ultrarrápido — sin cálculos)
-    const r = await fetch(GVIZ + 'PRODUCTOS_MAESTRO');
+    const r = await fetch(GVIZ + 'PRODUCTOS_MAESTRO&_=' + Date.now(), { cache: 'no-store' });
     const txt = await r.text();
     const j   = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
     const cols = (j.table?.cols||[]).map(c=>c.label);
