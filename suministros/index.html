@@ -698,7 +698,9 @@ function abrirNota(tmcode, tmdescrip) {
   document.getElementById('modalNota').classList.add('show');
 }
 
+let _guardandoNota = false;
 async function guardarNota() {
+  if (_guardandoNota) return;
   const tmcode   = document.getElementById('notaTmcode').value;
   const estado   = document.getElementById('notaEstado').value;
   const nota     = document.getElementById('notaTexto').value.trim();
@@ -723,6 +725,9 @@ async function guardarNota() {
     fecha_registro: new Date().toISOString()
   };
 
+  _guardandoNota = true;
+  const btnNota = document.querySelector('button[onclick="guardarNota()"]');
+  if (btnNota) { btnNota.disabled = true; btnNota.dataset._txt = btnNota.textContent; btnNota.textContent = 'Guardando...'; }
   try {
     await fetch(GAS_URL, {
       method: 'POST', mode: 'no-cors',
@@ -745,6 +750,9 @@ async function guardarNota() {
     if (document.getElementById('screenNotas').classList.contains('active')) renderTodasNotas();
   } catch(e) {
     toast('Error al guardar: ' + e.message);
+  } finally {
+    _guardandoNota = false;
+    if (btnNota) { btnNota.disabled = false; btnNota.textContent = btnNota.dataset._txt || '💾 Guardar nota'; }
   }
 }
 
