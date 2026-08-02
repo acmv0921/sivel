@@ -1595,12 +1595,15 @@ function cerrarSesion() {
 // LEER DATOS (GVIZ público — sin CORS)
 // =============================================================================
 async function leerGVIZ(hoja) {
-  const url  = GVIZ + encodeURIComponent(hoja);
+  // Cache-busting: sin esto, el navegador (o el borde de Google) puede devolver
+  // una respuesta vieja para la misma URL — causaba que datos recién guardados
+  // desde el celular no aparecieran actualizados al abrir la app en computador.
+  const url  = GVIZ + encodeURIComponent(hoja) + '&_=' + Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   let resp;
   try {
-    resp = await fetch(url, { signal: controller.signal });
+    resp = await fetch(url, { signal: controller.signal, cache: 'no-store' });
   } catch (e) {
     throw new Error('Sin conexión al leer "' + hoja + '" — verifica tu internet e intenta de nuevo.');
   } finally {
@@ -1922,7 +1925,9 @@ function filtrarProductos() {
 function renderMisAPs() {
   const cont = document.getElementById('listaMisAPs');
   if (!STATE.aps.length) { cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin pedidos</div>'; return; }
-  cont.innerHTML = STATE.aps.map(ap => cardAP(ap)).join('');
+  // Más recientes primero — antes se mostraban en el mismo orden de la hoja
+  // (las más viejas arriba), lo que hacía difícil ubicar un AP reciente.
+  cont.innerHTML = [...STATE.aps].reverse().map(ap => cardAP(ap)).join('');
 }
 
 function renderAPsHome() {
