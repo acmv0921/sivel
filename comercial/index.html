@@ -213,6 +213,13 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 .thumb-item{position:relative;}.thumb-item img{width:76px;height:76px;object-fit:cover;border-radius:9px;cursor:pointer;display:block;}
 .thumb-del{position:absolute;top:-5px;right:-5px;background:var(--rojo);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.6rem;cursor:pointer;}
 .thumb-mda{position:absolute;bottom:0;left:0;right:0;background:rgba(26,58,92,.78);border-radius:0 0 8px 8px;font-size:.48rem;color:#fff;text-align:center;padding:2px;}
+/* ===== ARCHIVOS ADJUNTOS (no-imagen: PDF, Word, Excel, etc) ===== */
+.archivo-chip{display:flex;align-items:center;gap:8px;background:var(--gris);border:1px solid var(--borde);border-radius:10px;padding:6px 10px;margin-top:6px;}
+.archivo-chip .archivo-ico{font-size:1.3rem;flex-shrink:0;}
+.archivo-chip .archivo-info{flex:1;min-width:0;}
+.archivo-chip .archivo-nombre{font-size:.78rem;font-weight:600;color:var(--azul);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.archivo-chip .archivo-meta{font-size:.65rem;color:#888;}
+.archivo-chip .archivo-del{background:var(--rojo);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;flex-shrink:0;}
 .foto-drop{border:2px dashed var(--borde);border-radius:12px;padding:1rem;text-align:center;cursor:pointer;background:var(--gris);}
 .foto-drop p{font-size:.78rem;color:#888;margin-top:4px;}
 .gps-pill{display:inline-flex;align-items:center;gap:5px;background:var(--gris);border-radius:20px;padding:4px 10px;font-size:.72rem;color:#444;}
@@ -704,6 +711,22 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <div id="pedidoFotos" class="thumb-grid"></div>
         </div>
 
+        <!-- ARCHIVOS ADJUNTOS DE LA NEGOCIACION -->
+        <div class="form-group" style="margin-top:1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="form-label" style="margin:0;">📎 Archivos adjuntos (opcional)</label>
+            <span id="pedidoArchivoCnt" class="foto-cnt" style="background:#eef2ff;color:#3730a3;">📎 0</span>
+          </div>
+          <p style="font-size:.68rem;color:#888;margin:0 0 6px;">Cotizaciones, RUT, planos — cualquier tipo de archivo, propios de este pedido.</p>
+          <label class="foto-drop" for="inputArchivoPedido" style="display:block;">
+            <p style="font-size:1.5rem;margin:0;">📎</p>
+            <p>Agregar archivo(s)</p>
+          </label>
+          <input id="inputArchivoPedido" type="file" multiple style="display:none;" onchange="agregarArchivoPedido(this)">
+          <div id="pedidoArchivos"></div>
+          <button type="button" class="btn btn-outline btn-sm" id="btnReenviarArchivosPedido" style="display:none;margin-top:6px;width:100%;" onclick="reenviarArchivosWA(ARCHIVOS_PEDIDO)">💬 Reenviar archivos por WhatsApp</button>
+        </div>
+
         <!-- RESUMEN FINANCIERO -->
         <div id="resumenAP" style="display:none;margin-top:1rem;padding-top:1rem;border-top:2px solid var(--borde);">
           <div class="card-title">Resumen Financiero</div>
@@ -787,12 +810,12 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <label class="form-label" style="margin:0;">📷 Fotos de la visita</label>
-        <span id="visitaCnt" class="foto-cnt err">⚠️ 0/3</span>
+        <span id="visitaCnt" class="foto-cnt warn">📷 0 foto(s)</span>
       </div>
       <div style="display:flex;gap:8px;">
         <label class="foto-drop" for="inputFotoVisita" style="flex:1;">
           <p style="font-size:1.5rem;margin:0;">📷</p>
-          <p>Tomar foto · Mínimo 3 requeridas</p>
+          <p>Tomar foto (opcional)</p>
           <p style="font-size:.63rem;">Logo POSTECSA + GPS + Hora automáticos en cada foto</p>
         </label>
         <label class="foto-drop" for="inputFotoVisitaGaleria" style="flex:1;">
@@ -808,6 +831,20 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div id="visitaFotos" class="thumb-grid"></div>
     </div>
     </div><!-- /seccionFotos -->
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <label class="form-label" style="margin:0;">📎 Archivos adjuntos (opcional)</label>
+        <span id="visitaArchivoCnt" class="foto-cnt" style="background:#eef2ff;color:#3730a3;">📎 0</span>
+      </div>
+      <p style="font-size:.68rem;color:#888;margin:0 0 6px;">Cotizaciones, RUT, planos, fichas técnicas — cualquier tipo de archivo. Se guardan con la visita y puedes reenviarlos por WhatsApp.</p>
+      <label class="foto-drop" for="inputArchivoVisita" style="display:block;">
+        <p style="font-size:1.5rem;margin:0;">📎</p>
+        <p>Agregar archivo(s)</p>
+      </label>
+      <input id="inputArchivoVisita" type="file" multiple style="display:none;" onchange="agregarArchivoVisita(this)">
+      <div id="visitaArchivos"></div>
+      <button type="button" class="btn btn-outline btn-sm" id="btnReenviarArchivosVisita" style="display:none;margin-top:6px;width:100%;" onclick="reenviarArchivosWA(_VARCHIVOS)">💬 Reenviar archivos por WhatsApp</button>
+    </div>
     <div class="contacto-box">
       <div class="contacto-title">👥 CONTACTO VISITADO</div>
       <div class="form-group" style="margin-bottom:.5rem;"><label class="form-label">Nombre</label><input id="visitaContNombre" class="form-control" placeholder="Nombre del contacto"></div>
@@ -1024,17 +1061,131 @@ async function procesarFotoMDA(file,gps,quien){
     };reader.readAsDataURL(file);
   });
 }
-let _VGPS=null,_VFOTOS=[],_VCLI=null,_VPRODINT=[],_VCOMP=[];
-function _cntF(){const n=_VFOTOS.length,el=document.getElementById('visitaCnt');if(!el)return;el.className='foto-cnt '+(n>=3?'ok':n>0?'warn':'err');el.textContent=(n>=3?'✅':'⚠️')+' '+n+'/3';}
+let _VGPS=null,_VFOTOS=[],_VCLI=null,_VPRODINT=[],_VCOMP=[],_VARCHIVOS=[];
+
+// ===== ARCHIVOS ADJUNTOS GENÉRICOS (PDF, Word, Excel, imágenes, etc) =====
+// Patrón independiente de _VFOTOS (fotos con GPS/MDA) — un archivo adjunto
+// no lleva marca de agua ni GPS, solo se guarda tal cual y se puede reenviar.
+function _iconoArchivo(nombre){
+  const ext=(nombre.split('.').pop()||'').toLowerCase();
+  if(['jpg','jpeg','png','gif','webp','heic'].includes(ext)) return '🖼️';
+  if(ext==='pdf') return '📄';
+  if(['doc','docx'].includes(ext)) return '📝';
+  if(['xls','xlsx','csv'].includes(ext)) return '📊';
+  if(['ppt','pptx'].includes(ext)) return '📽️';
+  if(['zip','rar','7z'].includes(ext)) return '🗜️';
+  return '📎';
+}
+function _tamanoLegible(bytes){
+  if(bytes<1024) return bytes+' B';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(0)+' KB';
+  return (bytes/(1024*1024)).toFixed(1)+' MB';
+}
+function _leerArchivoB64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=()=>reject(new Error('No se pudo leer '+file.name));
+    reader.readAsDataURL(file);
+  });
+}
+async function agregarArchivoVisita(input){
+  const files=Array.from(input.files);if(!files.length)return;
+  toast('⏳ Adjuntando '+files.length+' archivo(s)...');
+  let fallidos=0;
+  for(const file of files){
+    // Límite razonable por archivo para no llenar el almacenamiento local
+    // del celular (mismo problema que ya se vio con fotos, ver lección de
+    // "50 visitas con fotos llenaban el localStorage" más abajo en el archivo).
+    if(file.size>15*1024*1024){fallidos++;continue;}
+    try{
+      const b64=await _leerArchivoB64(file);
+      _VARCHIVOS.push({nombre:file.name,tipo:file.type||'application/octet-stream',tamano:file.size,b64});
+    }catch(e){fallidos++;}
+  }
+  input.value='';
+  _renderVA();
+  if(fallidos>0) toast('⚠️ '+_VARCHIVOS.length+' archivo(s) adjuntado(s) — '+fallidos+' no se pudo(eron) cargar (máx. 15MB c/u)');
+  else toast('✅ '+_VARCHIVOS.length+' archivo(s) adjuntado(s)');
+}
+function _renderVA(){
+  const c=document.getElementById('visitaArchivos');if(!c)return;
+  c.innerHTML=_VARCHIVOS.map((f,i)=>
+    '<div class="archivo-chip"><span class="archivo-ico">'+_iconoArchivo(f.nombre)+'</span>'+
+    '<div class="archivo-info"><div class="archivo-nombre">'+f.nombre+'</div>'+
+    '<div class="archivo-meta">'+_tamanoLegible(f.tamano)+'</div></div>'+
+    '<button type="button" class="archivo-del" onclick="_VARCHIVOS.splice('+i+',1);_renderVA();">✕</button></div>'
+  ).join('');
+  const cnt=document.getElementById('visitaArchivoCnt');
+  if(cnt) cnt.textContent='📎 '+_VARCHIVOS.length;
+  const btnWA=document.getElementById('btnReenviarArchivosVisita');
+  if(btnWA) btnWA.style.display=_VARCHIVOS.length?'block':'none';
+}
+// Convierte un archivo guardado (b64 dataURL) a File real para navigator.share
+function _b64AFile(nombre,tipo,dataUrl){
+  const arr=dataUrl.split(','),bstr=atob(arr[1]);
+  let n=bstr.length;const u8=new Uint8Array(n);
+  while(n--) u8[n]=bstr.charCodeAt(n);
+  return new File([u8],nombre,{type:tipo});
+}
+// Reenvía uno o varios archivos adjuntos por WhatsApp (u otra app de mensajería
+// disponible) usando Web Share API nivel 2 — mismo patrón ya usado en la app
+// para compartir el PDF del informe de negociación/visita.
+async function reenviarArchivosWA(archivos){
+  if(!archivos || !archivos.length){toast('No hay archivos para reenviar');return;}
+  try{
+    const files=archivos.map(f=>_b64AFile(f.nombre,f.tipo,f.b64));
+    if(navigator.canShare && navigator.canShare({files})){
+      await navigator.share({files, title:'Archivos POSTECSA', text:'Archivos adjuntos — '+(_VCLI?.razon_social||'')+' — POSTECSA DE COLOMBIA S.A.S.'});
+    } else {
+      toast('⚠️ Este dispositivo no permite compartir archivos directo — descárgalos y adjúntalos manualmente en WhatsApp');
+    }
+  }catch(e){
+    if(e.name!=='AbortError') toast('⚠️ No se pudo abrir el compartir: '+e.message);
+  }
+}
+function _cntF(){const n=_VFOTOS.length,el=document.getElementById('visitaCnt');if(!el)return;el.className='foto-cnt '+(n>0?'ok':'warn');el.textContent=(n>0?'✅':'📷')+' '+n+' foto(s)';}
 function _renderVF(){const c=document.getElementById('visitaFotos');if(!c)return;c.innerHTML=_VFOTOS.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="_VFOTOS.splice('+i+',1);_renderVF();_cntF();">✕</button></div>').join('');}
 
 // Fotos propias del PEDIDO/AP en edición (independientes de las fotos de visita _VFOTOS,
 // para que el informe de venta no dependa de si hubo o no una visita en la misma sesion)
 let FOTOS_PEDIDO=[];
+let ARCHIVOS_PEDIDO=[];
 function initFotosPedido(){
   FOTOS_PEDIDO=[];
+  ARCHIVOS_PEDIDO=[];
   const cont=document.getElementById('pedidoFotos'); if(cont) cont.innerHTML='';
-  _cntFP();
+  const contA=document.getElementById('pedidoArchivos'); if(contA) contA.innerHTML='';
+  _cntFP();_renderAP();
+}
+async function agregarArchivoPedido(input){
+  const files=Array.from(input.files);if(!files.length)return;
+  toast('⏳ Adjuntando '+files.length+' archivo(s)...');
+  let fallidos=0;
+  for(const file of files){
+    if(file.size>15*1024*1024){fallidos++;continue;}
+    try{
+      const b64=await _leerArchivoB64(file);
+      ARCHIVOS_PEDIDO.push({nombre:file.name,tipo:file.type||'application/octet-stream',tamano:file.size,b64});
+    }catch(e){fallidos++;}
+  }
+  input.value='';
+  _renderAP();
+  if(fallidos>0) toast('⚠️ '+ARCHIVOS_PEDIDO.length+' archivo(s) adjuntado(s) — '+fallidos+' no se pudo(eron) cargar (máx. 15MB c/u)');
+  else toast('✅ '+ARCHIVOS_PEDIDO.length+' archivo(s) adjuntado(s)');
+}
+function _renderAP(){
+  const c=document.getElementById('pedidoArchivos');if(!c)return;
+  c.innerHTML=ARCHIVOS_PEDIDO.map((f,i)=>
+    '<div class="archivo-chip"><span class="archivo-ico">'+_iconoArchivo(f.nombre)+'</span>'+
+    '<div class="archivo-info"><div class="archivo-nombre">'+f.nombre+'</div>'+
+    '<div class="archivo-meta">'+_tamanoLegible(f.tamano)+'</div></div>'+
+    '<button type="button" class="archivo-del" onclick="ARCHIVOS_PEDIDO.splice('+i+',1);_renderAP();">✕</button></div>'
+  ).join('');
+  const cnt=document.getElementById('pedidoArchivoCnt');
+  if(cnt) cnt.textContent='📎 '+ARCHIVOS_PEDIDO.length;
+  const btnWA=document.getElementById('btnReenviarArchivosPedido');
+  if(btnWA) btnWA.style.display=ARCHIVOS_PEDIDO.length?'block':'none';
 }
 function _cntFP(){const n=FOTOS_PEDIDO.length,el=document.getElementById('pedidoFotoCnt');if(!el)return;el.textContent='📷 '+n;}
 function _renderFP(){const c=document.getElementById('pedidoFotos');if(!c)return;c.innerHTML=FOTOS_PEDIDO.map((f,i)=>'<div class="thumb-item"><img src="'+f.b64+'" onclick="verFotoGrande(this.src)"><div class="thumb-mda">MDA</div><button class="thumb-del" onclick="FOTOS_PEDIDO.splice('+i+',1);_renderFP();_cntFP();">✕</button></div>').join('');}
@@ -2596,7 +2747,8 @@ function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre, apIdReal){
       obs_entrega: STATE.pedido.obs_entrega||'',
       transportista_flete: STATE.pedido.transportista_flete||'',
       // Fotos propias de ESTE pedido — no las de la visita, para que cada AP muestre solo sus propias fotos
-      fotos: FOTOS_PEDIDO.map(f=>({b64:f.b64,hora:f.hora}))
+      fotos: FOTOS_PEDIDO.map(f=>({b64:f.b64,hora:f.hora})),
+      archivos_adjuntos: ARCHIVOS_PEDIDO.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano}))
     };
     CESION_ACTUAL.push(item);
     localStorage.setItem('sivel_cesion_actual', JSON.stringify(CESION_ACTUAL));
@@ -3288,9 +3440,10 @@ function renderCompetencia(){const cont=document.getElementById('visitaCompetenc
 
 function abrirRegistroVisita(nit){
   const c=STATE.clientes.find(x=>String(x.cliente_nit)===String(nit));if(!c)return;
-  _VCLI=c;_VFOTOS=[];_VGPS=null;_VPRODINT=[];_VCOMP=[];
+  _VCLI=c;_VFOTOS=[];_VGPS=null;_VPRODINT=[];_VCOMP=[];_VARCHIVOS=[];
   document.getElementById('visitaCliente').textContent=c.razon_social;
   document.getElementById('visitaFotos').innerHTML='';
+  _renderVA();
   document.getElementById('visitaNotas').value='';renderProductosInteres();renderCompetencia();poblarDatalistProductos();
   document.getElementById('visitaDireccion').value=c.coordenadas_home||'';
   ['visitaContNombre','visitaContCel','visitaContCorreo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -3351,7 +3504,6 @@ function seleccionarCanal(btn) {
 
 async function guardarVisita(){
   const canal = document.getElementById('visitaCanal')?.value || 'Visita presencial';
-  if(canal === 'Visita presencial' && _VFOTOS.length<3){toast('⚠️ Visita presencial: mínimo 3 fotos');return;}
   if(!_VCLI){toast('Sin cliente');return;}
   const dir=document.getElementById('visitaDireccion')?.value.trim()||'';
   const reg={id:Date.now(),cliente:_VCLI,gps:_VGPS,direccion:dir,canal:canal,
@@ -3359,6 +3511,7 @@ async function guardarVisita(){
     cel:document.getElementById('visitaContCel')?.value.trim()||'',
     correo:document.getElementById('visitaContCorreo')?.value.trim()||''},
     fotos:_VFOTOS.map(f=>({b64:f.b64,hora:f.hora})),
+    archivos_adjuntos:_VARCHIVOS.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano})),
     notas:document.getElementById('visitaNotas')?.value.trim()||'',productos_interes:_VPRODINT.slice(),competencia:_VCOMP.filter(c=>c.nombre||c.producto||c.precio),
     hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
   // Se baja el tope de 50 a 20 visitas retenidas: 50 visitas con 3+ fotos
