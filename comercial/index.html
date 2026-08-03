@@ -428,7 +428,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div style="color:rgba(255,255,255,0.45);font-size:0.65rem;text-align:center;margin-top:1.5rem;line-height:1.7;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.7);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTECSA DE COLOMBIA S.A.S. · v1.19 · Compilación 19 · 02 ago 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.20 · Compilación 20 · 03 ago 2026
   </div>
 </div>
 
@@ -439,7 +439,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="header-left">
       <img src="../assets/logo_postecsa.jpg" alt="POSTECSA" style="height:38px;object-fit:contain;border-radius:6px;">
       <div>
-        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 19</span></div>
+        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 20</span></div>
         <div class="header-sub" id="headerSub">Cargando...</div>
       </div>
     </div>
@@ -1555,7 +1555,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 19;
+const BUILD_ACTUAL = 20;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1566,8 +1566,7 @@ function mostrarNovedadesBuild() {
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
     <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">02 ago 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🔄 <strong>Sincronización corregida</strong> — lo que registras en el celular ahora se refleja más rápido y de forma confiable en la app de Gerencia (computador)</li>
-      <li>📋 <strong>"Mis APs"</strong> ahora muestra tus pedidos más recientes primero, para ubicarlos más fácil</li>
+      <li>🚶 <strong>Tus visitas ahora quedan registradas</strong> — Gerencia ya puede consultarlas, no solo por WhatsApp</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
