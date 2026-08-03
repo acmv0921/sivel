@@ -642,7 +642,25 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn"        onclick="irA('screenUsuarios')"     id="navUsuarios">   <span class="icon">👥</span>Usuarios</button>
     <button class="nav-btn" id="navInventDrive" onclick="irA('screenInventDrive')"><span class="icon">📥</span>Inventario</button>
   <button class="nav-btn" id="navInformes" onclick="irA('screenInformes')"><span class="icon">📋</span>Informes</button>
+  <button class="nav-btn" id="navVisitas" onclick="irA('screenVisitas');cargarVisitas();"><span class="icon">🚶</span>Visitas</button>
 </nav>
+
+<!-- PANTALLA: VISITAS COMERCIALES -->
+<div id="screenVisitas" class="screen">
+  <div class="card">
+    <div class="card-title">🚶 Visitas Comerciales</div>
+    <p style="font-size:.78rem;color:#666;margin-bottom:.75rem;">Registro de visitas hechas por los vendedores en campo — las más recientes primero.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select id="visitasFiltroVendedor" class="form-control" style="max-width:220px;" onchange="renderVisitasGerencia()">
+        <option value="">Todos los vendedores</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="cargarVisitas()">🔄 Actualizar</button>
+    </div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--azul2);margin-top:.5rem;">
+    <div id="visitasLista"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
 
 <!-- PANTALLA: IMPORTAR INVENTARIO DRIVE -->
 <div id="screenInventDrive" class="screen">
@@ -2141,7 +2159,7 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
-    screenInventDrive:'navInventDrive',screenInformes:'navInformes'};
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInformes') renderInformeGerencia();
   window.scrollTo(0,0);
@@ -2226,6 +2244,62 @@ function promoCard(p, activa) {
         style="background:none;border:1px solid #ddd;border-radius:6px;padding:3px 8px;font-size:.68rem;color:#888;cursor:pointer;margin-left:6px;">
         Desactivar
       </button>` : ''}
+    </div>
+  </div>`;
+}
+
+// ===== VISITAS COMERCIALES (REGISTRO_VISITAS) =====
+// Lee el registro que cada vendedor deja al guardar una visita en Comercial
+// (ver guardarVisita() -> accion:'registrarVisita'). No incluye fotos ni
+// archivos completos — solo el conteo — esos siguen viajando por WhatsApp.
+let _visitasData = [];
+async function cargarVisitas() {
+  const cont = document.getElementById('visitasLista');
+  if (cont) cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const raw = await leerGVIZ('REGISTRO_VISITAS').catch(() => []);
+    _visitasData = Array.isArray(raw) ? raw : [];
+  } catch(e) { _visitasData = []; }
+  // Más recientes primero
+  _visitasData.sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+  _poblarFiltroVendedorVisitas();
+  renderVisitasGerencia();
+}
+function _poblarFiltroVendedorVisitas() {
+  const sel = document.getElementById('visitasFiltroVendedor');
+  if (!sel) return;
+  const actual = sel.value;
+  const nombres = [...new Set(_visitasData.map(v => v.nombre_vendedor).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todos los vendedores</option>' +
+    nombres.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.value = nombres.includes(actual) ? actual : '';
+}
+function renderVisitasGerencia() {
+  const cont = document.getElementById('visitasLista');
+  if (!cont) return;
+  const filtro = document.getElementById('visitasFiltroVendedor')?.value || '';
+  const lista = filtro ? _visitasData.filter(v => v.nombre_vendedor === filtro) : _visitasData;
+  if (!lista.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin visitas registradas</div>';
+    return;
+  }
+  cont.innerHTML = lista.map(visitaCard).join('');
+}
+function visitaCard(v) {
+  const fecha = v.fecha_hora ? new Date(v.fecha_hora).toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'short'}) : '—';
+  return `
+  <div style="border:1px solid var(--borde);border-radius:10px;padding:.75rem;margin-bottom:.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:.85rem;color:var(--azul);">${v.razon_social || 'Cliente sin nombre'}</div>
+        <div style="font-size:.72rem;color:#666;margin-top:2px;">👤 ${v.nombre_vendedor || '—'} · 📅 ${fecha}</div>
+        <div style="font-size:.70rem;color:#888;margin-top:4px;">
+          ${v.canal ? `📍 ${v.canal} · ` : ''}
+          ${v.contacto_nombre ? `🗣️ ${v.contacto_nombre}${v.contacto_cel ? ' (' + v.contacto_cel + ')' : ''} · ` : ''}
+          📎 ${v.num_fotos||0} foto(s) · ${v.num_archivos||0} archivo(s)
+        </div>
+        ${v.notas ? `<div style="font-size:.75rem;color:#444;margin-top:6px;font-style:italic;">"${v.notas}"</div>` : ''}
+      </div>
     </div>
   </div>`;
 }
