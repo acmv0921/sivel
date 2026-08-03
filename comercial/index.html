@@ -3609,6 +3609,15 @@ async function guardarVisita(){
   const p={accion:'actualizarCliente',cliente_nit:_VCLI.cliente_nit};
   if(_VGPS)p.coordenadas_home=_VGPS.lat+','+_VGPS.lon;if(dir)p.direccion=dir;
   escribirGAS(p).catch(e => console.warn('No se pudo sincronizar dirección/GPS del cliente (no bloquea el reporte de visita):', e));
+  // Registrar la visita en el backend (REGISTRO_VISITAS) para que Gerencia
+  // también pueda verla — en segundo plano, sin bloquear el guardado local
+  // ni el envío del reporte por WhatsApp, igual que la sincronización de arriba.
+  const pv={accion:'registrarVisita',id_vendedor:STATE.vendedor?.id_vendedor||'',
+    nombre_vendedor:STATE.vendedor?.nombre_vendedor||'',cliente_nit:_VCLI.cliente_nit,
+    razon_social:_VCLI.razon_social||'',canal:canal,gps:_VGPS?(_VGPS.lat+','+_VGPS.lon):'',
+    contacto_nombre:reg.contacto.nombre,contacto_cel:reg.contacto.cel,notas:reg.notas,
+    num_fotos:reg.fotos.length,num_archivos:reg.archivos_adjuntos.length};
+  escribirGAS(pv).catch(e => console.warn('No se pudo registrar la visita en el backend (no bloquea el reporte):', e));
   cerrarModal('modalVisita');
   toast('✅ Visita guardada — '+_VFOTOS.length+' fotos con MDA');renderVisitas();
   // El reporte de WhatsApp se envía siempre de inmediato, sin ningún paso
