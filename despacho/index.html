@@ -1661,7 +1661,7 @@ function renderHistorialDespachos() {
 
 function borrarHistorialDespacho(id) {
   DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.filter(h => h.id !== id);
-  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
+  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo actualizar el historial local:', e); }
   renderHistorialDespachos();
   toast('🗑️ Eliminado del historial');
 }
@@ -1669,7 +1669,7 @@ function borrarHistorialDespacho(id) {
 function borrarTodoHistorialDespacho() {
   if (!confirm('¿Borrar todo el historial de despachos? Esto no afecta los datos guardados en el Sheet ni en Drive, solo esta lista local.')) return;
   DESPACHOS_HISTORIAL = [];
-  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
+  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo limpiar el historial local:', e); }
   renderHistorialDespachos();
   toast('🗑️ Historial de despachos borrado');
 }
@@ -2084,7 +2084,7 @@ async function confirmarDespacho() {
     thumb: FOTOS_DESP.length ? FOTOS_DESP[0].b64 : ''
   });
   if (DESPACHOS_HISTORIAL.length > 100) DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.slice(0,100);
-  localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL));
+  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo guardar el historial local (no afecta lo ya enviado al Sheet/Drive):', e); }
 
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
@@ -2426,11 +2426,18 @@ async function guardarCurado() {
   }
 }
 
+let _liberandoCurado = {};
 async function liberarCurado(despacho_id) {
+  if (_liberandoCurado[despacho_id]) return;
   if (!confirm("¿Confirmar liberación del lote?")) return;
-  await escribirGAS({ accion:'liberarCurado', despacho_id });
-  toast("✅ Lote liberado — stock disponible actualizado");
-  await cargarTodo();
+  _liberandoCurado[despacho_id] = true;
+  try {
+    await escribirGAS({ accion:'liberarCurado', despacho_id });
+    toast("✅ Lote liberado — stock disponible actualizado");
+    await cargarTodo();
+  } finally {
+    _liberandoCurado[despacho_id] = false;
+  }
 }
 
 // =============================================================================
@@ -2751,8 +2758,11 @@ function editarVehiculo(v) {
   document.getElementById('formNuevoVeh').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
+let _eliminandoVehiculo = {};
 async function eliminarVehiculo(vehiculo_id, placa) {
+  if (_eliminandoVehiculo[vehiculo_id]) return;
   if (!confirm(`¿Eliminar el vehículo ${placa}? Esta acción no se puede deshacer.`)) return;
+  _eliminandoVehiculo[vehiculo_id] = true;
   try {
     await escribirGAS({ accion:'eliminarVehiculo', vehiculo_id });
     VEHICULOS_SHEET = VEHICULOS_SHEET.filter(v => String(v.vehiculo_id) !== String(vehiculo_id));
@@ -2761,6 +2771,8 @@ async function eliminarVehiculo(vehiculo_id, placa) {
     toast('🗑️ Vehículo eliminado');
   } catch(e) {
     toast('⚠️ No se pudo eliminar el vehículo: ' + e.message);
+  } finally {
+    _eliminandoVehiculo[vehiculo_id] = false;
   }
 }
 
