@@ -3057,13 +3057,8 @@ async function cerrarCesionYGenerarInforme(){
     // ya maneja sus propios errores y avisa con un toast si no logra copiar el PDF a Drive.
     _guardarPDFEnDrive('venta', filename, blob);
 
-    // BUG CORREGIDO: navigator.share() estaba en el mismo try que abrirWAVenta() de abajo.
-    // Si el usuario cerraba/cancelaba la hoja para compartir (algo muy común — p.ej. solo
-    // quería ver el PDF), share() rechaza con AbortError, eso saltaba directo al catch de
-    // más abajo, y la línea que abre el modal de WhatsApp NUNCA se ejecutaba. Por eso el
-    // reporte "no enviaba WhatsApp": no fallaba exactamente, sino que se saltaba por completo
-    // cada vez que se cancelaba o fallaba el share nativo. Ahora el intento de compartir el
-    // PDF va en su propio try/catch, para que su resultado nunca bloquee el paso siguiente.
+    // El intento de compartir el PDF va en su propio try/catch para que un
+    // cancelar/fallar el share nativo no interrumpa el resto del flujo.
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       try {
         await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
@@ -3077,9 +3072,9 @@ async function cerrarCesionYGenerarInforme(){
       toast('📄 PDF descargado — adjúntalo manualmente en el chat de WhatsApp que se abrirá a continuación');
     }
 
-    // Además del PDF, siempre abrir WhatsApp con el resumen de texto de la venta
-    // (mismo patrón confiable que ya funciona para el reporte de visitas)
-    abrirWAVenta(CESION_ACTUAL.slice());
+    // El mensaje de texto por WhatsApp se eliminó a propósito (mismo criterio
+    // que en Visitas): el PDF con fotos/detalle es la ÚNICA forma de enviar
+    // el reporte de negociación — ya se compartió arriba, no se abre nada más.
   } catch(e) {
     console.error('Error generando informe PDF', e);
     toast('⚠️ No se pudo generar el PDF: ' + e.message);
@@ -3087,100 +3082,6 @@ async function cerrarCesionYGenerarInforme(){
     CESION_ACTUAL = [];
     localStorage.removeItem('sivel_cesion_actual');
   }
-}
-
-function abrirWAVenta(items) {
-  if (!items || !items.length) return;
-  const fmtN = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
-  let detalle = '';
-  const hayApoyo = items.some(it => it.es_apoyo);
-  items.forEach((it, i) => {
-    const lineaVendedor = it.es_apoyo
-      ? `\n   Vendedor: *${it.vendedor_nombre}* · gestionada por ${it.apoyo_por}`
-      : '';
-    detalle += `\n${i+1}. *AP #${it.ap_id}* — ${it.cliente_nombre} (NIT ${it.cliente_nit})${lineaVendedor}`;
-
-    // Entrega: tipo, destino/zona, dirección de obra si hay transporte,
-    // contacto en obra, fecha solicitada, nombre de la obra, observaciones.
-    // Antes se omitían del mensaje — el vendedor los escribe en el pedido
-    // pero no llegaban al reporte de WhatsApp.
-    const tipoEntregaTxt = it.tipo_entrega === 'PLANTA' || !it.tipo_entrega
-      ? 'Recoge en planta'
-      : `Con transporte${it.destino ? ' — ' + it.destino : ''}`;
-    detalle += `\n   Entrega: ${tipoEntregaTxt}`;
-    if (it.nombre_obra)      detalle += `\n   Obra: ${it.nombre_obra}`;
-    if (it.direccion_obra)   detalle += `\n   Dirección: ${it.direccion_obra}`;
-    if (it.contacto_obra || it.cel_contacto) {
-      detalle += `\n   Contacto: ${it.contacto_obra||''}${it.cel_contacto ? ' · ' + it.cel_contacto : ''}`;
-    }
-    if (it.fecha_entrega)    detalle += `\n   Fecha entrega solicitada: ${it.fecha_entrega}`;
-    if (it.obs_entrega)      detalle += `\n   Observaciones: ${it.obs_entrega}`;
-    if (it.orden_compra_cliente) detalle += `\n   Orden de compra: ${it.orden_compra_cliente}`;
-    if (it.condiciones_pago) detalle += `\n   Condiciones de pago: ${it.condiciones_pago}`;
-
-    detalle += `\n   ${it.lineas} producto(s) · Total: $${it.totales ? fmtN(it.totales.total) : it.total}`;
-
-    // Desglose por producto — SIEMPRE se muestra el nombre y cantidad,
-    // aunque no tenga precio_base configurado (antes se omitía el producto
-    // completo si el precio era 0, dejando el mensaje sin decir qué se vendió).
-    const _totalUnidadesPedido = (it.detalle_lineas||[]).reduce((acc,l)=>acc+(parseFloat(l.cantidad_solicitada)||0),0);
-    const _fletePedido = it.totales ? (Number(it.totales.flete)||0) : 0;
-    const _fletePorUnidadPedido = _totalUnidadesPedido > 0 ? _fletePedido / _totalUnidadesPedido : 0;
-    (it.detalle_lineas||[]).forEach(l => {
-      const cant = fmtN(l.cantidad_solicitada||0);
-      const calidadTxt = (l.calidad||'PRIMERA')==='SEGUNDA' ? ' (2a calidad)' : '';
-      let nota = `     • ${l.tmdescrip||''} — ${cant} ${l.tmund||'und'}${calidadTxt}`;
-      const listaU = Number(l.precio_base)||0;
-      if (listaU) {
-        const descPct = Number(l.descuento_aplicado)||0;
-        const pactadoU = Math.round(listaU * (1 - descPct));
-        const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadPedido);
-        nota += `: Lista $${fmtN(listaU)}`;
-        if (descPct) nota += ` · c/desc (${(descPct*100).toFixed(0)}%): $${fmtN(pactadoU)}`;
-        if (_fletePorUnidadPedido > 0) nota += ` · Flete/u: $${fmtN(_fletePorUnidadPedido)} · c/desc+flete: $${fmtN(pactadoConFleteU)}`;
-      }
-      detalle += `\n${nota}`;
-    });
-  });
-  const lineaCabeceraVendedor = hayApoyo
-    ? `Gestionado por: ${STATE.vendedor?.nombre_vendedor||''} (apoyo a vendedor)`
-    : `Vendedor: ${STATE.vendedor?.nombre_vendedor||''}`;
-  const msg = `*POSTECSA DE COLOMBIA S.A.S.*
-━━━━━━━━━━━━━━━━━━
-*REPORTE DE VENTA — PEDIDO(S)*
-━━━━━━━━━━━━━━━━━━
-${lineaCabeceraVendedor}
-Fecha: ${new Date().toLocaleString('es-CO')}
-Pedido(s): ${items.length}
-${detalle}
-━━━━━━━━━━━━━━━━━━
-Informe PDF con el detalle completo generado — adjúntalo en este chat.
-━━━━━━━━━━━━━━━━━━
-_SIVIL · POSTECSA v1.0_`;
-
-  const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay show';
-  overlay.id = 'modalWAVenta';
-  overlay.innerHTML = `
-    <div class="modal-box">
-      <button class="modal-close" onclick="document.getElementById('modalWAVenta').remove()">✕</button>
-      <div class="modal-title">📲 Enviar Reporte de Venta</div>
-      <div class="wa-panel">
-        <div class="wa-panel-title">MENSAJE A ENVIAR</div>
-        <div style="font-size:0.75rem;white-space:pre-wrap;color:#333;line-height:1.6;max-height:150px;overflow-y:auto;">${msg}</div>
-      </div>
-      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
-        ${funcs.map(f => `
-          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''}
-                  onclick="waEnviar('${f.wa}','${encodeURIComponent(msg)}')">
-            📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
-          </button>`).join('')}
-      </div>
-      ${!funcs.length ? '<p style="color:#888;font-size:0.78rem;text-align:center;">No hay funcionarios activos configurados.<br>Agrégalos en la sección Clientes → Funcionarios.</p>' : ''}
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
 let _guardandoAP = false;
