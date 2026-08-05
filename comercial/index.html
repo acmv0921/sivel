@@ -1254,20 +1254,23 @@ function _blobABase64(blob) {
 
 async function _guardarPDFEnDrive(tipo, filename, blob, intentos) {
   intentos = intentos || 2;
+  // Devuelve {ok, url} — antes solo devolvía true/false y se descartaba el link
+  // de Drive, lo que impedía reenviarlo por WhatsApp cuando el navegador no
+  // soporta adjuntar el archivo directamente (ver uso en cerrarCesionYGenerarInforme).
   try {
     const b64 = await _blobABase64(blob);
     for (let i = 0; i < intentos; i++) {
       const r = await escribirGAS({accion:'guardarInformePDF', tipo, nombre_archivo: filename, base64_pdf: b64});
-      if (r && r.ok) return true;
+      if (r && r.ok) return {ok:true, url: r.url||''};
       console.error('guardarInformePDF intento ' + (i+1) + ' fallido:', r && r.error);
       if (i < intentos - 1) await new Promise(res => setTimeout(res, 1500));
     }
     toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
-    return false;
+    return {ok:false, url:''};
   } catch (e) {
     console.error('No se pudo guardar el informe en Drive', e);
     toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
-    return false;
+    return {ok:false, url:''};
   }
 }
 
@@ -3049,13 +3052,12 @@ async function cerrarCesionYGenerarInforme(){
     const filename = 'Informe_Negociacion_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
-    // Guardar copia del PDF en la carpeta de Drive de Gerencia — SIN await a propósito.
-    // BUG CORREGIDO: aunque el comentario decía "no bloquea el flujo de compartir", el
-    // código sí tenía `await` aquí. _guardarPDFEnDrive reintenta 2 veces con hasta 25s de
-    // timeout cada una — en el peor caso bloqueaba el informe (y el WhatsApp) casi un
-    // minuto entero, o indefinidamente si Drive no respondía. Ahora corre en segundo plano;
-    // ya maneja sus propios errores y avisa con un toast si no logra copiar el PDF a Drive.
-    _guardarPDFEnDrive('venta', filename, blob);
+    // BUG CORREGIDO: el PDF se guardaba en Drive en segundo plano (sin esperar el
+    // link) y en computador — donde el navegador no soporta adjuntar el archivo
+    // directamente — el toast prometía "WhatsApp se abrirá a continuación" pero
+    // nada lo abría. Ahora SÍ se espera el guardado en Drive (es rápido, una sola
+    // llamada) para poder usar el link como respaldo de WhatsApp en ese caso.
+    const _driveInfo = await _guardarPDFEnDrive('venta', filename, blob);
 
     // El intento de compartir el PDF va en su propio try/catch para que un
     // cancelar/fallar el share nativo no interrumpa el resto del flujo.
@@ -3066,15 +3068,21 @@ async function cerrarCesionYGenerarInforme(){
         console.warn('Compartir PDF cancelado o falló (no bloquea el envío por WhatsApp):', shareErr);
       }
     } else {
+      // Sin soporte nativo para adjuntar el archivo (típico en computador):
+      // se abre WhatsApp con el link del PDF que ya quedó guardado en Drive,
+      // para que el informe SÍ llegue por WhatsApp aunque no se pueda adjuntar
+      // el archivo directamente desde el navegador.
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filename; a.click();
-      toast('📄 PDF descargado — adjúntalo manualmente en el chat de WhatsApp que se abrirá a continuación');
+      if (_driveInfo && _driveInfo.ok && _driveInfo.url) {
+        const msgWA = 'Informe de negociación — ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.\n' + _driveInfo.url;
+        window.open('https://wa.me/?text=' + encodeURIComponent(msgWA), '_blank');
+        toast('📄 PDF descargado y WhatsApp abierto con el link del informe');
+      } else {
+        toast('📄 PDF descargado — no se pudo obtener el link de Drive, adjúntalo manualmente en WhatsApp');
+      }
     }
-
-    // El mensaje de texto por WhatsApp se eliminó a propósito (mismo criterio
-    // que en Visitas): el PDF con fotos/detalle es la ÚNICA forma de enviar
-    // el reporte de negociación — ya se compartió arriba, no se abre nada más.
   } catch(e) {
     console.error('Error generando informe PDF', e);
     toast('⚠️ No se pudo generar el PDF: ' + e.message);
