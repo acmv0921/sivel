@@ -409,7 +409,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;text-align:center;margin-top:1.5rem;line-height:1.8;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.65);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTECSA DE COLOMBIA S.A.S. · v1.1 · Compilación 1 · 05 ago 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.2 · Compilación 2 · 05 ago 2026
   </div>
 </div>
 
@@ -419,7 +419,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="header-left">
       <img src="../assets/logo_postecsa.jpg" alt="P" style="height:36px;border-radius:6px;object-fit:contain;">
       <div>
-        <div class="header-title">SIVIL Despacho <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 1</span></div>
+        <div class="header-title">SIVIL Despacho <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 2</span></div>
         <div class="header-sub" id="headerSub">Patio y Logística</div>
       </div>
     </div>
@@ -1234,7 +1234,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // Se muestra UNA sola vez por compilación (guardado en localStorage con la
 // clave de esta compilación). Si se sube una nueva compilación, cambiar
 // BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 1;
+const BUILD_ACTUAL = 2;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1246,6 +1246,7 @@ function mostrarNovedadesBuild() {
     <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">05 ago 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
       <li>📄 El informe de despacho ahora tiene un <strong>botón para enviarlo (o reenviarlo) por WhatsApp</strong> — antes dependía de un intento automático que en computador podía no llegar</li>
+      <li>🔒 Liberar un lote de curado y eliminar un vehículo quedaron <strong>protegidos contra doble-toque</strong>, para que no se dupliquen por accidente</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
