@@ -3059,36 +3059,77 @@ async function cerrarCesionYGenerarInforme(){
     // llamada) para poder usar el link como respaldo de WhatsApp en ese caso.
     const _driveInfo = await _guardarPDFEnDrive('venta', filename, blob);
 
-    // El intento de compartir el PDF va en su propio try/catch para que un
-    // cancelar/fallar el share nativo no interrumpa el resto del flujo.
+    // Se guarda para el botón "Enviar/Reenviar por WhatsApp" del modal de abajo.
+    // ANTES: el envío por WhatsApp era 100% automático y sin ningún botón visible
+    // — si el vendedor cerraba por error el selector de compartir, o el navegador
+    // bloqueaba la ventana de wa.me, no tenía ninguna forma de reintentarlo.
+    _ultimoInformeVenta = { pdfFile, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', numPedidos: CESION_ACTUAL.length };
+
+    // El intento automático de compartir se conserva como conveniencia (en
+    // celular suele bastar), pero ya no es la única forma de enviarlo: el modal
+    // que se abre después siempre trae un botón explícito para enviarlo o
+    // reenviarlo por WhatsApp, se haya compartido automáticamente o no.
     if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
       try {
         await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
       } catch (shareErr) {
-        console.warn('Compartir PDF cancelado o falló (no bloquea el envío por WhatsApp):', shareErr);
+        console.warn('Compartir PDF cancelado o falló (el botón del modal permite reintentar):', shareErr);
       }
     } else {
-      // Sin soporte nativo para adjuntar el archivo (típico en computador):
-      // se abre WhatsApp con el link del PDF que ya quedó guardado en Drive,
-      // para que el informe SÍ llegue por WhatsApp aunque no se pueda adjuntar
-      // el archivo directamente desde el navegador.
-      const url = URL.createObjectURL(blob);
+      const urlDescarga = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      if (_driveInfo && _driveInfo.ok && _driveInfo.url) {
-        const msgWA = 'Informe de negociación — ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.\n' + _driveInfo.url;
-        window.open('https://wa.me/?text=' + encodeURIComponent(msgWA), '_blank');
-        toast('📄 PDF descargado y WhatsApp abierto con el link del informe');
-      } else {
-        toast('📄 PDF descargado — no se pudo obtener el link de Drive, adjúntalo manualmente en WhatsApp');
-      }
+      a.href = urlDescarga; a.download = filename; a.click();
     }
+
+    abrirModalInformeVenta(_ultimoInformeVenta.numPedidos);
   } catch(e) {
     console.error('Error generando informe PDF', e);
     toast('⚠️ No se pudo generar el PDF: ' + e.message);
   } finally {
     CESION_ACTUAL = [];
     localStorage.removeItem('sivel_cesion_actual');
+  }
+}
+
+// Modal con botón explícito para enviar/reenviar el informe de negociación por
+// WhatsApp — mismo criterio que el modal de Visitas: el vendedor siempre tiene
+// una acción visible y repetible, no solo un intento automático que puede fallar
+// o cerrarse por accidente.
+function abrirModalInformeVenta(numPedidos) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'modalInformeVenta';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('modalInformeVenta').remove()">✕</button>
+      <div class="modal-title">📄 Informe de Negociación Generado</div>
+      <p style="font-size:.8rem;color:#555;line-height:1.5;margin-bottom:1rem;">
+        El PDF de ${numPedidos} pedido(s) ya se guardó en Drive. Toca el botón para enviarlo (o reenviarlo) por WhatsApp.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-success" style="width:100%;justify-content:center;" onclick="reenviarInformeVentaWA()">📲 Enviar por WhatsApp</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+async function reenviarInformeVentaWA() {
+  if (!_ultimoInformeVenta) { toast('No hay informe reciente para reenviar'); return; }
+  const { pdfFile, driveUrl, numPedidos } = _ultimoInformeVenta;
+  if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+    try {
+      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+      return;
+    } catch (shareErr) {
+      console.warn('Compartir cancelado, se intenta con el link de Drive:', shareErr);
+    }
+  }
+  if (driveUrl) {
+    const msgWA = 'Informe de negociación — ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.\n' + driveUrl;
+    window.open('https://wa.me/?text=' + encodeURIComponent(msgWA), '_blank');
+  } else {
+    toast('⚠️ No se pudo obtener el link de Drive — intenta de nuevo en un momento');
   }
 }
 
@@ -3761,6 +3802,7 @@ function abrirWAVisita(registro) {
   _ultimaVisitaWA = registro;
 }
 let _ultimaVisitaWA = null;
+let _ultimoInformeVenta = null;
 
 function waEnviar(numero, msgEnc) {
   if (!numero) { toast("Sin número WhatsApp"); return; }
