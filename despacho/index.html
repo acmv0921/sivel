@@ -409,7 +409,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;text-align:center;margin-top:1.5rem;line-height:1.8;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.65);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTECSA DE COLOMBIA S.A.S. · v1.0 · 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.1 · Compilación 1 · 05 ago 2026
   </div>
 </div>
 
@@ -419,7 +419,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="header-left">
       <img src="../assets/logo_postecsa.jpg" alt="P" style="height:36px;border-radius:6px;object-fit:contain;">
       <div>
-        <div class="header-title">SIVIL Despacho</div>
+        <div class="header-title">SIVIL Despacho <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 1</span></div>
         <div class="header-sub" id="headerSub">Patio y Logística</div>
       </div>
     </div>
@@ -1185,6 +1185,7 @@ function iniciarApp() {
   document.getElementById('headerSub').textContent  = n;
   document.getElementById('userNombre').textContent = n.split(' ')[0];
   mostrarBienvenidaApp(n, S.vendedor.rol || S.vendedor.cargo || '', '#7c3200', 'SIVIL Despacho', 'tu app de Logística');
+  mostrarNovedadesBuild();
   // Agregar automáticamente al funcionario logueado si no existe
   if (S.funcionarios.length === 0) agregarFuncionariosDefault();
   cargarTodo();
@@ -1227,6 +1228,32 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
     document.head.appendChild(st);
   }
   setTimeout(() => { if (b.parentNode) { b.style.transition='opacity .4s'; b.style.opacity='0'; setTimeout(()=>b.remove(),400); } }, 5000);
+}
+
+// ===== AVISO DE ACTUALIZACIÓN DE VERSIÓN (mismo patrón usado en Comercial) =====
+// Se muestra UNA sola vez por compilación (guardado en localStorage con la
+// clave de esta compilación). Si se sube una nueva compilación, cambiar
+// BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
+const BUILD_ACTUAL = 1;
+function mostrarNovedadesBuild() {
+  const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
+  try { if (localStorage.getItem(clave)) return; } catch(e) {}
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
+    <div style="font-weight:800;font-size:1.05rem;color:#7c3200;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">05 ago 2026</div>
+    <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
+      <li>📄 El informe de despacho ahora tiene un <strong>botón para enviarlo (o reenviarlo) por WhatsApp</strong> — antes dependía de un intento automático que en computador podía no llegar</li>
+    </ul>
+    <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('btnCerrarAvisoUpdate').onclick = () => {
+    ov.remove();
+    try { localStorage.setItem(clave, '1'); } catch(e) {}
+  };
 }
 
 function agregarFuncionariosDefault() {
