@@ -940,20 +940,23 @@ function _blobABase64(blob) {
 
 async function _guardarPDFEnDrive(tipo, filename, blob, intentos) {
   intentos = intentos || 2;
+  // Devuelve {ok, url} — antes solo devolvía true/false y se descartaba el link
+  // de Drive (mismo fix ya aplicado en Comercial), lo que impedía reenviar por
+  // WhatsApp el informe cuando el navegador no soporta adjuntar el archivo.
   try {
     const b64 = await _blobABase64(blob);
     for (let i = 0; i < intentos; i++) {
       const r = await escribirGAS({accion:'guardarInformePDF', tipo, nombre_archivo: filename, base64_pdf: b64});
-      if (r && r.ok) return true;
+      if (r && r.ok) return {ok:true, url: r.url||''};
       console.error('guardarInformePDF intento ' + (i+1) + ' fallido:', r && r.error);
       if (i < intentos - 1) await new Promise(res => setTimeout(res, 1500));
     }
     toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
-    return false;
+    return {ok:false, url:''};
   } catch (e) {
     console.error('No se pudo guardar el informe en Drive', e);
     toast('⚠️ El PDF no se copio a Drive (revisa tu conexion) — igual puedes compartirlo por WhatsApp');
-    return false;
+    return {ok:false, url:''};
   }
 }
 
@@ -2216,11 +2219,15 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     const filename = 'Informe_Despacho_AP' + ap.ap_id + '_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
-    // Guardar copia del PDF en la carpeta de Drive de Gerencia — SIN await a propósito
-    // (misma corrección aplicada hoy en Comercial): _guardarPDFEnDrive reintenta 2 veces
-    // con hasta 25s de timeout cada una y podía dejar el informe "colgado" casi un minuto.
-    // Corre en segundo plano; ya maneja sus propios errores con un toast.
-    _guardarPDFEnDrive('despacho', filename, blob);
+    // BUG CORREGIDO (mismo encontrado y corregido hoy en Comercial): se guardaba
+    // en Drive sin esperar el link, y en computador (sin soporte para adjuntar el
+    // archivo) el vendedor solo obtenía un toast diciendo "adjúntalo manualmente"
+    // — WhatsApp nunca se abría, y no había ningún botón para reintentarlo.
+    const _driveInfo = await _guardarPDFEnDrive('despacho', filename, blob);
+
+    // Se guarda para el botón "Enviar por WhatsApp" del modal de abajo, que queda
+    // disponible sin importar si el intento automático de compartir funcionó o no.
+    _ultimoInformeDespacho = { pdfFile, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', apId: ap.ap_id };
 
     // share() en su propio try/catch: si el usuario cancela la hoja de compartir, no debe
     // marcarse como si hubiera fallado la generación del PDF (que sí se generó bien).
@@ -2228,17 +2235,62 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
       try {
         await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.'});
       } catch (shareErr) {
-        console.warn('Compartir PDF de despacho cancelado o falló (no es un error real):', shareErr);
+        console.warn('Compartir PDF de despacho cancelado o falló (el botón del modal permite reintentar):', shareErr);
       }
     } else {
-      const url = URL.createObjectURL(blob);
+      const urlDescarga = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
-      toast('📄 PDF de despacho descargado — adjúntalo manualmente en WhatsApp');
+      a.href = urlDescarga; a.download = filename; a.click();
     }
+
+    abrirModalInformeDespacho(ap.ap_id);
   } catch(e) {
     console.error('Error generando informe PDF de despacho', e);
     toast('⚠️ No se pudo generar el PDF de despacho: ' + e.message);
+  }
+}
+
+let _ultimoInformeDespacho = null;
+
+// Modal con botón explícito para enviar/reenviar el informe de despacho por
+// WhatsApp — mismo criterio ya aplicado hoy en Comercial (Visitas y Negociación):
+// el usuario siempre tiene una acción visible y repetible, no solo un intento
+// automático que puede fallar o cerrarse por accidente.
+function abrirModalInformeDespacho(apId) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'modalInformeDespacho';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <button class="modal-close" onclick="document.getElementById('modalInformeDespacho').remove()">✕</button>
+      <div class="modal-title">📄 Informe de Despacho Generado</div>
+      <p style="font-size:.8rem;color:#555;line-height:1.5;margin-bottom:1rem;">
+        El PDF del despacho de AP #${apId} ya se guardó en Drive. Toca el botón para enviarlo (o reenviarlo) por WhatsApp.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-success" style="width:100%;justify-content:center;" onclick="reenviarInformeDespachoWA()">📲 Enviar por WhatsApp</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+async function reenviarInformeDespachoWA() {
+  if (!_ultimoInformeDespacho) { toast('No hay informe reciente para reenviar'); return; }
+  const { pdfFile, driveUrl, apId } = _ultimoInformeDespacho;
+  if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+    try {
+      await navigator.share({files:[pdfFile], title:'Informe de despacho', text:'Despacho AP #' + apId + ' — POSTECSA DE COLOMBIA S.A.S.'});
+      return;
+    } catch (shareErr) {
+      console.warn('Compartir cancelado, se intenta con el link de Drive:', shareErr);
+    }
+  }
+  if (driveUrl) {
+    const msgWA = 'Informe de despacho — AP #' + apId + ' — POSTECSA DE COLOMBIA S.A.S.\n' + driveUrl;
+    window.open('https://wa.me/?text=' + encodeURIComponent(msgWA), '_blank');
+  } else {
+    toast('⚠️ No se pudo obtener el link de Drive — intenta de nuevo en un momento');
   }
 }
 
