@@ -3827,48 +3827,23 @@ async function generarInformeVisitaPDF(reg) {
 }
 
 function abrirWAVisita(registro) {
-  const funcs = getFuncionarios().filter(f => f.activo && f.recibe === 'si');
-  const gpsLink = registro.gps ? linkMaps(registro.gps.lat, registro.gps.lon) : 'Sin GPS';
-  // NOTA: sin emojis pictográficos a color (🏭📋👤🏢📄🕐📍📝📞📷) — WhatsApp
-  // Desktop en Windows no siempre tiene la fuente de emoji completa y los
-  // muestra como ◆. Se usa texto simple + ━ • que sí son Unicode básico universal.
-  const msg = `*POSTECSA DE COLOMBIA S.A.S.*
-━━━━━━━━━━━━━━━━━━
-*REPORTE DE VISITA COMERCIAL*
-━━━━━━━━━━━━━━━━━━
-Vendedor: ${registro.vendedor}
-Cliente: ${registro.cliente.razon_social}
-NIT: ${registro.cliente.cliente_nit}
-Hora: ${registro.hora}
-Ubicación: ${gpsLink}
-${registro.notas ? 'Notas: ' + registro.notas : ''}
-Canal: ${registro.canal||'Visita presencial'}
-Fotos: ${registro.fotos.length > 0 ? registro.fotos.length+' foto(s) registrada(s)' : 'Sin fotos (contacto remoto)'}
-━━━━━━━━━━━━━━━━━━
-_SIVIL · POSTECSA v1.0_`;
-
-  // Modal WA
+  // El envío por mensaje de texto se eliminó a propósito: un vendedor no
+  // estaba entendiendo que el PDF con fotos era necesario (lo veía como
+  // "opcional" y solo mandaba el mensaje). Ahora el PDF con fotos es la
+  // ÚNICA forma de enviar el reporte de visita — no queda como alternativa.
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay show';
   overlay.id = 'modalWAVisita';
   overlay.innerHTML = `
     <div class="modal-box">
       <button class="modal-close" onclick="document.getElementById('modalWAVisita').remove()">✕</button>
-      <div class="modal-title">📲 Enviar Reporte de Visita</div>
-      <div class="wa-panel">
-        <div class="wa-panel-title">MENSAJE A ENVIAR</div>
-        <div style="font-size:0.75rem;white-space:pre-wrap;color:#333;line-height:1.6;max-height:150px;overflow-y:auto;">${msg}</div>
-      </div>
-      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
-        ${funcs.map(f => `
-          <button class="btn-wa" style="width:100%;justify-content:center;" ${!f.wa?'disabled':''}
-                  onclick="waEnviar('${f.wa}','${encodeURIComponent(msg)}')">
-            📲 Enviar a ${f.nombre.split(' ')[0]} — ${f.cargo}${!f.wa?' (sin número)':''}
-          </button>`).join('')}
-      </div>
-      ${!funcs.length ? '<p style="color:#888;font-size:0.78rem;text-align:center;">No hay funcionarios activos configurados.<br>Agrégalos en la sección Clientes → Funcionarios.</p>' : ''}
-      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #eee;display:flex;flex-direction:column;gap:8px;">
-        <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="generarInformeVisitaPDF(_ultimaVisitaWA)">📄 Generar PDF con fotos (opcional)</button>
+      <div class="modal-title">📄 Enviar Reporte de Visita (PDF con fotos)</div>
+      <p style="font-size:.8rem;color:#555;line-height:1.5;margin-bottom:1rem;">
+        El reporte de esta visita se envía como PDF con las fotos incluidas.
+        Toca el botón para generarlo y elegir por dónde enviarlo (WhatsApp u otra app).
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-success" style="width:100%;justify-content:center;" onclick="generarInformeVisitaPDF(_ultimaVisitaWA)">📄 Generar y enviar PDF con fotos</button>
         <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="document.getElementById('modalWAVisita').remove();nuevoPedidoDesdeCliente('${String(registro.cliente.cliente_nit).replace(/'/g,"\\'")}')">➕ Crear pedido para este cliente</button>
       </div>
     </div>`;
