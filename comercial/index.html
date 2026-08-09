@@ -753,6 +753,12 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <span class="search-icon">🔍</span>
         <input id="buscarClienteLista" class="form-control" placeholder="NIT o nombre..." oninput="filtrarClientes()">
       </div>
+      <div class="form-group">
+        <label class="form-label" style="font-size:.72rem;color:#888;">Vendedor que atiende</label>
+        <select id="filtroVendedorClientes" class="form-control" onchange="filtrarClientes()">
+          <option value="">Todos los vendedores</option>
+        </select>
+      </div>
       <button class="btn btn-outline btn-sm" onclick="mostrarFormCliente()">➕ Nuevo cliente</button>
     </div>
     <button class="btn btn-success btn-sm" onclick="irA('screenVisitas')" style="margin-bottom:0.5rem;">📋 Ver mis visitas de hoy</button>
@@ -1834,8 +1840,31 @@ async function cargarClientes() {
     // Todos los vendedores consultan la base completa de clientes
     // (decisión de negocio 03/07/2026 — ya no se filtra por vendedor_asignado).
     STATE.clientes = await leerGVIZ("CLIENTES");
+    // Se reutiliza la misma lista de vendedores de "venta de apoyo" (ya trae
+    // id + nombre) para poblar el filtro "Vendedor que atiende" — así el
+    // vendedor puede consultar los clientes de sus compañeros, no solo los
+    // propios, tal como lo pidieron en la última reunión.
+    if (!STATE.vendedoresParaApoyo || !STATE.vendedoresParaApoyo.length) {
+      await cargarVendedoresParaApoyo();
+    }
+    poblarFiltroVendedorClientes();
     renderClientes();
   } catch(e) { console.error("Error clientes:", e); }
+}
+
+function poblarFiltroVendedorClientes() {
+  const sel = document.getElementById('filtroVendedorClientes');
+  if (!sel) return;
+  const actual = sel.value;
+  const vendedores = (STATE.vendedoresParaApoyo || []).slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
+  sel.innerHTML = '<option value="">Todos los vendedores</option>' +
+    vendedores.map(v => `<option value="${v.id_vendedor}">${v.nombre}</option>`).join('');
+  sel.value = actual;
+}
+
+function _nombreVendedorCliente(idVendedor) {
+  const v = (STATE.vendedoresParaApoyo || []).find(x => String(x.id_vendedor) === String(idVendedor));
+  return v ? v.nombre : '';
 }
 
 async function cargarMisAPs() {
@@ -2051,21 +2080,28 @@ async function cancelarAP(ap_id) {
 function renderClientes(filtro="") {
   const cont = document.getElementById('listaClientes');
   const fl   = filtro.toLowerCase();
-  const lista = STATE.clientes.filter(c =>
-    !fl || String(c.razon_social).toLowerCase().includes(fl) || String(c.cliente_nit).includes(fl)
-  );
+  const filtroVend = document.getElementById('filtroVendedorClientes')?.value || '';
+  const lista = STATE.clientes.filter(c => {
+    const coincideTexto  = !fl || String(c.razon_social).toLowerCase().includes(fl) || String(c.cliente_nit).includes(fl);
+    const coincideVend   = !filtroVend || String(c.vendedor_asignado) === String(filtroVend);
+    return coincideTexto && coincideVend;
+  });
   if (!lista.length) { cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin clientes</div>'; return; }
-  cont.innerHTML = lista.map(c => `
+  cont.innerHTML = lista.map(c => {
+    const nombreVend = _nombreVendedorCliente(c.vendedor_asignado);
+    return `
     <div class="card" style="margin-bottom:0.6rem;padding:1rem;cursor:pointer;" onclick="nuevoPedidoDesdeCliente('${c.cliente_nit}')">
       <div class="cr-nit">NIT ${c.cliente_nit}</div>
       <div class="cr-name">${c.razon_social}</div>
+      ${nombreVend ? `<div class="cr-vend">👤 Atiende: ${nombreVend}</div>` : ''}
       ${c.coordenadas_home ? `<div class="cr-vend">📍 ${c.coordenadas_home}</div>` : ''}
       <div class="btn-row" style="margin-top:8px;">
         <button class="btn btn-success btn-sm" onclick="event.stopPropagation();abrirRegistroVisita('${c.cliente_nit}')">📷 Registrar Visita</button>
         <button class="btn btn-outline btn-sm" onclick="nuevoPedidoDesdeCliente('${c.cliente_nit}')">➕ Nueva AP</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function filtrarClientes() {
