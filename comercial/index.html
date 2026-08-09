@@ -1841,30 +1841,56 @@ async function cargarClientes() {
     // Todos los vendedores consultan la base completa de clientes
     // (decisión de negocio 03/07/2026 — ya no se filtra por vendedor_asignado).
     STATE.clientes = await leerGVIZ("CLIENTES");
-    // Se reutiliza la misma lista de vendedores de "venta de apoyo" (ya trae
-    // id + nombre) para poblar el filtro "Vendedor que atiende" — así el
-    // vendedor puede consultar los clientes de sus compañeros, no solo los
-    // propios, tal como lo pidieron en la última reunión.
-    if (!STATE.vendedoresParaApoyo || !STATE.vendedoresParaApoyo.length) {
-      await cargarVendedoresParaApoyo();
-    }
+    // El filtro "Vendedor que atiende" NO se limita a rol VENDEDOR/JEFE_VENTAS
+    // (eso es lo que usa "venta de apoyo" para otro fin). Aquí se necesita
+    // cualquier persona que realmente atienda clientes — Gerencia y Suministros
+    // también venden (ver reunión: Principal=Gerencia, Lorena, Juan Fernando) —
+    // así que se construye a partir de quién aparece de verdad en vendedor_asignado.
+    await cargarTodosLosUsuariosActivos();
     poblarFiltroVendedorClientes();
     renderClientes();
   } catch(e) { console.error("Error clientes:", e); }
+}
+
+// Trae TODOS los usuarios activos (cualquier rol) para poder resolver nombres
+// de "quién atiende" a cada cliente — a diferencia de cargarVendedoresParaApoyo(),
+// que sigue restringido a VENDEDOR/JEFE_VENTAS para su propio flujo.
+async function cargarTodosLosUsuariosActivos() {
+  try {
+    let usuarios;
+    try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
+    catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+    STATE.todosUsuariosActivos = usuarios
+      .filter(u => String(u.estado || '').trim().toUpperCase() === 'ACTIVO')
+      .map(u => ({
+        id_vendedor: u.id_usuario || u.id_vendedor || u.cedula || '',
+        nombre: u.nombre_completo || u.nombre_vendedor || u.nombre || ''
+      }))
+      .filter(v => v.id_vendedor && v.nombre);
+  } catch(e) {
+    console.error('Error cargando usuarios activos:', e);
+    STATE.todosUsuariosActivos = STATE.todosUsuariosActivos || [];
+  }
 }
 
 function poblarFiltroVendedorClientes() {
   const sel = document.getElementById('filtroVendedorClientes');
   if (!sel) return;
   const actual = sel.value;
-  const vendedores = (STATE.vendedoresParaApoyo || []).slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
+  // Solo se listan los IDs que realmente aparecen asignados a algún cliente —
+  // así el desplegable no muestra vendedores sin cartera y sí capta a
+  // cualquiera que venda, sin importar su rol registrado.
+  const idsConClientes = new Set(STATE.clientes.map(c => String(c.vendedor_asignado)).filter(Boolean));
+  const vendedores = (STATE.todosUsuariosActivos || [])
+    .filter(v => idsConClientes.has(String(v.id_vendedor)))
+    .slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
   sel.innerHTML = '<option value="">Todos los vendedores</option>' +
     vendedores.map(v => `<option value="${v.id_vendedor}">${v.nombre}</option>`).join('');
   sel.value = actual;
 }
 
 function _nombreVendedorCliente(idVendedor) {
-  const v = (STATE.vendedoresParaApoyo || []).find(x => String(x.id_vendedor) === String(idVendedor));
+  const v = (STATE.todosUsuariosActivos || []).find(x => String(x.id_vendedor) === String(idVendedor));
   return v ? v.nombre : '';
 }
 
