@@ -1685,10 +1685,18 @@ async function cargarVendedoresParaApoyo() {
     try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
     catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
 
+    // Además de VENDEDOR/JEFE_VENTAS, se incluyen explícitamente Gerencia, Lorena
+    // y Juan Fernando (de Suministros) — atienden clientes propios (ver migración
+    // de vendedor_asignado) pero no se les crea una cuenta VENDEDOR aparte; se les
+    // puede registrar la venta por este mismo mecanismo de apoyo. Identificados por
+    // CÉDULA (no id_usuario), que es el identificador real que usa toda la app.
+    const CEDULAS_VENDEDORES_ADICIONALES = ['31409227', '31434163', '1144160845'];
     const vendedoresReales = usuarios.filter(u => {
       const rol = String(u.rol || u.cargo || '').trim().toUpperCase();
       const estado = String(u.estado || '').trim().toUpperCase();
-      return (rol === 'VENDEDOR' || rol === 'JEFE_VENTAS') && estado === 'ACTIVO';
+      const cedula = String(u.cedula || '').trim();
+      const esAdicional = CEDULAS_VENDEDORES_ADICIONALES.includes(cedula);
+      return ((rol === 'VENDEDOR' || rol === 'JEFE_VENTAS') || esAdicional) && estado === 'ACTIVO';
     });
 
     STATE.vendedoresParaApoyo = vendedoresReales.map(u => ({
@@ -1860,10 +1868,14 @@ async function cargarTodosLosUsuariosActivos() {
     let usuarios;
     try { usuarios = await leerGVIZ('USUARIOS_MAESTRO'); }
     catch(e) { usuarios = await leerGVIZ('VENDEDORES'); }
+    // BUG CORREGIDO: se usaba u.id_usuario (2,4,5,6,9,10) como id_vendedor, pero
+    // toda la app (login, Mis APs, crearCliente, guardarVisita) identifica al
+    // vendedor por su CÉDULA — se confirmó en PREVENTAS_AP.vendedor_id. Con
+    // id_usuario, el filtro nunca habría coincidido con los clientes reales.
     STATE.todosUsuariosActivos = usuarios
       .filter(u => String(u.estado || '').trim().toUpperCase() === 'ACTIVO')
       .map(u => ({
-        id_vendedor: u.id_usuario || u.id_vendedor || u.cedula || '',
+        id_vendedor: u.id_vendedor || u.cedula || '',
         nombre: u.nombre_completo || u.nombre_vendedor || u.nombre || ''
       }))
       .filter(v => v.id_vendedor && v.nombre);
