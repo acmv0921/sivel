@@ -980,8 +980,34 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <button class="gps-btn" onclick="capturarGPS()">📍</button>
       </div>
     </div>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label class="form-label" style="margin:0;">👤 Contactos (opcional)</label>
+        <button type="button" class="btn btn-outline btn-sm" onclick="agregarFilaContactoNC()">+ Agregar</button>
+      </div>
+      <div id="ncContactosRows" style="margin-top:8px;"></div>
+    </div>
     <button class="btn btn-success" onclick="guardarCliente()">💾 Guardar Cliente</button>
     <div id="clienteErr" style="font-size:0.75rem;color:var(--rojo);margin-top:0.5rem;"></div>
+  </div>
+</div>
+
+<!-- ===== MODAL: CONTACTOS DE CLIENTE ===== -->
+<div id="modalContactos" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalContactos')">✕</button>
+    <div class="modal-title">Contactos — <span id="mcClienteNombre"></span></div>
+    <div style="font-size:0.72rem;color:#666;margin-bottom:8px;">NIT: <span id="mcClienteNit"></span></div>
+    <div id="mcContactosLista" style="margin-bottom:10px;"></div>
+    <div style="border-top:1px solid #eee;padding-top:10px;margin-top:6px;">
+      <label class="form-label">+ Nuevo contacto</label>
+      <input id="mcNuevoNombre" class="form-control" placeholder="Nombre" style="margin-bottom:6px;">
+      <input id="mcNuevoCargo" class="form-control" placeholder="Cargo (ej: Compras, Obra)" style="margin-bottom:6px;">
+      <input id="mcNuevoTelefono" class="form-control" placeholder="Teléfono" style="margin-bottom:6px;">
+      <input id="mcNuevoCorreo" class="form-control" placeholder="Correo" style="margin-bottom:6px;">
+      <button class="btn btn-success btn-sm" style="width:100%;" onclick="agregarContactoExistente()">💾 Agregar contacto</button>
+    </div>
+    <div id="mcErr" style="font-size:0.75rem;color:var(--rojo);margin-top:0.5rem;"></div>
   </div>
 </div>
 
@@ -1849,6 +1875,13 @@ async function cargarClientes() {
     // Todos los vendedores consultan la base completa de clientes
     // (decisión de negocio 03/07/2026 — ya no se filtra por vendedor_asignado).
     STATE.clientes = await leerGVIZ("CLIENTES");
+    // Contactos por cliente (NIT, correos, teléfonos) — hoja separada
+    // CLIENTE_CONTACTOS. Se carga en paralelo sin bloquear STATE.clientes
+    // si esa hoja aún no existe.
+    leerGVIZ("CLIENTE_CONTACTOS").then(c => {
+      STATE.contactos = c;
+      renderClientes(document.getElementById('buscarClienteLista')?.value || '');
+    }).catch(e => { console.error("Error contactos:", e); STATE.contactos = STATE.contactos || []; });
     // El filtro "Vendedor que atiende" NO se limita a rol VENDEDOR/JEFE_VENTAS
     // (eso es lo que usa "venta de apoyo" para otro fin). Aquí se necesita
     // cualquier persona que realmente atienda clientes — Gerencia y Suministros
@@ -2128,6 +2161,7 @@ function renderClientes(filtro="") {
   if (!lista.length) { cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin clientes</div>'; return; }
   cont.innerHTML = lista.map(c => {
     const nombreVend = _nombreVendedorCliente(c.vendedor_asignado);
+    const nContactos = (STATE.contactos||[]).filter(x => String(x.cliente_nit) === String(c.cliente_nit)).length;
     return `
     <div class="card" style="margin-bottom:0.6rem;padding:1rem;cursor:pointer;" onclick="nuevoPedidoDesdeCliente('${c.cliente_nit}')">
       <div class="cr-nit">NIT ${c.cliente_nit}</div>
@@ -2136,7 +2170,8 @@ function renderClientes(filtro="") {
       ${c.coordenadas_home ? `<div class="cr-vend">📍 ${c.coordenadas_home}</div>` : ''}
       <div class="btn-row" style="margin-top:8px;">
         <button class="btn btn-success btn-sm" onclick="event.stopPropagation();abrirRegistroVisita('${c.cliente_nit}')">📷 Registrar Visita</button>
-        <button class="btn btn-outline btn-sm" onclick="nuevoPedidoDesdeCliente('${c.cliente_nit}')">➕ Nueva AP</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();nuevoPedidoDesdeCliente('${c.cliente_nit}')">➕ Nueva AP</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();abrirModalContactos('${c.cliente_nit}')">📇 Contactos${nContactos?` (${nContactos})`:''}</button>
       </div>
     </div>
   `;
@@ -2145,6 +2180,79 @@ function renderClientes(filtro="") {
 
 function filtrarClientes() {
   renderClientes(document.getElementById('buscarClienteLista').value);
+}
+
+// =============================================================================
+// CONTACTOS DE CLIENTE — ver/agregar/eliminar para un cliente YA existente
+// (para clientes nuevos, los contactos se capturan directo en el modal
+// "Nuevo Cliente", ver agregarFilaContactoNC más abajo).
+// =============================================================================
+let _MCNit = null;
+function abrirModalContactos(nit) {
+  const c = STATE.clientes.find(x => String(x.cliente_nit) === String(nit));
+  if (!c) return;
+  _MCNit = nit;
+  document.getElementById('mcClienteNombre').textContent = c.razon_social;
+  document.getElementById('mcClienteNit').textContent = nit;
+  document.getElementById('mcNuevoNombre').value = '';
+  document.getElementById('mcNuevoCargo').value = '';
+  document.getElementById('mcNuevoTelefono').value = '';
+  document.getElementById('mcNuevoCorreo').value = '';
+  document.getElementById('mcErr').textContent = '';
+  renderContactosModal();
+  document.getElementById('modalContactos').classList.add('show');
+}
+
+function renderContactosModal() {
+  const cont = document.getElementById('mcContactosLista');
+  const lista = (STATE.contactos||[]).filter(x => String(x.cliente_nit) === String(_MCNit));
+  if (!lista.length) { cont.innerHTML = '<div style="color:#888;font-size:0.78rem;">Sin contactos registrados todavía.</div>'; return; }
+  cont.innerHTML = lista.map(ct => `
+    <div style="border:1px solid #eee;border-radius:8px;padding:8px;margin-bottom:6px;">
+      <div style="font-weight:600;font-size:0.85rem;">${ct.nombre_contacto}${ct.cargo?' · '+ct.cargo:''}</div>
+      ${ct.telefono ? `<div style="font-size:0.78rem;color:#555;">📞 ${ct.telefono}</div>` : ''}
+      ${ct.correo   ? `<div style="font-size:0.78rem;color:#555;">✉️ ${ct.correo}</div>` : ''}
+      <button class="btn btn-outline btn-sm" style="margin-top:6px;color:var(--rojo);border-color:var(--rojo);" onclick="eliminarContactoExistente('${ct.id_contacto}')">🗑 Eliminar</button>
+    </div>
+  `).join('');
+}
+
+async function agregarContactoExistente() {
+  const nombre   = document.getElementById('mcNuevoNombre').value.trim();
+  const cargo    = document.getElementById('mcNuevoCargo').value.trim();
+  const telefono = document.getElementById('mcNuevoTelefono').value.trim();
+  const correo   = document.getElementById('mcNuevoCorreo').value.trim();
+  const err = document.getElementById('mcErr');
+  if (!nombre) { err.textContent = "Nombre requerido"; return; }
+  err.textContent = "Guardando...";
+  const r = await escribirGAS({
+    accion: 'crearContacto',
+    cliente_nit: _MCNit,
+    nombre_contacto: nombre,
+    cargo, telefono, correo,
+    vendedor_registro: STATE.vendedor?.id_vendedor || ''
+  });
+  if (!r || r.ok === false) { err.textContent = "❌ " + (r && r.error ? r.error : "No se pudo guardar"); return; }
+  if (!STATE.contactos) STATE.contactos = [];
+  STATE.contactos.push({ id_contacto: r.id_contacto, cliente_nit: _MCNit, nombre_contacto: nombre, cargo, telefono, correo });
+  document.getElementById('mcNuevoNombre').value = '';
+  document.getElementById('mcNuevoCargo').value = '';
+  document.getElementById('mcNuevoTelefono').value = '';
+  document.getElementById('mcNuevoCorreo').value = '';
+  err.textContent = '';
+  renderContactosModal();
+  renderClientes(document.getElementById('buscarClienteLista')?.value || '');
+  toast('✅ Contacto agregado');
+}
+
+async function eliminarContactoExistente(idContacto) {
+  if (!confirm('¿Eliminar este contacto?')) return;
+  const r = await escribirGAS({ accion: 'eliminarContacto', id_contacto: idContacto });
+  if (!r || r.ok === false) { toast('❌ No se pudo eliminar'); return; }
+  STATE.contactos = (STATE.contactos||[]).filter(x => String(x.id_contacto) !== String(idContacto));
+  renderContactosModal();
+  renderClientes(document.getElementById('buscarClienteLista')?.value || '');
+  toast('🗑 Contacto eliminado');
 }
 
 // =============================================================================
@@ -3305,7 +3413,33 @@ function mostrarFormCliente() {
   document.getElementById('ncNombre').value = '';
   document.getElementById('ncGps').value    = '';
   document.getElementById('clienteErr').textContent = '';
+  _NCONTACTOS = [];
+  renderContactosNC();
   document.getElementById('modalCliente').classList.add('show');
+}
+
+// ---- CONTACTOS: repetidor de filas en el modal "Nuevo Cliente" ----
+let _NCONTACTOS = [];
+function agregarFilaContactoNC(){ _NCONTACTOS.push({nombre:'',cargo:'',telefono:'',correo:''}); renderContactosNC(); }
+function quitarFilaContactoNC(i){ _NCONTACTOS.splice(i,1); renderContactosNC(); }
+function actualizarFilaContactoNC(i,campo,valor){ if(_NCONTACTOS[i]) _NCONTACTOS[i][campo]=valor; }
+function renderContactosNC(){
+  const cont = document.getElementById('ncContactosRows');
+  if (!cont) return;
+  if (!_NCONTACTOS.length) { cont.innerHTML = '<span style="color:#aaa;font-size:.72rem;">Ninguno agregado (opcional)</span>'; return; }
+  cont.innerHTML = _NCONTACTOS.map((c,i) => `
+    <div style="border:1px solid #eee;border-radius:8px;padding:8px;margin-bottom:6px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Nombre" value="${String(c.nombre||'').replace(/"/g,'&quot;')}" oninput="actualizarFilaContactoNC(${i},'nombre',this.value)">
+        <input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Cargo" value="${String(c.cargo||'').replace(/"/g,'&quot;')}" oninput="actualizarFilaContactoNC(${i},'cargo',this.value)">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 28px;gap:6px;">
+        <input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Teléfono" value="${String(c.telefono||'').replace(/"/g,'&quot;')}" oninput="actualizarFilaContactoNC(${i},'telefono',this.value)">
+        <input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Correo" value="${String(c.correo||'').replace(/"/g,'&quot;')}" oninput="actualizarFilaContactoNC(${i},'correo',this.value)">
+        <button type="button" onclick="quitarFilaContactoNC(${i})" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button>
+      </div>
+    </div>
+  `).join('');
 }
 
 function capturarGPS() {
@@ -3359,6 +3493,33 @@ async function guardarCliente() {
   if (!resultadoCliente || resultadoCliente.ok === false) {
     err.textContent = "❌ " + (resultadoCliente && resultadoCliente.error ? resultadoCliente.error : "No se pudo guardar el cliente");
     return;
+  }
+
+  // Guardar los contactos capturados (opcional). Un contacto fallido no
+  // bloquea el registro del cliente, que ya quedó guardado arriba — solo
+  // se avisa cuántos no se pudieron guardar para que el vendedor los
+  // reintente luego desde "📇 Contactos" en la lista de clientes.
+  const contactosValidos = _NCONTACTOS.filter(c => (c.nombre||'').trim());
+  if (contactosValidos.length) {
+    err.textContent = "Guardando contactos...";
+    if (!STATE.contactos) STATE.contactos = [];
+    const resultados = await Promise.all(contactosValidos.map(c => escribirGAS({
+      accion:            'crearContacto',
+      cliente_nit:       nit,
+      nombre_contacto:   c.nombre.trim(),
+      cargo:             (c.cargo||'').trim(),
+      telefono:          (c.telefono||'').trim(),
+      correo:            (c.correo||'').trim(),
+      vendedor_registro: STATE.vendedor?.id_vendedor || ''
+    })));
+    resultados.forEach((r, i) => {
+      if (r && r.ok !== false) {
+        const c = contactosValidos[i];
+        STATE.contactos.push({ id_contacto:r.id_contacto, cliente_nit:nit, nombre_contacto:c.nombre.trim(), cargo:(c.cargo||'').trim(), telefono:(c.telefono||'').trim(), correo:(c.correo||'').trim() });
+      }
+    });
+    const fallidos = resultados.filter(r => !r || r.ok === false).length;
+    if (fallidos) toast(`⚠️ ${fallidos} contacto(s) no se pudieron guardar — reinténtalos desde "📇 Contactos"`);
   }
 
   // Agregar localmente para uso inmediato
@@ -3973,3 +4134,4 @@ function mostrarAvisoActualizacion(reg) {
 </script>
 </body>
 </html>
+
