@@ -1011,6 +1011,37 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   </div>
 </div>
 
+<!-- ===== MODAL: EDITAR CLIENTE ===== -->
+<div id="modalEditarCliente" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="cerrarModal('modalEditarCliente')">✕</button>
+    <div class="modal-title">Editar Cliente</div>
+    <div style="border-top:1px solid #eee;padding-top:10px;margin-top:6px;">
+      <label class="form-label">NIT</label>
+      <input id="ecNit" class="form-control" placeholder="NIT" style="margin-bottom:6px;">
+      <div style="font-size:0.72rem;color:var(--rojo);margin-bottom:10px;">⚠️ Cambiar el NIT actualiza automaticamente todos los pedidos, contactos y visitas de este cliente.</div>
+      <label class="form-label">Razon social</label>
+      <input id="ecRazonSocial" class="form-control" placeholder="Razon social" style="margin-bottom:6px;">
+      <label class="form-label">Telefono</label>
+      <input id="ecTelefono" class="form-control" placeholder="Telefono" style="margin-bottom:6px;">
+      <label class="form-label">Ciudad</label>
+      <input id="ecCiudad" class="form-control" placeholder="Ciudad" style="margin-bottom:6px;">
+      <label class="form-label">Direccion</label>
+      <input id="ecDireccion" class="form-control" placeholder="Direccion" style="margin-bottom:6px;">
+      <label class="form-label">Coordenadas GPS</label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="ecCoordenadas" class="form-control" placeholder="lat,lon" readonly style="flex:1;">
+        <button class="btn btn-outline btn-sm" onclick="capturarGPSEditarCliente()">📍 Capturar</button>
+      </div>
+      <div id="ecErr" style="font-size:0.75rem;color:var(--rojo);margin-top:0.5rem;"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-outline" style="flex:1;" onclick="cerrarModal('modalEditarCliente')">Cancelar</button>
+        <button id="ecBtnGuardar" class="btn btn-primary" style="flex:1;" onclick="guardarEdicionCliente()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL: DETALLE AP ===== -->
 <div id="modalVerAP" class="modal-overlay">
   <div class="modal-box">
@@ -2180,6 +2211,7 @@ function renderClientes(filtro="") {
         <button class="btn btn-success btn-sm" onclick="event.stopPropagation();abrirRegistroVisita('${c.cliente_nit}')">📷 Registrar Visita</button>
         <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();nuevoPedidoDesdeCliente('${c.cliente_nit}')">➕ Nueva AP</button>
         <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();abrirModalContactos('${c.cliente_nit}')">📇 Contactos${nContactos?` (${nContactos})`:''}</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();abrirModalEditarCliente('${c.cliente_nit}')">✏️ Editar</button>
       </div>
     </div>
   `;
@@ -2195,7 +2227,63 @@ function filtrarClientes() {
 // (para clientes nuevos, los contactos se capturan directo en el modal
 // "Nuevo Cliente", ver agregarFilaContactoNC más abajo).
 // =============================================================================
-let _MCNit = null;
+let _ECNitOriginal = null;
+function abrirModalEditarCliente(nit) {
+  const c = STATE.clientes.find(x => String(x.cliente_nit) === String(nit));
+  if (!c) return;
+  _ECNitOriginal = String(nit);
+  document.getElementById('ecNit').value = c.cliente_nit;
+  document.getElementById('ecRazonSocial').value = c.razon_social || '';
+  document.getElementById('ecTelefono').value = c.telefono || '';
+  document.getElementById('ecCiudad').value = c.ciudad || '';
+  document.getElementById('ecDireccion').value = c.direccion || '';
+  document.getElementById('ecCoordenadas').value = c.coordenadas_home || '';
+  document.getElementById('ecErr').textContent = '';
+  document.getElementById('modalEditarCliente').classList.add('show');
+}
+function capturarGPSEditarCliente() {
+  if (!navigator.geolocation) { toast("GPS no disponible"); return; }
+  toast("📍 Obteniendo ubicacion...");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const coords = `${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`;
+      document.getElementById('ecCoordenadas').value = coords;
+      toast("✅ GPS capturado");
+    },
+    () => toast("❌ No se pudo obtener GPS")
+  );
+}
+async function guardarEdicionCliente() {
+  const btn = document.getElementById('ecBtnGuardar');
+  const errEl = document.getElementById('ecErr');
+  errEl.textContent = '';
+  const nitNuevo = (document.getElementById('ecNit').value || '').trim();
+  const nitOriginal = _ECNitOriginal;
+  if (!nitNuevo) { errEl.textContent = 'El NIT no puede estar vacio.'; return; }
+  const razon_social = document.getElementById('ecRazonSocial').value.trim();
+  const telefono = document.getElementById('ecTelefono').value.trim();
+  const ciudad = document.getElementById('ecCiudad').value.trim();
+  const direccion = document.getElementById('ecDireccion').value.trim();
+  const coordenadas_home = document.getElementById('ecCoordenadas').value.trim();
+  if (btn) btn.disabled = true;
+  try {
+    if (nitNuevo !== nitOriginal) {
+      const conf = confirm('Vas a CAMBIAR el NIT de ' + nitOriginal + ' a ' + nitNuevo + '.\n\nEsto actualizara automaticamente TODOS los pedidos, contactos y visitas registrados de este cliente al nuevo NIT.\n\n¿Continuar?');
+      if (!conf) { if (btn) btn.disabled = false; return; }
+      const rNit = await escribirGAS({accion:'cambiarNitCliente', cliente_nit_actual: nitOriginal, cliente_nit_nuevo: nitNuevo});
+      if (!rNit || !rNit.ok) { errEl.textContent = (rNit && rNit.error) || 'Error al cambiar el NIT.'; if (btn) btn.disabled = false; return; }
+    }
+    const rUpd = await escribirGAS({accion:'actualizarCliente', cliente_nit: nitNuevo, razon_social, telefono, ciudad, direccion, coordenadas_home});
+    if (!rUpd || !rUpd.ok) { errEl.textContent = (rUpd && rUpd.error) || 'Error al actualizar el cliente.'; if (btn) btn.disabled = false; return; }
+    toast('✅ Cliente actualizado');
+    cerrarModal('modalEditarCliente');
+    await cargarClientes();
+  } catch(e) {
+    errEl.textContent = 'Error: ' + (e.message || e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 function abrirModalContactos(nit) {
   const c = STATE.clientes.find(x => String(x.cliente_nit) === String(nit));
   if (!c) return;
@@ -4143,5 +4231,6 @@ function mostrarAvisoActualizacion(reg) {
 </script>
 </body>
 </html>
+
 
 
