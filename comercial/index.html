@@ -2228,6 +2228,7 @@ function filtrarClientes() {
 // "Nuevo Cliente", ver agregarFilaContactoNC más abajo).
 // =============================================================================
 let _ECNitOriginal = null;
+let _guardandoEdicionCliente = false;
 function abrirModalEditarCliente(nit) {
   const c = STATE.clientes.find(x => String(x.cliente_nit) === String(nit));
   if (!c) return;
@@ -2254,6 +2255,7 @@ function capturarGPSEditarCliente() {
   );
 }
 async function guardarEdicionCliente() {
+  if (_guardandoEdicionCliente) return;
   const btn = document.getElementById('ecBtnGuardar');
   const errEl = document.getElementById('ecErr');
   errEl.textContent = '';
@@ -2265,6 +2267,7 @@ async function guardarEdicionCliente() {
   const ciudad = document.getElementById('ecCiudad').value.trim();
   const direccion = document.getElementById('ecDireccion').value.trim();
   const coordenadas_home = document.getElementById('ecCoordenadas').value.trim();
+  _guardandoEdicionCliente = true;
   if (btn) btn.disabled = true;
   try {
     if (nitNuevo !== nitOriginal) {
@@ -2281,6 +2284,7 @@ async function guardarEdicionCliente() {
   } catch(e) {
     errEl.textContent = 'Error: ' + (e.message || e);
   } finally {
+    _guardandoEdicionCliente = false;
     if (btn) btn.disabled = false;
   }
 }
@@ -4231,6 +4235,7 @@ function mostrarAvisoActualizacion(reg) {
 </script>
 </body>
 </html>
+
 
 
 
