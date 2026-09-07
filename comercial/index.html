@@ -2307,14 +2307,36 @@ function renderContactosModal() {
   const cont = document.getElementById('mcContactosLista');
   const lista = (STATE.contactos||[]).filter(x => String(x.cliente_nit) === String(_MCNit));
   if (!lista.length) { cont.innerHTML = '<div style="color:#888;font-size:0.78rem;">Sin contactos registrados todavía.</div>'; return; }
-  cont.innerHTML = lista.map(ct => `
-    <div style="border:1px solid #eee;border-radius:8px;padding:8px;margin-bottom:6px;">
-      <div style="font-weight:600;font-size:0.85rem;">${ct.nombre_contacto}${ct.cargo?' · '+ct.cargo:''}</div>
+  // El principal siempre arriba — es el que se asume vigente; los demás quedan
+  // como histórico (p. ej. quien atendió la primera visita antes de lograr el
+  // contacto de verdad importante), tal como se acordó en la reunión de ventas.
+  const ordenada = lista.slice().sort((a,b) => (b.es_principal?1:0) - (a.es_principal?1:0));
+  cont.innerHTML = ordenada.map(ct => {
+    const esPrincipal = !!ct.es_principal;
+    return `
+    <div style="border:1px solid ${esPrincipal?'var(--azul)':'#eee'};border-radius:8px;padding:8px;margin-bottom:6px;${esPrincipal?'background:#f0f6ff;':''}">
+      <div style="font-weight:600;font-size:0.85rem;">
+        ${esPrincipal ? '<span style="color:var(--azul);">⭐ Principal</span> · ' : ''}${ct.nombre_contacto}${ct.cargo?' · '+ct.cargo:''}
+      </div>
       ${ct.telefono ? `<div style="font-size:0.78rem;color:#555;">📞 ${ct.telefono}</div>` : ''}
       ${ct.correo   ? `<div style="font-size:0.78rem;color:#555;">✉️ ${ct.correo}</div>` : ''}
-      <button class="btn btn-outline btn-sm" style="margin-top:6px;color:var(--rojo);border-color:var(--rojo);" onclick="eliminarContactoExistente('${ct.id_contacto}')">🗑 Eliminar</button>
+      <div class="btn-row" style="margin-top:6px;">
+        ${!esPrincipal ? `<button class="btn btn-outline btn-sm" onclick="marcarContactoPrincipalUI('${ct.id_contacto}')">⭐ Marcar como principal</button>` : ''}
+        <button class="btn btn-outline btn-sm" style="color:var(--rojo);border-color:var(--rojo);" onclick="eliminarContactoExistente('${ct.id_contacto}')">🗑 Eliminar</button>
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+async function marcarContactoPrincipalUI(idContacto) {
+  const r = await escribirGAS({ accion: 'marcarContactoPrincipal', id_contacto: idContacto, cliente_nit: _MCNit });
+  if (!r || r.ok === false) { toast('❌ ' + (r && r.error ? r.error : 'No se pudo marcar como principal')); return; }
+  (STATE.contactos||[]).forEach(x => {
+    if (String(x.cliente_nit) === String(_MCNit)) x.es_principal = (String(x.id_contacto) === String(idContacto));
+  });
+  renderContactosModal();
+  toast('⭐ Contacto marcado como principal');
 }
 
 async function agregarContactoExistente() {
@@ -2334,7 +2356,11 @@ async function agregarContactoExistente() {
   });
   if (!r || r.ok === false) { err.textContent = "❌ " + (r && r.error ? r.error : "No se pudo guardar"); return; }
   if (!STATE.contactos) STATE.contactos = [];
-  STATE.contactos.push({ id_contacto: r.id_contacto, cliente_nit: _MCNit, nombre_contacto: nombre, cargo, telefono, correo });
+  // El backend ya decide si es principal (el primer contacto de un cliente
+  // queda como principal por defecto); se replica la misma regla aquí para
+  // reflejarlo de inmediato sin esperar una recarga completa.
+  const esPrimerContacto = !STATE.contactos.some(x => String(x.cliente_nit) === String(_MCNit));
+  STATE.contactos.push({ id_contacto: r.id_contacto, cliente_nit: _MCNit, nombre_contacto: nombre, cargo, telefono, correo, es_principal: esPrimerContacto });
   document.getElementById('mcNuevoNombre').value = '';
   document.getElementById('mcNuevoCargo').value = '';
   document.getElementById('mcNuevoTelefono').value = '';
