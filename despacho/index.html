@@ -2039,7 +2039,13 @@ async function confirmarDespacho() {
 
   const nuevoEstado = todoCompleto ? 'Despachado Total' : 'Despachado Parcial';
   const detalleFlete = document.getElementById('despDetalleFlete')?.value.trim() || '';
-  const resEstado = await escribirGAS({ accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete });
+  const cargueManualInfo = getCargueManual();
+  const resEstado = await escribirGAS({
+    accion:'actualizarEstadoAP', ap_id: ap.ap_id, estado_ap: nuevoEstado, detalle_flete_despacho: detalleFlete,
+    cargue_manual_requerido: cargueManualInfo ? 'SI' : '',
+    cargue_manual_fecha: cargueManualInfo?.fecha || '',
+    cargue_manual_nota: cargueManualInfo?.nota || ''
+  });
   if (!resEstado || resEstado.ok === false) {
     toast('⚠️ Los productos se registraron, pero no se pudo actualizar el estado de la AP: ' + (resEstado?.error || 'error desconocido'));
   }
@@ -2092,7 +2098,7 @@ async function confirmarDespacho() {
 
   // Recargar y abrir WhatsApp
   await cargarTodo();
-  setTimeout(() => abrirReporteWA(ap.ap_id, placa, conductorFinal), 600);
+  setTimeout(() => abrirReporteWA(ap.ap_id, placa, conductorFinal, cargueManualInfo), 600);
 
   borrarBorradorDespacho();
   } catch (err) {
@@ -2888,7 +2894,7 @@ function renderFotosDespacho() {
 // =============================================================================
 // REPORTE WHATSAPP
 // =============================================================================
-function abrirReporteWA(ap_id, placa, conductor) {
+function abrirReporteWA(ap_id, placa, conductor, cargueManual) {
   const ap     = S.aps.find(a => String(a.ap_id) === String(ap_id));
   const lineas = S.detalles.filter(d => String(d.ap_id) === String(ap_id));
   const cliente = nombreCliente(ap?.cliente_nit);
@@ -2921,6 +2927,11 @@ function abrirReporteWA(ap_id, placa, conductor) {
 
   const notaNeg = notaNegociacionAP(ap||{});
   const notaTxt = notaNeg.length ? `\n*NOTA DE NEGOCIACIÓN (Comercial):*\n` + notaNeg.map(p => `  • ${p}`).join('\n') + '\n' : '';
+  // Cargue manual — antes se capturaba en pantalla pero nunca llegaba a nadie
+  // (ni a producción ni a Ventas). Ahora se incluye siempre que se haya marcado.
+  const cargueTxt = (cargueManual && cargueManual.requiere)
+    ? `\n🏗️ *REQUIERE CARGUE MANUAL*\n  • Fecha estimada: ${cargueManual.fecha || 'No especificada'}\n${cargueManual.nota ? '  • Nota: ' + cargueManual.nota + '\n' : ''}`
+    : '';
 
   // NOTA: sin emojis pictográficos a color (🏭📋📦🏢👤📅🚛👷) — WhatsApp Desktop
   // en Windows no siempre tiene la fuente de emoji completa y los muestra como ◆.
@@ -2938,7 +2949,7 @@ Conductor: ${conductor||'N/A'}
 Tipo: ${ap?.tipo_entrega||''}
 
 *PRODUCTOS DESPACHADOS:*
-${detalleProd}${notaTxt}
+${detalleProd}${cargueTxt}${notaTxt}
 ━━━━━━━━━━━━━━━━━━━━
 _Generado por SIVIL · POSTECSA_`;
 
