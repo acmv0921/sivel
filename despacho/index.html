@@ -1461,7 +1461,7 @@ function renderInventario(filtro="") {
   cont.innerHTML = Object.values(porCodigo).map(({ base: p, primera, segunda }) => {
     const precio1 = primera?.precio_base || p.precio_base || 0;
     const dscto2  = segunda?.descuento_segunda_pct || p.descuento_segunda_pct || 10;
-    const precio2 = Math.round(precio1 * (1 - dscto2/100));
+    const precio2 = precio1 * (1 - dscto2/100); // sin redondear — solo fmt() redondea al mostrar
 
     const bloqueCalidad = `
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
@@ -1853,7 +1853,7 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
           const listaPrimera = parseFloat(prod.precio_base_planta) || 0;
           const dsctoSeg = parseFloat(prod.descuento_segunda_pct) || 10;
           const listaAplicable = (l.calidad||'PRIMERA').toUpperCase()==='SEGUNDA'
-            ? Math.round(listaPrimera * (1 - dsctoSeg/100)) : listaPrimera;
+            ? listaPrimera * (1 - dsctoSeg/100) : listaPrimera; // sin redondear
           // FIX: "pactado" antes era igual a l.precio_base (precio de lista) sin
           // aplicar el descuento negociado — por eso nunca se veía distinto del
           // precio de lista aunque hubiera descuento. Ahora sí resta el % de
@@ -1861,13 +1861,13 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
           // calcula Comercial.
           const precioBaseLinea = Number(l.precio_base) || 0;
           const descuentoPct = Number(l.descuento_aplicado) || 0;
-          const pactado = Math.round(precioBaseLinea * (1 - descuentoPct));
-          const pactadoConFlete = Math.round(pactado + fletePorUnidadAP);
+          const pactado = precioBaseLinea * (1 - descuentoPct); // sin redondear
+          const pactadoConFlete = pactado + fletePorUnidadAP;
           let html = '';
           if (listaAplicable) html += `<br>🏷️ Precio de lista${(l.calidad||'PRIMERA').toUpperCase()==='SEGUNDA'?' (Segunda)':''}: $${listaAplicable.toLocaleString('es-CO')}/${und}`;
-          if (pactado) html += `<br>💲 Precio pactado (con descuento${descuentoPct?' '+(descuentoPct*100).toFixed(0)+'%':''}): $${pactado.toLocaleString('es-CO')}/${und}${pactado < listaAplicable ? ' <span style="color:#b91c1c;font-weight:700;">(con descuento)</span>' : ''}`;
-          if (fletePorUnidadAP > 0) html += `<br>🚚 Flete prorrateado: $${Math.round(fletePorUnidadAP).toLocaleString('es-CO')}/${und}`;
-          if (fletePorUnidadAP > 0 && pactado) html += `<br>💵 Precio con descuento + flete: $${pactadoConFlete.toLocaleString('es-CO')}/${und}`;
+          if (pactado) html += `<br>💲 Precio pactado (con descuento${descuentoPct?' '+(descuentoPct*100).toFixed(0)+'%':''}): $${pactado.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}${pactado < listaAplicable ? ' <span style="color:#b91c1c;font-weight:700;">(con descuento)</span>' : ''}`;
+          if (fletePorUnidadAP > 0) html += `<br>🚚 Flete prorrateado: $${fletePorUnidadAP.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}`;
+          if (fletePorUnidadAP > 0 && pactado) html += `<br>💵 Precio con descuento + flete: $${pactadoConFlete.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}`;
           return html;
         })()}
       </div>
@@ -2188,22 +2188,27 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
       // pantalla de "Cantidades a despachar" y en el detalle de AP de Comercial.
       const listaU = Number(l.precio_base||0);
       const descPct = Number(l.descuento_aplicado||0);
-      const pactadoU = Math.round(listaU * (1 - descPct));
+      // CORRECCION (redondeo acumulado): antes pactadoU se redondeaba ANTES
+      // de multiplicar por la cantidad, acumulando diferencias visibles en
+      // cantidades grandes (caso real: Bloque 12, dos lineas identicas de 750
+      // unidades con totales distintos). Ahora nunca se redondea un valor
+      // intermedio, solo el texto final se muestra con 0 decimales.
+      const pactadoU = listaU * (1 - descPct);
       const fleteU = Number(l.flete_unidad||0);
-      const pactadoConFleteU = Math.round(pactadoU + fleteU);
+      const pactadoConFleteU = pactadoU + fleteU;
       const valorL = pactadoU * Number(l.cantidad||0);
       totalInforme += valorL;
       doc.text(nombre, 14, y);
       doc.text(String(l.cantidad||0), 108, y);
       doc.text(l.unidad||'', 130, y);
-      doc.text(pactadoU ? '$' + pactadoU.toLocaleString('es-CO') : '-', 150, y);
-      doc.text(valorL ? '$' + valorL.toLocaleString('es-CO') : '-', 180, y);
+      doc.text(pactadoU ? '$' + pactadoU.toLocaleString('es-CO',{maximumFractionDigits:0}) : '-', 150, y);
+      doc.text(valorL ? '$' + valorL.toLocaleString('es-CO',{maximumFractionDigits:0}) : '-', 180, y);
       y += 4.3;
       // NUEVO: desglose de precio unitario (lista / con descuento / con descuento+flete)
       doc.setFontSize(6.8); doc.setTextColor(120);
-      let nota = 'Lista: $' + listaU.toLocaleString('es-CO');
+      let nota = 'Lista: $' + listaU.toLocaleString('es-CO',{maximumFractionDigits:0});
       if (descPct) nota += '  ·  Dcto: ' + (descPct*100).toFixed(0) + '%';
-      if (fleteU > 0) nota += '  ·  Flete/u: $' + Math.round(fleteU).toLocaleString('es-CO') + '  ·  Con desc.+flete: $' + pactadoConFleteU.toLocaleString('es-CO');
+      if (fleteU > 0) nota += '  ·  Flete/u: $' + fleteU.toLocaleString('es-CO',{maximumFractionDigits:0}) + '  ·  Con desc.+flete: $' + pactadoConFleteU.toLocaleString('es-CO',{maximumFractionDigits:0});
       doc.text(nota, 14, y);
       doc.setFontSize(8); doc.setTextColor(0);
       y += 4.7;
@@ -2905,11 +2910,11 @@ function abrirReporteWA(ap_id, placa, conductor) {
     const listaU = Number(l.precio_base) || 0;
     if (listaU) {
       const descPct = Number(l.descuento_aplicado) || 0;
-      const pactadoU = Math.round(listaU * (1 - descPct));
-      const pactadoConFleteU = Math.round(pactadoU + _fletePorUnidadWA);
-      let nota = `     🏷️ Lista: $${listaU.toLocaleString('es-CO')}/${und}`;
-      if (descPct) nota += `  ·  💲 Con desc. (${(descPct*100).toFixed(0)}%): $${pactadoU.toLocaleString('es-CO')}/${und}`;
-      if (_fletePorUnidadWA > 0) nota += `  ·  🚚 Flete/u: $${Math.round(_fletePorUnidadWA).toLocaleString('es-CO')}  ·  💵 Con desc.+flete: $${pactadoConFleteU.toLocaleString('es-CO')}/${und}`;
+      const pactadoU = listaU * (1 - descPct);
+      const pactadoConFleteU = pactadoU + _fletePorUnidadWA;
+      let nota = `     🏷️ Lista: $${listaU.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}`;
+      if (descPct) nota += `  ·  💲 Con desc. (${(descPct*100).toFixed(0)}%): $${pactadoU.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}`;
+      if (_fletePorUnidadWA > 0) nota += `  ·  🚚 Flete/u: $${_fletePorUnidadWA.toLocaleString('es-CO',{maximumFractionDigits:0})}  ·  💵 Con desc.+flete: $${pactadoConFleteU.toLocaleString('es-CO',{maximumFractionDigits:0})}/${und}`;
       detalleProd += nota + '\n';
     }
   });
