@@ -519,6 +519,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div id="screenPedidos" class="screen">
     <div class="card">
       <div class="card-title">Mis Pedidos (APs)</div>
+      <div class="btn-row" style="margin-bottom:.5rem;">
+        <button class="btn btn-primary btn-sm" id="btnVistaPorAP" onclick="cambiarVistaPedidos('ap')">📋 Por AP</button>
+        <button class="btn btn-outline btn-sm" id="btnVistaPorProducto" onclick="cambiarVistaPedidos('producto')">📦 Pendientes por producto</button>
+      </div>
       <select id="filtroEstado" class="form-control" onchange="cargarMisAPs()">
         <option value="">Todos los estados</option>
         <option value="Pendiente">Pendiente</option>
@@ -530,6 +534,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="listaMisAPs">
       <div class="loading"><div class="spinner"></div> Cargando...</div>
     </div>
+    <div id="listaPendientesProducto" style="display:none;"></div>
   </div>
 
   <!-- NUEVO PEDIDO -->
@@ -1978,6 +1983,49 @@ function _nombreVendedorCliente(idVendedor) {
   return v ? v.nombre : '';
 }
 
+// Vista de pendientes por producto — pedido de la reunión de despacho: los
+// vendedores necesitan ver, agregado por producto, cuánto tienen pendiente
+// de despachar entre todos sus AP activos (antes solo Despacho lo veía).
+function cambiarVistaPedidos(vista) {
+  const esAP = vista === 'ap';
+  document.getElementById('listaMisAPs').style.display = esAP ? 'block' : 'none';
+  document.getElementById('listaPendientesProducto').style.display = esAP ? 'none' : 'block';
+  document.getElementById('filtroEstado').style.display = esAP ? 'block' : 'none';
+  const btnAP = document.getElementById('btnVistaPorAP');
+  const btnProd = document.getElementById('btnVistaPorProducto');
+  btnAP.classList.toggle('btn-primary', esAP);
+  btnAP.classList.toggle('btn-outline', !esAP);
+  btnProd.classList.toggle('btn-primary', !esAP);
+  btnProd.classList.toggle('btn-outline', esAP);
+  if (!esAP) cargarPendientesPorProducto();
+}
+
+async function cargarPendientesPorProducto() {
+  const cont = document.getElementById('listaPendientesProducto');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando...</div>';
+  const vendedorId = STATE.vendedor?.id_vendedor;
+  if (!vendedorId) { cont.innerHTML = '<div style="padding:1rem;color:#888;text-align:center;">No se pudo identificar el vendedor.</div>'; return; }
+  try {
+    const r = await fetch(`${GAS_URL}?accion=getPendientesPorProducto&vendedor_id=${encodeURIComponent(vendedorId)}&_=${Date.now()}`, {cache:'no-store'});
+    const data = await r.json();
+    const lista = (data && data.ok) ? data.data : [];
+    if (!lista.length) {
+      cont.innerHTML = '<div class="card" style="text-align:center;color:#888;padding:1.5rem;">✅ No tienes pendientes por despachar</div>';
+      return;
+    }
+    cont.innerHTML = lista.map(p => `
+      <div class="card">
+        <div style="font-weight:700;">${p.tmdescrip}</div>
+        <div style="font-size:0.72rem;color:#888;">Código ${p.tmcode}</div>
+        <div style="margin-top:6px;font-size:0.95rem;color:#b91c1c;font-weight:700;">⏳ Pendiente: ${p.pendiente} ${p.tmund||''}</div>
+        <div style="font-size:0.72rem;color:#888;margin-top:2px;">En ${p.num_aps} AP${p.num_aps>1?'s':''}: ${p.aps.join(', ')}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    cont.innerHTML = '<div style="padding:1rem;color:#dc2626;text-align:center;">Error al cargar pendientes.</div>';
+  }
+}
+
 async function cargarMisAPs() {
   try {
     const todas = await leerGVIZ("PREVENTAS_AP");
@@ -2156,12 +2204,18 @@ total += sub;
 if (prod && prod.tipo_iva === 'G') iva += sub * 0.19;
 const precioConDescuento = precio * (1 - desc);
 const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
+// Pendiente por despachar — antes solo se mostraba "Desp: X" (el vendedor
+// tenía que restar mentalmente). Ahora se calcula y resalta directamente,
+// para que sea igual de visible que en Despacho (pedido de la reunión: los
+// vendedores necesitan ver lo que tienen pendiente por cada AP).
+const despachadoLinea = parseFloat(l.cantidad_despachada) || 0;
+const pendienteLinea = Math.max(0, cant - despachadoLinea);
 html += `
 <div class="linea-item">
 <div class="linea-num">${i+1}</div>
 <div class="linea-info">
 <div class="linea-prod">${nombre}</div>
-<div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${l.cantidad_despachada||0}</div>
+<div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${despachadoLinea}${pendienteLinea>0 ? ' · <span style="color:#b91c1c;font-weight:700;">⏳ Pendiente: '+pendienteLinea+'</span>' : ' · ✅ Completo'}</div>
 <div class="linea-cant" style="margin-top:2px;">🏷️ Sin descuento: ${fmt(precio)}/u · 💲 Con descuento: ${fmt(precioConDescuento)}/u${fletePorUnidadAP>0 ? ' · 🚚 Flete: '+fmt(fletePorUnidadAP)+'/u · 💵 Con desc. + flete: '+fmt(precioConDescuentoYFlete)+'/u' : ''}</div>
 </div>
 <div class="linea-precio">${fmt(sub)}</div>
