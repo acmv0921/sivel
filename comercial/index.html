@@ -2020,7 +2020,7 @@ function renderInventario(filtro="") {
   cont.innerHTML = Object.values(porCodigo).map(({ base: p, primera, segunda }) => {
     const precio1 = primera?.precio_base || p.precio_base || 0;
     const dscto2  = segunda?.descuento_segunda_pct || p.descuento_segunda_pct || 10;
-    const precio2 = Math.round(precio1 * (1 - dscto2/100));
+    const precio2 = precio1 * (1 - dscto2/100); // sin redondear — solo fmt() redondea al mostrar
 
     // Bloque de calidades — muestra Primera y/o Segunda según existan
     const bloqueCalidad = `
@@ -2148,8 +2148,8 @@ const cant = parseFloat(l.cantidad_solicitada) || 0;
 const sub = cant * precio * (1 - desc);
 total += sub;
 if (prod && prod.tipo_iva === 'G') iva += sub * 0.19;
-const precioConDescuento = Math.round(precio * (1 - desc));
-const precioConDescuentoYFlete = Math.round(precioConDescuento + fletePorUnidadAP);
+const precioConDescuento = precio * (1 - desc);
+const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
 html += `
 <div class="linea-item">
 <div class="linea-num">${i+1}</div>
@@ -2591,7 +2591,7 @@ function seleccionarCalidad(calidad) {
   // Precio según calidad
   const dscto = parseFloat(p.descuento_segunda_pct||0);
   const precio1 = p.precio_base || 0;
-  const precio2 = Math.round(precio1 * (1 - dscto/100));
+  const precio2 = precio1 * (1 - dscto/100); // sin redondear — solo fmt() redondea al mostrar
   const precioActual = calidad==='SEGUNDA' ? precio2 : precio1;
   document.getElementById('detallePrecio').value = fmt(precioActual);
   if (calidad==='SEGUNDA' && dscto>0) {
@@ -2612,7 +2612,7 @@ const alert = document.getElementById('detalleDescAlert');
 
 const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
 const precioBase = calidad==='SEGUNDA'
-  ? Math.round(p.precio_base*(1-dsctoSeg/100))
+  ? p.precio_base*(1-dsctoSeg/100) // sin redondear — solo fmt() redondea al mostrar
   : p.precio_base;
 
 // FIX (2026-07-19): se elimina el tope de descuento a nivel de vendedor —
@@ -2653,7 +2653,7 @@ if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de
 
 const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
 const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
-const precioFinal = calidad==='SEGUNDA' ? Math.round(p.precio_base*(1-dsctoSeg/100)) : p.precio_base;
+const precioFinal = calidad==='SEGUNDA' ? p.precio_base*(1-dsctoSeg/100) : p.precio_base; // sin redondear — se guarda con precisión completa
 const estibaFinal = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
 const postesFinal = parseFloat(document.getElementById('detallePostes')?.value) || 0;
 
@@ -2845,12 +2845,12 @@ if (todasConPeso && flete > 0 && pesoTotalPedido > 0) {
   const pesoLinea = l.cantidad_solicitada * l.peso_kg_unitario;
   const esUltima = idx === lineas.length - 1;
   if (!esUltima) {
-    l._fleteLineaPeso = Math.round(flete * (pesoLinea / pesoTotalPedido));
+    l._fleteLineaPeso = flete * (pesoLinea / pesoTotalPedido); // sin redondear
     _fleteAsignadoPeso += l._fleteLineaPeso;
   } else {
     l._fleteLineaPeso = flete - _fleteAsignadoPeso;
   }
-  l._fletePorUnidadPeso = l.cantidad_solicitada > 0 ? Math.round(l._fleteLineaPeso / l.cantidad_solicitada) : 0;
+  l._fletePorUnidadPeso = l.cantidad_solicitada > 0 ? (l._fleteLineaPeso / l.cantidad_solicitada) : 0; // sin redondear
 } else {
   l._fleteLineaPeso = null;
   l._fletePorUnidadPeso = null;
@@ -3243,8 +3243,8 @@ async function cerrarCesionYGenerarInforme(){
 
         // NUEVO: desglose de precio unitario (con descuento / con descuento+flete),
         // mismo dato que ya se muestra en Despacho y en "Mis APs" de Comercial.
-        const _precioConDescuentoU = Math.round((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
-        const _precioConDescuentoYFleteU = Math.round(_precioConDescuentoU + _fletePorUnidadPedido);
+        const _precioConDescuentoU = (l.precio_base||0) * (1 - (l.descuento_aplicado||0)); // sin redondear
+        const _precioConDescuentoYFleteU = _precioConDescuentoU + _fletePorUnidadPedido;
         doc.setFontSize(6.8); doc.setTextColor(120);
         let _nota = 'P. unit. con desc.: $' + fmtN(_precioConDescuentoU);
         if (_fletePorUnidadPedido > 0) _nota += '  ·  Flete/u: $' + fmtN(_fletePorUnidadPedido) + '  ·  Con desc.+flete: $' + fmtN(_precioConDescuentoYFleteU);
