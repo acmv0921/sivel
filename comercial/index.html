@@ -2120,6 +2120,12 @@ if (ap.transportista_flete) extraInfo += `<div style="font-size:0.72rem;color:#8
 if (ap.flete_negociado === true || ap.flete_negociado === 'TRUE' || ap.flete_negociado === 'VERDADERO') {
 extraInfo += `<div style="font-size:0.72rem;color:#b45309;">⚠️ Flete negociado: ${fmt(ap.flete_valor)} (sugerido: ${fmt(ap.flete_sugerido)})</div>`;
 }
+// Cargue manual — reportado por Valentina (Despacho): esta información se
+// capturaba en el formulario de despacho pero nunca quedaba visible en
+// ningún lado (ni WhatsApp ni la AP). Ahora se guarda y se muestra aquí.
+if (ap.cargue_manual_requerido === 'SI' || ap.cargue_manual_requerido === true) {
+extraInfo += `<div style="font-size:0.72rem;color:#b45309;">🏗️ Requiere cargue manual${ap.cargue_manual_fecha ? ' · ' + fmtFechaHora(ap.cargue_manual_fecha) : ''}${ap.cargue_manual_nota ? ' · ' + ap.cargue_manual_nota : ''}</div>`;
+}
 
 let html = `
 <div class="modal-title">AP #${ap.ap_id}</div>
