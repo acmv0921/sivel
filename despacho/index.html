@@ -640,6 +640,14 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input type="hidden" id="curadoProducto">
     </div>
     <div class="form-group">
+      <label class="form-label">Calidad</label>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-outline btn-sm" id="curadoCalidadPrimera" onclick="seleccionarCalidadCurado('PRIMERA')" style="flex:1;background:var(--verde);color:#fff;border-color:var(--verde);">🥇 Primera</button>
+        <button type="button" class="btn btn-outline btn-sm" id="curadoCalidadSegunda" onclick="seleccionarCalidadCurado('SEGUNDA')" style="flex:1;">🥈 Segunda</button>
+      </div>
+      <input type="hidden" id="curadoCalidad" value="PRIMERA">
+    </div>
+    <div class="form-group">
       <label class="form-label">Dias de curado (sugerido, editable)</label>
       <input id="curadoDias" class="form-control" type="number" min="1" oninput="actualizarFechaDesdeDias()">
     </div>
@@ -1417,7 +1425,12 @@ function calcularInventario() {
   S.inventario = S.productos.map(p => {
     const code = String(p.tmcode);
     const bruto = parseFloat(p.tmcant) || 0;
-    const curado = S.patio.filter(x => String(x.tmcode) === code)
+    // El curado se resta SOLO de la fila de su propia calidad — antes se
+    // restaba el mismo total tanto a primera como a segunda (doble conteo),
+    // lo que Valentina detecto al ver cantidades negativas en segunda.
+    const calidadFila = (p.calidad || 'PRIMERA').toUpperCase();
+    const curado = S.patio.filter(x => String(x.tmcode) === code
+        && (String(x.calidad_curado||'PRIMERA').toUpperCase() === calidadFila))
       .reduce((s,x) => s + (parseFloat(x.cant_en_curado)||0), 0);
     const averias = S.patio.filter(x => String(x.tmcode) === code)
       .reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
@@ -2350,6 +2363,13 @@ function renderCurado() {
     const fLib = parseFecha(p.fecha_liberacion_curado);
     const dias = fLib ? Math.ceil((fLib - hoy) / 86400000) : null;
     const color = dias === null ? '#888' : dias <= 1 ? 'var(--verde)' : dias <= 3 ? 'var(--amarillo)' : 'var(--morado)';
+    // Calidad — antes no se mostraba (ni existia forma de registrarla), lo
+    // que Valentina reporto como un vacio en el control de curado.
+    const calidad = (p.calidad_curado || 'PRIMERA').toUpperCase();
+    const badgeCalidad = calidad === 'SEGUNDA'
+      ? `<span style="background:#fffbeb;color:#92400e;border:1px solid #f59e0b;border-radius:6px;padding:1px 6px;font-size:.65rem;font-weight:700;">🥈 SEGUNDA</span>`
+      : `<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:6px;padding:1px 6px;font-size:.65rem;font-weight:700;">🥇 PRIMERA</span>`;
+    const fechaISO = fLib ? fLib.toISOString().split('T')[0] : '';
     return `
     <div class="curado-card">
       <div style="display:flex;align-items:center;gap:1rem;">
@@ -2358,13 +2378,16 @@ function renderCurado() {
           <div class="curado-label">DÍAS</div>
         </div>
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:0.9rem;">${nombreProducto(p.tmcode)}</div>
+          <div style="font-weight:700;font-size:0.9rem;">${nombreProducto(p.tmcode)} ${badgeCalidad}</div>
           <div style="font-size:0.75rem;color:#666;margin-top:2px;">${p.cant_en_curado} ${undProducto(p.tmcode)} en curado</div>
           <div style="font-size:0.72rem;color:#888;">Liberación: ${fmtFecha(p.fecha_liberacion_curado)}</div>
         </div>
-        ${dias !== null && dias <= 0
-          ? `<button class="btn btn-success btn-sm" onclick="liberarCurado('${p.despacho_id}')">✅ Liberar</button>`
-          : ''}
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <button class="btn btn-outline btn-sm" onclick="editarLoteCurado('${p.despacho_id}','${p.tmcode}',${p.cant_en_curado},'${fechaISO}','${calidad}')">✏️ Editar</button>
+          ${dias !== null && dias <= 0
+            ? `<button class="btn btn-success btn-sm" onclick="liberarCurado('${p.despacho_id}')">✅ Liberar</button>`
+            : ''}
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -2376,7 +2399,29 @@ function abrirModalCurado() {
   document.getElementById('curadoProductoBuscar').value = '';
   document.getElementById('curadoDias').value = '';
   document.getElementById('curadoFecha').value = '';
+  document.getElementById('_curadoEditandoId') && (document.getElementById('_curadoEditandoId').value = '');
+  document.getElementById('curadoProductoBuscar').disabled = false;
+  const titulo = document.querySelector('#modalCurado .modal-title');
+  if (titulo) titulo.textContent = 'Nuevo Lote en Curado';
+  seleccionarCalidadCurado('PRIMERA');
   document.getElementById('modalCurado').classList.add('show');
+}
+
+// Selector visual de calidad (primera/segunda) en el modal de curado —
+// antes no existia, por lo que TODO se registraba sin distinguir calidad
+// (reportado por Valentina: en el inventario no se veia que cantidades
+// estaban en curado de primera vs de segunda).
+function seleccionarCalidadCurado(cal) {
+  document.getElementById('curadoCalidad').value = cal;
+  const btnP = document.getElementById('curadoCalidadPrimera');
+  const btnS = document.getElementById('curadoCalidadSegunda');
+  if (cal === 'SEGUNDA') {
+    btnS.style.background = '#f59e0b'; btnS.style.color = '#fff'; btnS.style.borderColor = '#f59e0b';
+    btnP.style.background = ''; btnP.style.color = ''; btnP.style.borderColor = '';
+  } else {
+    btnP.style.background = 'var(--verde)'; btnP.style.color = '#fff'; btnP.style.borderColor = 'var(--verde)';
+    btnS.style.background = ''; btnS.style.color = ''; btnS.style.borderColor = '';
+  }
 }
 
 function calcularDiasCurado(tmdescripRaw) {
@@ -2422,20 +2467,51 @@ async function guardarCurado() {
   const cant   = parseFloat(document.getElementById('curadoCant').value) || 0;
   const fecha  = document.getElementById('curadoFecha').value;
   const dias   = parseFloat(document.getElementById('curadoDias').value) || null;
+  const calidad = document.getElementById('curadoCalidad')?.value || 'PRIMERA';
+  const editandoId = document.getElementById('_curadoEditandoId')?.value || '';
   if (!tmcode || !cant || !fecha) { toast("Completa todos los campos (verifica que el producto quedo seleccionado de la lista)"); return; }
 
   _guardandoCurado = true;
   const btn = document.querySelector('#modalCurado .btn-morado, #modalCurado button[onclick="guardarCurado()"]');
   if (btn) { btn.disabled = true; btn.dataset._txt = btn.textContent; btn.textContent = 'Guardando...'; }
   try {
-    await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha, dias_curado_aplicado: dias });
+    if (editandoId) {
+      // Edicion de un lote existente — Valentina reporto que no habia forma
+      // de corregir un error (cantidad, fecha o calidad mal digitada).
+      await escribirGAS({ accion:'editarCurado', despacho_id: editandoId, cant_en_curado: cant, fecha_liberacion_curado: fecha, calidad_curado: calidad });
+      toast(`✏️ Lote actualizado`);
+    } else {
+      await escribirGAS({ accion:'registrarCurado', tmcode, cant_en_curado: cant, fecha_liberacion_curado: fecha, dias_curado_aplicado: dias, calidad_curado: calidad });
+      toast(`⏳ ${cant} unidades registradas en curado (${calidad === 'SEGUNDA' ? 'Segunda' : 'Primera'})`);
+    }
     cerrarModal('modalCurado');
-    toast(`⏳ ${cant} unidades registradas en curado`);
     await cargarTodo();
   } finally {
     _guardandoCurado = false;
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset._txt || 'Guardar'; }
   }
+}
+
+// Abre el modal ya lleno con los datos del lote, para poder corregir un
+// error sin tener que borrar y volver a crear el registro.
+function editarLoteCurado(despacho_id, tmcode, cant, fecha, calidad) {
+  document.getElementById('curadoProducto').value = tmcode;
+  const prod = (S.productos||[]).find(p => String(p.tmcode) === String(tmcode));
+  document.getElementById('curadoProductoBuscar').value = prod ? `${prod.tmdescrip} (${prod.tmund})` : tmcode;
+  document.getElementById('curadoProductoBuscar').disabled = true;
+  document.getElementById('curadoCant').value = cant;
+  document.getElementById('curadoFecha').value = fecha;
+  document.getElementById('curadoDias').value = '';
+  seleccionarCalidadCurado((calidad||'PRIMERA').toUpperCase());
+  let hid = document.getElementById('_curadoEditandoId');
+  if (!hid) {
+    hid = document.createElement('input');
+    hid.type = 'hidden'; hid.id = '_curadoEditandoId';
+    document.querySelector('#modalCurado .modal-box, #modalCurado').appendChild(hid);
+  }
+  hid.value = despacho_id;
+  document.querySelector('#modalCurado .modal-title').textContent = 'Editar Lote en Curado';
+  document.getElementById('modalCurado').classList.add('show');
 }
 
 let _liberandoCurado = {};
