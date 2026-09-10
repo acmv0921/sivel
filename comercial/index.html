@@ -1883,7 +1883,12 @@ aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
 STATE.inventario = prods.map(p => {
 const code = String(p.tmcode);
 const bruto = parseFloat(p.tmcant) || 0;
-const curado = patio.filter(x => String(x.tmcode) === code)
+// El curado se resta SOLO de la fila de su propia calidad — antes se
+// restaba el mismo total tanto a primera como a segunda (doble conteo),
+// lo que Valentina detecto al ver cantidades negativas en segunda.
+const calidadFila = (p.calidad || 'PRIMERA').toUpperCase();
+const curado = patio.filter(x => String(x.tmcode) === code
+    && (String(x.calidad_curado||'PRIMERA').toUpperCase() === calidadFila))
 .reduce((s,x) => s + (parseFloat(x.cant_en_curado)||0), 0);
 const averias = patio.filter(x => String(x.tmcode) === code)
 .reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
