@@ -1634,7 +1634,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 25;
+const BUILD_ACTUAL = 26;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1643,13 +1643,9 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">09 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">10 sep 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>📦 Nueva vista <strong>"Pendientes por producto"</strong> en Mis Pedidos — ve de un vistazo cuánto te falta por despachar de cada producto, en todas tus AP</li>
-      <li>⏳ Cada línea de una AP ahora resalta claramente <strong>"Pendiente: X"</strong> en rojo (antes solo mostraba lo despachado)</li>
-      <li>🏗️ Al abrir una AP se ve un aviso si <strong>requiere cargue manual</strong>, con fecha y nota</li>
-      <li>🔧 Corregido: el inventario de segunda calidad ya no muestra cantidades negativas por productos en curado</li>
-      <li>💲 Corregido: los precios ya no se redondean antes de multiplicar por la cantidad (evita pequeñas diferencias en pedidos grandes)</li>
+      <li>👥 Base de clientes ampliada: se agregaron miles de clientes nuevos y se completó teléfono/ciudad/dirección de muchos que ya existían</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
