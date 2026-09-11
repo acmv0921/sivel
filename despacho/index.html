@@ -385,6 +385,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   background:#dbeafe;color:#1e40af;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -523,6 +524,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="card">
       <div class="card-title">Inventario Disponible</div>
       <input class="form-control" id="buscarProdDespacho" placeholder="Buscar producto o codigo..." oninput="renderInventario(this.value)">
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;" onclick="exportarExcelDespacho()">📊 Exportar todo a Excel</button>
     </div>
     <div id="listaInventario">
       <div class="loading"><div class="spinner"></div> Cargando inventario...</div>
@@ -1449,6 +1451,83 @@ function calcularInventario() {
       desc_max: parseFloat(precio.descuento_max_vendedor) || 0
     };
   });
+}
+
+// Exportacion a Excel — Valentina pidio poder descargar la informacion util
+// de Despacho: que hay en curado, cuanto se ha despachado y cuanto falta
+// (relacionado por vendedor, no solo por AP), y los vehiculos disponibles.
+// No repite el inventario bruto porque eso ya se ve en la pantalla de
+// Inventario — aqui va lo que no se ve de un vistazo.
+function exportarExcelDespacho() {
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // Hoja 1: En curado (mismos datos que la pantalla de Curado)
+    const hoy = new Date();
+    const filasCurado = S.patio.filter(p => (parseFloat(p.cant_en_curado)||0) > 0).map(p => {
+      const fLib = parseFecha(p.fecha_liberacion_curado);
+      const dias = fLib ? Math.ceil((fLib - hoy) / 86400000) : null;
+      return {
+        "Producto": nombreProducto(p.tmcode),
+        "Calidad": (p.calidad_curado || "PRIMERA").toUpperCase(),
+        "Cantidad en curado": parseFloat(p.cant_en_curado) || 0,
+        "Unidad": undProducto(p.tmcode),
+        "Fecha liberacion": fmtFecha(p.fecha_liberacion_curado),
+        "Dias restantes": dias !== null ? dias : ""
+      };
+    });
+    const hojaCurado = XLSX.utils.json_to_sheet(filasCurado);
+    XLSX.utils.book_append_sheet(wb, hojaCurado, "En Curado");
+
+    // Hoja 2: Despachado y pendiente, relacionado por vendedor
+    const clientesPorNit = {};
+    S.clientes.forEach(c => { clientesPorNit[String(c.cliente_nit)] = c.razon_social; });
+    const productosPorCodigo = {};
+    S.productos.forEach(p => { productosPorCodigo[String(p.tmcode)] = p.tmdescrip; });
+    const apsPorId = {};
+    S.aps.forEach(a => { apsPorId[String(a.ap_id)] = a; });
+
+    const filasDespachos = S.detalles.map(d => {
+      const ap = apsPorId[String(d.ap_id)] || {};
+      const solicitada = parseFloat(d.cantidad_solicitada) || 0;
+      const despachada = parseFloat(d.cantidad_despachada) || 0;
+      return {
+        "Vendedor": nombreVendedor(ap.vendedor_id) || "Sin vendedor",
+        "AP": d.ap_id,
+        "Fecha creacion": fmtFecha(ap.fecha_creacion),
+        "Cliente": clientesPorNit[String(ap.cliente_nit)] || ap.cliente_nit || "",
+        "Estado AP": ap.estado_ap || "",
+        "Producto": productosPorCodigo[String(d.tmcode)] || d.tmcode,
+        "Cantidad solicitada": solicitada,
+        "Cantidad despachada": despachada,
+        "Pendiente": Math.max(0, solicitada - despachada),
+        "Viaje compartido": ap.viaje_compartido_id || "",
+        "Cargue manual": ap.cargue_manual_requerido ? "Si" : "No"
+      };
+    }).sort((a,b) => String(a["Vendedor"]).localeCompare(String(b["Vendedor"])));
+    const hojaDesp = XLSX.utils.json_to_sheet(filasDespachos);
+    XLSX.utils.book_append_sheet(wb, hojaDesp, "Despachos por Vendedor");
+
+    // Hoja 3: Vehiculos
+    const filasVehiculos = (VEHICULOS_SHEET||[]).map(v => ({
+      "Placa": v.placa,
+      "Marca": v.marca,
+      "Modelo": v.modelo,
+      "Color": v.color,
+      "Capacidad (Ton)": v.capacidad_und,
+      "Conductor": v.conductor_nombre,
+      "Celular conductor": v.conductor_cel,
+      "Estado": v.estado
+    }));
+    const hojaVeh = XLSX.utils.json_to_sheet(filasVehiculos);
+    XLSX.utils.book_append_sheet(wb, hojaVeh, "Vehiculos");
+
+    const fechaArchivo = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `SIVIL_Despacho_${fechaArchivo}.xlsx`);
+    toast("📊 Excel descargado");
+  } catch(e) {
+    toast("❌ Error generando Excel: " + e.message);
+  }
 }
 
 function renderInventario(filtro="") {
