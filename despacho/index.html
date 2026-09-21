@@ -1404,14 +1404,21 @@ function poblarSelectProductos() {
 function poblarDatalistCurado() {
   const dl = document.getElementById('curadoProductoList');
   if (!dl) return;
+  // Se incluye el codigo al inicio del valor — Valentina pidio poder buscar
+  // tanto por codigo como por nombre en el campo de Curado.
   dl.innerHTML = S.productos.map(p =>
-    `<option value="${String(p.tmdescrip).replace(/"/g,'&quot;')} (${p.tmund})">`
+    `<option value="${p.tmcode} - ${String(p.tmdescrip).replace(/"/g,'&quot;')} (${p.tmund})">`
   ).join('');
 }
 
 function sincronizarCuradoProducto() {
   const val = (document.getElementById('curadoProductoBuscar').value || '').trim();
-  const prod = S.productos.find(p => `${p.tmdescrip} (${p.tmund})` === val);
+  // Formato nuevo: "CODIGO - Descripcion (UND)" — se toma lo que esta antes del " - "
+  const codigoMatch = val.match(/^(\S+)\s*-\s*/);
+  let prod = codigoMatch ? S.productos.find(p => String(p.tmcode) === codigoMatch[1]) : null;
+  // Compatibilidad: tambien acepta escribir solo el codigo, o el formato viejo (solo descripcion)
+  if (!prod) prod = S.productos.find(p => String(p.tmcode) === val);
+  if (!prod) prod = S.productos.find(p => `${p.tmdescrip} (${p.tmund})` === val);
   document.getElementById('curadoProducto').value = prod ? prod.tmcode : '';
   if (prod) actualizarDiasCurado();
 }
@@ -1902,12 +1909,20 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
       </div>` : ''}
     </div>
 
+    <!-- CLIENTE LLEVA SU PROPIO VEHICULO -->
+    <div class="form-group" style="background:#f0fdf4;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:#14532d;">
+        <input type="checkbox" id="chkClienteVehiculo" onchange="toggleClienteVehiculo()" style="width:18px;height:18px;">
+        🚗 El cliente lleva su propio vehículo (recoge en planta)
+      </label>
+    </div>
+
     <!-- VEHÍCULO -->
     <div id="selectorVehiculo"></div>
     <div id="vehResumen" style="display:none;margin-bottom:1rem;"></div>
 
     <!-- CONDUCTOR MANUAL (si no usa lista) -->
-    <div class="form-group">
+    <div class="form-group" id="grupoConductorDesp">
       <label class="form-label">👷 Conductor (confirmar o editar)</label>
       <input id="despConductor" class="form-control" placeholder="Nombre del conductor">
     </div>
@@ -2576,7 +2591,7 @@ async function guardarCurado() {
 function editarLoteCurado(despacho_id, tmcode, cant, fecha, calidad) {
   document.getElementById('curadoProducto').value = tmcode;
   const prod = (S.productos||[]).find(p => String(p.tmcode) === String(tmcode));
-  document.getElementById('curadoProductoBuscar').value = prod ? `${prod.tmdescrip} (${prod.tmund})` : tmcode;
+  document.getElementById('curadoProductoBuscar').value = prod ? `${prod.tmcode} - ${prod.tmdescrip} (${prod.tmund})` : tmcode;
   document.getElementById('curadoProductoBuscar').disabled = true;
   document.getElementById('curadoCant').value = cant;
   document.getElementById('curadoFecha').value = fecha;
@@ -2811,6 +2826,30 @@ async function cargarVehiculos() {
   } catch(e) {
     VEHICULOS_SHEET = [];
     console.warn("Hoja VEHICULOS no encontrada:", e.message);
+  }
+}
+
+// Cliente lleva su propio vehiculo — Valentina pidio una opcion para que,
+// cuando el cliente hace su propio transporte, no haya que llenar placa ni
+// conductor. Se marca un vehiculo "virtual" para que pase la validacion de
+// confirmarDespacho() sin pedir mas datos.
+function toggleClienteVehiculo() {
+  const marcado = document.getElementById('chkClienteVehiculo')?.checked;
+  const selVeh = document.getElementById('selectorVehiculo');
+  const vehResumen = document.getElementById('vehResumen');
+  const grupoConductor = document.getElementById('grupoConductorDesp');
+  const inputConductor = document.getElementById('despConductor');
+  if (marcado) {
+    VEH_SELECCIONADO = { placa: 'CLIENTE RECOGE', conductor_nombre: 'Cliente' };
+    if (selVeh) selVeh.style.display = 'none';
+    if (vehResumen) vehResumen.style.display = 'none';
+    if (grupoConductor) grupoConductor.style.display = 'none';
+    if (inputConductor) inputConductor.value = 'Cliente';
+  } else {
+    VEH_SELECCIONADO = null;
+    if (selVeh) selVeh.style.display = '';
+    if (grupoConductor) grupoConductor.style.display = '';
+    if (inputConductor) inputConductor.value = '';
   }
 }
 
