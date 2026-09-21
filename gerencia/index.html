@@ -1179,6 +1179,7 @@ function iniciarApp() {
   document.getElementById('headerSub').textContent=n;
   document.getElementById('userNombre').textContent=n.split(' ')[0];
   mostrarBienvenidaApp(n, G.vendedor.rol || G.vendedor.cargo || '', '#14532d', 'SIVIL Gerencia', 'Panel de Dirección');
+  mostrarNovedadesBuild();
   cargarDatos();
   // FIX: mismo problema — verificarPermisoReset() nunca se llamaba, así que la
   // sección de reset quedaba oculta para GERENTE/ADMIN aunque tuvieran permiso.
@@ -1210,6 +1211,35 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
     document.head.appendChild(st);
   }
   setTimeout(() => { if (b.parentNode) { b.style.transition='opacity .4s'; b.style.opacity='0'; setTimeout(()=>b.remove(),400); } }, 5000);
+}
+
+// ===== AVISO DE ACTUALIZACIÓN DE VERSIÓN (mismo patrón usado en Comercial/Despacho) =====
+// Se muestra UNA sola vez por compilación (guardado en localStorage). Como
+// todas las apps de SIVIL comparten el mismo dominio, se usa una clave con
+// prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
+// Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
+// vuelva a mostrarse una vez con sus novedades.
+const BUILD_ACTUAL = 1;
+function mostrarNovedadesBuild() {
+  const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
+  try { if (localStorage.getItem(clave)) return; } catch(e) {}
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
+    <div style="font-weight:800;font-size:1.05rem;color:#14532d;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">10 sep 2026</div>
+    <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
+      <li>🥇🥈 El widget de <strong>En Curado</strong> ahora muestra el código del producto junto al nombre, y la calidad (Primera/Segunda)</li>
+      <li>⚠️ Nueva sección <strong>"Novedades de Patio"</strong> — averías por cargue, por restribado, reposiciones y mermas de segunda, sin tener que abrir Despacho</li>
+    </ul>
+    <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('btnCerrarAvisoUpdate').onclick = () => {
+    ov.remove();
+    try { localStorage.setItem(clave, '1'); } catch(e) {}
+  };
 }
 
 function cerrarSesion() {
