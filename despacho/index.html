@@ -2677,7 +2677,15 @@ async function guardarAveria() {
   const btnAveria = document.querySelector('button[onclick="guardarAveria()"]');
   if (btnAveria) { btnAveria.disabled = true; btnAveria.dataset._txt = btnAveria.textContent; btnAveria.textContent = 'Guardando...'; }
   try {
-    await escribirGAS({ accion:'registrarNovedad', categoria, tmcode, cantidad: cant, ap_id: ap_id || 0 });
+    // FIX: antes no se revisaba la respuesta del backend, así que si
+    // registrarNovedad fallaba (ej: "Despacho no encontrado"), igual se
+    // mostraba "✅ registrada" y el usuario nunca se enteraba de que la
+    // novedad no se había guardado (reportado por Valentina).
+    const resultado = await escribirGAS({ accion:'registrarNovedad', categoria, tmcode, cantidad: cant, ap_id: ap_id || 0 });
+    if (!resultado || !resultado.ok) {
+      toast('❌ No se pudo registrar: ' + (resultado?.error || 'error desconocido'));
+      return;
+    }
     toast(`✅ ${etiqueta} registrada — ${cant} unidades`);
     document.getElementById('averiaCant').value = '';
     document.getElementById('averiaAP').value   = '';
@@ -2705,7 +2713,11 @@ async function guardarNovedadLogistica() {
   const btnNovLog = document.querySelector('button[onclick="guardarNovedadLogistica()"]');
   if (btnNovLog) { btnNovLog.disabled = true; btnNovLog.dataset._txt = btnNovLog.textContent; btnNovLog.textContent = 'Guardando...'; }
   try {
-    await escribirGAS({ accion:'registrarNovedadLogistica', categoria, ap_id, descripcion, usuario, placa_vehiculo });
+    const resultado = await escribirGAS({ accion:'registrarNovedadLogistica', categoria, ap_id, descripcion, usuario, placa_vehiculo });
+    if (!resultado || !resultado.ok) {
+      toast('❌ No se pudo registrar: ' + (resultado?.error || 'error desconocido'));
+      return;
+    }
     toast("Novedad de logistica registrada");
     document.getElementById('novedadLogAP').value = '';
     document.getElementById('novedadLogPlaca').value = '';
