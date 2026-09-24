@@ -489,6 +489,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <button class="btn btn-primary" onclick="irA('screenPedido')">➕ Nuevo Pedido (AP)</button>
         <button class="btn btn-outline" onclick="irA('screenClientes')">👤 Mis Clientes</button>
         <button class="btn btn-outline" onclick="irA('screenInventario')">📦 Inventario en Campo</button>
+        <button class="btn btn-outline" onclick="irA('screenInventario')">⏳ Producto en Curado</button>
       </div>
     </div>
 
@@ -510,6 +511,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <input id="buscarProd" class="form-control" placeholder="Buscar por nombre o código (ej: 3302)..." oninput="filtrarProductos()">
       </div>
     </div>
+    <div id="moduloCurado"></div>
     <div id="listaInventario">
       <div class="loading"><div class="spinner"></div> Cargando inventario...</div>
     </div>
@@ -793,7 +795,8 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div class="modal-box">
     <button class="modal-close" onclick="cerrarModal('modalVisita')">✕</button>
     <div class="modal-title">📷 Registrar Visita Comercial</div>
-    <div id="visitaCliente" style="font-weight:700;font-size:.95rem;color:var(--azul);margin-bottom:.75rem;"></div>
+    <div id="visitaCliente" style="font-weight:700;font-size:.95rem;color:var(--azul);margin-bottom:.2rem;"></div>
+    <div id="visitaClienteInfo" style="font-size:.72rem;color:#666;margin-bottom:.75rem;line-height:1.5;"></div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.75rem;">
       <span id="visitaGPS" class="gps-pill">📍 Obteniendo...</span>
       <a id="visitaGPSLink" href="#" target="_blank" style="display:none;font-size:.72rem;color:var(--azul2);">🗺 Ver mapa</a>
@@ -858,6 +861,11 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     </div>
     <div class="contacto-box">
       <div class="contacto-title">👥 CONTACTO VISITADO</div>
+      <div class="form-group" style="margin-bottom:.5rem;">
+        <label class="form-label">Contactos registrados del cliente</label>
+        <select id="visitaContSelect" class="form-control" onchange="seleccionarContactoVisita(this.value)"></select>
+        <div id="visitaContHint" style="font-size:.66rem;color:#888;margin-top:3px;"></div>
+      </div>
       <div class="form-group" style="margin-bottom:.5rem;"><label class="form-label">Nombre</label><input id="visitaContNombre" class="form-control" placeholder="Nombre del contacto"></div>
       <div class="form-group" style="margin-bottom:.5rem;"><label class="form-label">Celular</label><input id="visitaContCel" class="form-control" type="tel" placeholder="3001234567"></div>
       <div class="form-group" style="margin-bottom:0;"><label class="form-label">Correo</label><input id="visitaContCorreo" class="form-control" type="email" placeholder="contacto@empresa.com"></div>
@@ -1634,7 +1642,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 26;
+const BUILD_ACTUAL = 27;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1643,9 +1651,11 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">10 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">23 sep 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>👥 Base de clientes ampliada: se agregaron miles de clientes nuevos y se completó teléfono/ciudad/dirección de muchos que ya existían</li>
+      <li>⏳ Nuevo módulo <b>Producto en Curado</b> en Inventario: ves lo que está curando en patio, su calidad y fecha de liberación</li>
+      <li>👥 Al <b>Registrar Visita</b> ya aparecen los contactos del cliente (el principal viene precargado). Si escribes uno nuevo, queda guardado en 📇 Contactos</li>
+      <li>📊 En <b>Mis APs</b> cada pedido muestra cuánto se ha entregado y cuánto falta por despachar</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1873,6 +1883,10 @@ const aps = await leerGVIZ("PREVENTAS_AP");
 const precios = await leerGVIZ("PRECIOS_GERENCIA");
 const tarifas = await leerGVIZ("TARIFAS_FLETE");
 STATE.tarifasFlete = tarifas;
+// Se guarda el patio completo para el módulo "Producto en Curado" (pedido de
+// la reunión de ventas 23/09/2026): los vendedores deben ver lo que Valentina
+// registra en curado desde Despacho, con su fecha de liberación.
+STATE.patio = patio;
 
 const apsPendIds = new Set(
 aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
@@ -2032,7 +2046,13 @@ async function cargarPendientesPorProducto() {
 
 async function cargarMisAPs() {
   try {
-    const todas = await leerGVIZ("PREVENTAS_AP");
+    // DETALLE_AP se trae junto con las AP para mostrar en cada tarjeta cuánto
+    // del pedido inicial ya se entregó y cuánto falta (reunión ventas 23/09/2026).
+    const [todas, dets] = await Promise.all([
+      leerGVIZ("PREVENTAS_AP"),
+      leerGVIZ("DETALLE_AP").catch(() => STATE.detallesAP || [])
+    ]);
+    STATE.detallesAP = dets;
     const id    = String(STATE.vendedor?.id_vendedor || "");
     const fil   = document.getElementById('filtroEstado')?.value || "";
     STATE.aps   = todas.filter(a => String(a.vendedor_id) === id && (!fil || a.estado_ap === fil));
@@ -2044,7 +2064,83 @@ async function cargarMisAPs() {
 // =============================================================================
 // RENDER INVENTARIO
 // =============================================================================
+// =============================================================================
+// MÓDULO "PRODUCTO EN CURADO" — solo lectura. Los lotes los registra Despacho
+// (Valentina) en CONTROL_PATIO_Y_LOGISTICA; aquí el vendedor ve qué viene en
+// camino, en qué calidad y cuándo se libera, para poder ofrecerlo al cliente.
+// =============================================================================
+let _curadoExpandido = true;
+function _lotesEnCurado() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return (STATE.patio || [])
+    .filter(x => (parseFloat(x.cant_en_curado) || 0) > 0)
+    .map(x => {
+      const fLib = parseFecha(x.fecha_liberacion_curado);
+      const prod = (STATE.inventario || []).find(p => String(p.tmcode) === String(x.tmcode));
+      return {
+        tmcode: String(x.tmcode),
+        nombre: prod ? prod.tmdescrip : ('Código ' + x.tmcode),
+        und: prod ? (prod.tmund || 'UND') : 'UND',
+        cant: parseFloat(x.cant_en_curado) || 0,
+        calidad: String(x.calidad_curado || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA',
+        fLib,
+        dias: fLib ? Math.ceil((new Date(fLib).setHours(0,0,0,0) - hoy) / 86400000) : null
+      };
+    })
+    .sort((a,b) => (a.fLib ? a.fLib.getTime() : Infinity) - (b.fLib ? b.fLib.getTime() : Infinity));
+}
+
+// Próxima liberación de un producto/calidad — para la etiqueta en la tarjeta del inventario.
+function _proxLiberacion(tmcode, calidad) {
+  const l = _lotesEnCurado().find(x => x.tmcode === String(tmcode) && x.calidad === calidad);
+  return l && l.fLib ? fmtFecha(l.fLib) : '';
+}
+
+function toggleModuloCurado() {
+  _curadoExpandido = !_curadoExpandido;
+  renderModuloCurado(document.getElementById('buscarProd')?.value || '');
+}
+
+function renderModuloCurado(filtro = '') {
+  const cont = document.getElementById('moduloCurado');
+  if (!cont) return;
+  const fl = String(filtro || '').toLowerCase();
+  const lotes = _lotesEnCurado().filter(l => !fl || l.nombre.toLowerCase().includes(fl) || l.tmcode.includes(fl));
+  if (!lotes.length) { cont.innerHTML = fl ? '' : `<div class="card" style="padding:.8rem;font-size:.78rem;color:#888;">⏳ No hay producto en curado en este momento</div>`; return; }
+  const totalUnd = lotes.reduce((s,l) => s + l.cant, 0);
+  const filas = lotes.map(l => {
+    const color = l.dias === null ? '#888' : l.dias <= 0 ? '#15803d' : l.dias <= 3 ? '#b45309' : '#6d28d9';
+    const txtDias = l.dias === null ? '?' : l.dias <= 0 ? '✓' : l.dias;
+    const etiqueta = l.dias === null ? 'Sin fecha' : l.dias <= 0 ? 'Listo — por liberar en patio' : (l.dias === 1 ? 'Falta 1 día' : 'Faltan ' + l.dias + ' días');
+    const badge = l.calidad === 'SEGUNDA'
+      ? '<span style="background:#fffbeb;color:#92400e;border:1px solid #f59e0b;border-radius:6px;padding:1px 6px;font-size:.62rem;font-weight:700;">🥈 SEGUNDA</span>'
+      : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:6px;padding:1px 6px;font-size:.62rem;font-weight:700;">🥇 PRIMERA</span>';
+    return `<div style="display:flex;align-items:center;gap:.8rem;padding:.6rem 0;border-top:1px solid #eee;">
+      <div style="text-align:center;min-width:38px;">
+        <div style="font-size:1.35rem;font-weight:800;color:${color};line-height:1;">${txtDias}</div>
+        <div style="font-size:.58rem;color:#888;font-weight:700;">DÍAS</div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:.82rem;">${l.nombre} ${badge}</div>
+        <div style="font-size:.74rem;color:#444;margin-top:2px;"><b>${l.cant}</b> ${l.und} en curado · Cód ${l.tmcode}</div>
+        <div style="font-size:.7rem;color:${color};">📅 Liberación: ${l.fLib ? fmtFecha(l.fLib) : '—'} · ${etiqueta}</div>
+      </div>
+    </div>`;
+  }).join('');
+  cont.innerHTML = `<div class="card" style="border-left:4px solid #7c3aed;padding:.9rem;">
+    <div onclick="toggleModuloCurado()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+      <div>
+        <div style="font-weight:800;color:#5b21b6;font-size:.9rem;">⏳ Producto en Curado</div>
+        <div style="font-size:.7rem;color:#666;">${lotes.length} lote${lotes.length>1?'s':''} · ${totalUnd} unidades · aún NO disponible para despacho</div>
+      </div>
+      <span style="font-size:.8rem;color:#5b21b6;font-weight:700;">${_curadoExpandido ? '▲ Ocultar' : '▼ Ver'}</span>
+    </div>
+    ${_curadoExpandido ? `<div style="margin-top:.4rem;">${filas}</div>` : ''}
+  </div>`;
+}
+
 function renderInventario(filtro="") {
+  renderModuloCurado(filtro);
   const cont = document.getElementById('listaInventario');
   const fl   = filtro.toLowerCase();
 
@@ -2081,11 +2177,13 @@ function renderInventario(filtro="") {
           <div style="font-size:.65rem;font-weight:700;color:#14532d;">🥇 PRIMERA</div>
           <div style="font-size:.88rem;font-weight:800;color:${semColor(primera.semaforo)};">${primera.disponible} ${p.tmund}</div>
           <div style="font-size:.65rem;color:#555;">${semIcon(primera.semaforo)} ${primera.semaforo}${precio1?` · $${fmt(precio1)}`:''}${primera.comprometido>0?` · 🔒${primera.comprometido}`:''}</div>
+          ${primera.curado>0 ? `<div style="font-size:.65rem;color:#5b21b6;font-weight:700;margin-top:2px;">⏳ +${primera.curado} en curado${_proxLiberacion(p.tmcode,'PRIMERA') ? ' · libera '+_proxLiberacion(p.tmcode,'PRIMERA') : ''}</div>` : ''}
         </div>` : ''}
         ${segunda ? `<div onclick="abrirDetalleProducto('${p.tmcode}')" style="cursor:pointer;flex:1;min-width:120px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:6px 10px;">
           <div style="font-size:.65rem;font-weight:700;color:#92400e;">🥈 SEGUNDA</div>
           <div style="font-size:.88rem;font-weight:800;color:${semColor(segunda.semaforo)};">${segunda.disponible} ${p.tmund}</div>
           <div style="font-size:.65rem;color:#555;">${semIcon(segunda.semaforo)} ${segunda.semaforo}${precio2?` · $${fmt(precio2)}`:''}${segunda.comprometido>0?` · 🔒${segunda.comprometido}`:''}</div>
+          ${segunda.curado>0 ? `<div style="font-size:.65rem;color:#5b21b6;font-weight:700;margin-top:2px;">⏳ +${segunda.curado} en curado${_proxLiberacion(p.tmcode,'SEGUNDA') ? ' · libera '+_proxLiberacion(p.tmcode,'SEGUNDA') : ''}</div>` : ''}
         </div>` : ''}
       </div>`;
 
@@ -2130,6 +2228,35 @@ function renderAPsHome() {
   cont.innerHTML = recientes.map(ap => cardAP(ap)).join('');
 }
 
+// Totales de avance de una AP: pedido inicial vs entregado vs por despachar.
+function _avanceAP(ap_id, lineasOpt) {
+  const lineas = lineasOpt || (STATE.detallesAP || []).filter(d => String(d.ap_id) === String(ap_id));
+  let sol = 0, desp = 0;
+  lineas.forEach(l => {
+    const s = parseFloat(l.cantidad_solicitada) || 0;
+    sol += s;
+    desp += Math.min(s, parseFloat(l.cantidad_despachada) || 0);
+  });
+  const pend = Math.max(0, sol - desp);
+  const pct = sol > 0 ? Math.round(desp / sol * 100) : 0;
+  return { sol, desp, pend, pct, nLineas: lineas.length };
+}
+function _barraAvanceHTML(av, compacto) {
+  if (!av || !av.sol) return '';
+  const color = av.pct >= 100 ? '#16a34a' : av.pct > 0 ? '#f59e0b' : '#94a3b8';
+  return `<div style="margin-top:${compacto?'6px':'0'};">
+    <div style="display:flex;justify-content:space-between;font-size:${compacto?'.68rem':'.76rem'};color:#444;margin-bottom:3px;gap:6px;flex-wrap:wrap;">
+      <span>📦 Pedido: <b>${av.sol}</b></span>
+      <span style="color:#15803d;">✅ Entregado: <b>${av.desp}</b></span>
+      <span style="color:${av.pend>0?'#b91c1c':'#15803d'};">⏳ Por despachar: <b>${av.pend}</b></span>
+    </div>
+    <div style="background:#e5e7eb;border-radius:6px;height:${compacto?'6px':'9px'};overflow:hidden;">
+      <div style="width:${Math.min(100,av.pct)}%;height:100%;background:${color};"></div>
+    </div>
+    <div style="font-size:.62rem;color:#888;text-align:right;margin-top:1px;">${av.pct}% entregado</div>
+  </div>`;
+}
+
 function cardAP(ap) {
   const est = (ap.estado_ap || "").toLowerCase().replace(/ /g,'-');
   const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
@@ -2153,14 +2280,24 @@ function cardAP(ap) {
         </div>
         <span class="ap-estado estado-${est}">${ap.estado_ap}</span>
       </div>
+      ${String(ap.estado_ap).toLowerCase().startsWith('cancel') ? '' : _barraAvanceHTML(_avanceAP(ap.ap_id), true)}
     </div>`;
 }
 
 async function verAP(ap_id) {
 const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
 if (!ap) return;
-const detalles = await leerGVIZ("DETALLE_AP");
+const [detalles, patioAP] = await Promise.all([
+  leerGVIZ("DETALLE_AP"),
+  leerGVIZ("CONTROL_PATIO_Y_LOGISTICA").catch(() => STATE.patio || [])
+]);
+STATE.detallesAP = detalles;
 const lineas = detalles.filter(d => String(d.ap_id) === String(ap_id));
+const avance = _avanceAP(ap_id, lineas);
+// Entregas registradas por Despacho para esta AP (filas del patio con placa).
+const entregas = patioAP
+  .filter(x => String(x.ap_id) === String(ap_id) && String(x.placa_vehiculo || '').trim() !== '')
+  .sort((a,b) => (parseFecha(a.fecha_registro) || 0) - (parseFecha(b.fecha_registro) || 0));
 const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit));
 
 let extraInfo = '';
@@ -2186,6 +2323,17 @@ let html = `
 <div style="font-size:0.75rem;color:#666;">${ap.destino || ap.tipo_entrega} · ${ap.estado_ap}</div>
 <div style="font-size:0.72rem;color:#888;">${fmtFechaHora(ap.fecha_creacion)}</div>
 ${extraInfo}
+</div>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:.7rem .8rem;margin-bottom:1rem;">
+<div style="font-size:.7rem;font-weight:800;color:var(--azul);letter-spacing:.5px;margin-bottom:6px;">📊 AVANCE DEL PEDIDO</div>
+${_barraAvanceHTML(avance, false) || '<div style="font-size:.75rem;color:#888;">Sin líneas registradas</div>'}
+${entregas.length ? `<div style="margin-top:8px;font-size:.7rem;color:#555;">
+  <div style="font-weight:700;margin-bottom:2px;">🚚 Entregas registradas por Despacho (${entregas.length})</div>
+  ${entregas.map(e => {
+    const pr = STATE.inventario.find(p => String(p.tmcode) === String(e.tmcode));
+    return `<div>• ${fmtFecha(e.fecha_registro)} · ${pr ? pr.tmdescrip : (e.tmcode ? 'Cód ' + e.tmcode : '')} · 🚛 ${e.placa_vehiculo}</div>`;
+  }).join('')}
+</div>` : ''}
 </div>
 <div class="card-title">Productos</div>`;
 
@@ -2219,7 +2367,8 @@ html += `
 <div class="linea-num">${i+1}</div>
 <div class="linea-info">
 <div class="linea-prod">${nombre}</div>
-<div class="linea-cant">${cant} ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}% · Desp: ${despachadoLinea}${pendienteLinea>0 ? ' · <span style="color:#b91c1c;font-weight:700;">⏳ Pendiente: '+pendienteLinea+'</span>' : ' · ✅ Completo'}</div>
+<div class="linea-cant">Pedido: <b>${cant}</b> ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}%</div>
+<div class="linea-cant"><span style="color:#15803d;font-weight:700;">✅ Entregado: ${Math.min(cant,despachadoLinea)}</span> · ${pendienteLinea>0 ? '<span style="color:#b91c1c;font-weight:700;">⏳ Por despachar: '+pendienteLinea+'</span>' : '<span style="color:#15803d;font-weight:700;">Completo</span>'}</div>
 <div class="linea-cant" style="margin-top:2px;">🏷️ Sin descuento: ${fmt(precio)}/u · 💲 Con descuento: ${fmt(precioConDescuento)}/u${fletePorUnidadAP>0 ? ' · 🚚 Flete: '+fmt(fletePorUnidadAP)+'/u · 💵 Con desc. + flete: '+fmt(precioConDescuentoYFlete)+'/u' : ''}</div>
 </div>
 <div class="linea-precio">${fmt(sub)}</div>
@@ -3888,12 +4037,76 @@ function abrirRegistroVisita(nit){
   document.getElementById('visitaFotos').innerHTML='';
   _renderVA();
   document.getElementById('visitaNotas').value='';renderProductosInteres();renderCompetencia();poblarDatalistProductos();
-  document.getElementById('visitaDireccion').value=c.coordenadas_home||'';
-  ['visitaContNombre','visitaContCel','visitaContCorreo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Antes se precargaba coordenadas_home en el campo Dirección, y al guardar
+  // la visita esas coordenadas terminaban sobrescribiendo la dirección real
+  // del cliente. Ahora se precarga la dirección registrada (Editar cliente).
+  document.getElementById('visitaDireccion').value=c.direccion||'';
+  const infoCli=[ 'NIT '+c.cliente_nit, c.telefono?'📞 '+c.telefono:'', c.ciudad?'🏙️ '+c.ciudad:'', c.direccion?'📍 '+c.direccion:'' ].filter(Boolean).join(' · ');
+  const ic=document.getElementById('visitaClienteInfo'); if(ic) ic.textContent=infoCli;
+  poblarContactosVisita(c.cliente_nit);
   _cntF();document.getElementById('visitaGPS').textContent='📍 Obteniendo GPS...';
   document.getElementById('visitaGPSLink').style.display='none';
   document.getElementById('modalVisita').classList.add('show');
-  obtenerGPS().then(gps=>{_VGPS=gps;if(gps){document.getElementById('visitaGPS').textContent='📍 '+gps.lat+','+gps.lon+' (±'+gps.acc+'m)';document.getElementById('visitaGPSLink').href='https://maps.google.com/?q='+gps.lat+','+gps.lon;document.getElementById('visitaGPSLink').style.display='inline';const d=document.getElementById('visitaDireccion');if(d&&!d.value)d.value=gps.lat+','+gps.lon;}else document.getElementById('visitaGPS').textContent='📍 GPS no disponible';});
+  obtenerGPS().then(gps=>{_VGPS=gps;if(gps){document.getElementById('visitaGPS').textContent='📍 '+gps.lat+','+gps.lon+' (±'+gps.acc+'m)';document.getElementById('visitaGPSLink').href='https://maps.google.com/?q='+gps.lat+','+gps.lon;document.getElementById('visitaGPSLink').style.display='inline';}else document.getElementById('visitaGPS').textContent='📍 GPS no disponible';});
+}
+
+// =============================================================================
+// CONTACTOS EN "REGISTRAR VISITA" — reunión de ventas 23/09/2026: los
+// contactos creados con el botón 📇 Contactos no aparecían al registrar la
+// visita (el formulario arrancaba vacío). Ahora se listan, se precarga el
+// principal, y un contacto nuevo escrito en la visita se guarda también en
+// CLIENTE_CONTACTOS para que aparezca después en 📇 Contactos.
+// =============================================================================
+async function poblarContactosVisita(nit){
+  const sel=document.getElementById('visitaContSelect');
+  const hint=document.getElementById('visitaContHint');
+  if(!sel) return;
+  // Si la hoja de contactos aún no terminó de cargar (se carga en segundo
+  // plano al entrar), se espera aquí para no mostrar la lista vacía.
+  if(!Array.isArray(STATE.contactos)){
+    sel.innerHTML='<option value="">Cargando contactos...</option>';
+    try{ STATE.contactos=await leerGVIZ('CLIENTE_CONTACTOS'); }catch(e){ STATE.contactos=[]; }
+    if(!_VCLI || String(_VCLI.cliente_nit)!==String(nit)) return; // se cambió de cliente mientras cargaba
+  }
+  const lista=(STATE.contactos||[]).filter(x=>String(x.cliente_nit)===String(nit))
+    .slice().sort((a,b)=>(_esPrincipalCt(b)?1:0)-(_esPrincipalCt(a)?1:0));
+  const esc=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  sel.innerHTML=lista.map(ct=>`<option value="${esc(ct.id_contacto)}">${_esPrincipalCt(ct)?'⭐ ':''}${esc(ct.nombre_contacto)}${ct.cargo?' · '+esc(ct.cargo):''}</option>`).join('')
+    +'<option value="__nuevo__">➕ Otro contacto (nuevo)</option>';
+  if(lista.length){
+    sel.value=String(lista[0].id_contacto);
+    seleccionarContactoVisita(sel.value);
+    if(hint) hint.textContent=lista.length+' contacto(s) registrado(s). Puedes corregir los datos abajo si cambiaron.';
+  } else {
+    sel.value='__nuevo__';
+    seleccionarContactoVisita('__nuevo__');
+    if(hint) hint.textContent='Este cliente aún no tiene contactos. El que escribas aquí quedará guardado en 📇 Contactos.';
+  }
+}
+function _esPrincipalCt(ct){ const v=ct&&ct.es_principal; return v===true||String(v).toUpperCase()==='TRUE'||String(v).toUpperCase()==='VERDADERO'||String(v).toUpperCase()==='SI'; }
+function seleccionarContactoVisita(id){
+  const set=(k,v)=>{const el=document.getElementById(k);if(el)el.value=v||'';};
+  if(id==='__nuevo__'||!id){ set('visitaContNombre',''); set('visitaContCel',''); set('visitaContCorreo',''); return; }
+  const ct=(STATE.contactos||[]).find(x=>String(x.id_contacto)===String(id));
+  if(!ct) return;
+  set('visitaContNombre',ct.nombre_contacto); set('visitaContCel',ct.telefono); set('visitaContCorreo',ct.correo);
+}
+// Guarda en CLIENTE_CONTACTOS el contacto escrito en la visita si todavía no
+// existe (se compara por nombre, sin tildes ni mayúsculas). En segundo plano:
+// nunca bloquea el guardado de la visita ni el envío por WhatsApp.
+function sincronizarContactoDesdeVisita(nit, contacto){
+  const nombre=(contacto&&contacto.nombre||'').trim();
+  if(!nit||!nombre) return;
+  const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+  const existe=(STATE.contactos||[]).some(x=>String(x.cliente_nit)===String(nit)&&norm(x.nombre_contacto)===norm(nombre));
+  if(existe) return;
+  const esPrimero=!(STATE.contactos||[]).some(x=>String(x.cliente_nit)===String(nit));
+  const nuevo={id_contacto:'tmp_'+Date.now(),cliente_nit:nit,nombre_contacto:nombre,cargo:'',telefono:contacto.cel||'',correo:contacto.correo||'',es_principal:esPrimero};
+  if(!Array.isArray(STATE.contactos)) STATE.contactos=[];
+  STATE.contactos.push(nuevo);
+  escribirGAS({accion:'crearContacto',cliente_nit:nit,nombre_contacto:nombre,cargo:'',telefono:nuevo.telefono,correo:nuevo.correo,vendedor_registro:STATE.vendedor?.id_vendedor||''})
+    .then(r=>{ if(r&&r.id_contacto) nuevo.id_contacto=r.id_contacto; renderClientes(document.getElementById('buscarClienteLista')?.value||''); })
+    .catch(e=>console.warn('No se pudo guardar el contacto de la visita en CLIENTE_CONTACTOS:',e));
 }
 
 function agregarFotoVisita(input){
@@ -3994,6 +4207,7 @@ async function guardarVisita(){
     contacto_nombre:reg.contacto.nombre,contacto_cel:reg.contacto.cel,notas:reg.notas,
     num_fotos:reg.fotos.length,num_archivos:reg.archivos_adjuntos.length};
   escribirGAS(pv).catch(e => console.warn('No se pudo registrar la visita en el backend (no bloquea el reporte):', e));
+  sincronizarContactoDesdeVisita(_VCLI.cliente_nit, reg.contacto);
   cerrarModal('modalVisita');
   toast('✅ Visita guardada — '+_VFOTOS.length+' fotos con MDA');renderVisitas();
   // El reporte de WhatsApp se envía siempre de inmediato, sin ningún paso
