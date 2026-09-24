@@ -1642,7 +1642,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 27;
+const BUILD_ACTUAL = 28;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1655,7 +1655,7 @@ function mostrarNovedadesBuild() {
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
       <li>⏳ Nuevo módulo <b>Producto en Curado</b> en Inventario: ves lo que está curando en patio, su calidad y fecha de liberación</li>
       <li>👥 Al <b>Registrar Visita</b> ya aparecen los contactos del cliente (el principal viene precargado). Si escribes uno nuevo, queda guardado en 📇 Contactos</li>
-      <li>📊 En <b>Mis APs</b> cada pedido muestra cuánto se ha entregado y cuánto falta por despachar</li>
+      <li>📊 En <b>Mis APs</b> cada pedido muestra cuánto se ha entregado y cuánto falta por despachar, y el historial de entregas indica cuántas unidades salieron en cada viaje (despachos desde hoy)</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2331,7 +2331,8 @@ ${entregas.length ? `<div style="margin-top:8px;font-size:.7rem;color:#555;">
   <div style="font-weight:700;margin-bottom:2px;">🚚 Entregas registradas por Despacho (${entregas.length})</div>
   ${entregas.map(e => {
     const pr = STATE.inventario.find(p => String(p.tmcode) === String(e.tmcode));
-    return `<div>• ${fmtFecha(e.fecha_registro)} · ${pr ? pr.tmdescrip : (e.tmcode ? 'Cód ' + e.tmcode : '')} · 🚛 ${e.placa_vehiculo}</div>`;
+    const cv = parseFloat(e.cant_despachada_viaje) || 0; // columna nueva (backend v48) — despachos anteriores no la tienen
+    return `<div>• ${fmtFecha(e.fecha_registro)} · ${pr ? pr.tmdescrip : (e.tmcode ? 'Cód ' + e.tmcode : '')}${cv ? ` · <b>${cv} ${pr?.tmund || 'und'}</b>` : ''} · 🚛 ${e.placa_vehiculo}</div>`;
   }).join('')}
 </div>` : ''}
 </div>
