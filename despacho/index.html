@@ -1244,19 +1244,22 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // Se muestra UNA sola vez por compilación (guardado en localStorage con la
 // clave de esta compilación). Si se sube una nueva compilación, cambiar
 // BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 6;
+const BUILD_ACTUAL = 7;
 function mostrarNovedadesBuild() {
-  const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
+  // Clave con prefijo propio (desde C7): Comercial usa 'sivil_update_visto_build'
+  // en el mismo dominio, y un número de compilación repetido podía ocultar el aviso.
+  const clave = 'sivil_despacho_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#7c3200;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">22 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">23 sep 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🐛 Corregido: registrar una <strong>Avería / Reposición / Merma</strong> sin indicar la AP ya no fallaba en silencio — ahora sí se guarda y aparece en Gerencia</li>
-      <li>⚠️ Si registrar una novedad llega a fallar, ahora la app te lo avisa claramente en vez de mostrar "registrada" por error</li>
+      <li>🚚 Cada despacho ahora guarda <strong>cuántas unidades salieron en ese viaje</strong>. Los vendedores lo ven en el historial de entregas de su AP</li>
+      <li>⏳ Los vendedores ya ven en su app los lotes que registras en <strong>Curado</strong> (producto, calidad y fecha de liberación). Mantén las fechas al día con ✏️ Editar</li>
+      <li>📊 Los vendedores ya ven en cada AP cuánto se ha entregado y cuánto falta por despachar</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
