@@ -1,13 +1,12 @@
 // =============================================================================
-// SIVIL - Sistema Integrado de Ventas, Inventario y Logística
+// SIVEL - Sistema Integrado de Ventas, Inventario y Logística
 // POSTEC DE OCCIDENTE S.A.S.
 // Backend: Google Apps Script (GAS) v1.0
 // Arquitectura: GET público para lectura | POST no-cors para escritura
 // =============================================================================
 
-const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+const SIVIL_SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 
-// Nombres de hojas
 const HOJAS = {
   PRODUCTOS:   "PRODUCTOS_MAESTRO",
   VENDEDORES:  "VENDEDORES",
@@ -16,220 +15,124 @@ const HOJAS = {
   DETALLE:     "DETALLE_AP",
   PATIO:       "CONTROL_PATIO_Y_LOGISTICA",
   PRECIOS:     "PRECIOS_GERENCIA",
-  VEHICULOS:   "VEHICULOS"
+  VEHICULOS:   "VEHICULOS",
+  CONTACTOS:   "CLIENTE_CONTACTOS",
+  ENSAMBLES:   "REGISTRO_ENSAMBLES",
+  TARIFAS:     "TARIFAS_FLETE",
+  NOVEDADES:   "NOVEDADES_LOGISTICA",
+  VIAJES:      "VIAJES_COMPARTIDOS",
+  FUNCIONARIOS: "FUNCIONARIOS",
+  VISITAS: "REGISTRO_VISITAS", APROBACIONES: "APROBACIONES",
 };
 
-// =============================================================================
-// ROUTER PRINCIPAL
-// =============================================================================
 function doGet(e) {
   const accion = e.parameter.accion || "";
   let resultado;
-
   try {
     switch (accion) {
-      // --- PRODUCTOS ---
-      case "getProductos":
-        resultado = getProductos();
-        break;
-      case "getProducto":
-        resultado = getProducto(e.parameter.tmcode);
-        break;
-
-      // --- VENDEDORES ---
-      case "getVendedores":
-        resultado = getVendedores();
-        break;
-      case "getVendedor":
-        resultado = getVendedor(e.parameter.correo);
-        break;
-
-      // --- CLIENTES ---
-      case "getClientes":
-        resultado = getClientes(e.parameter.vendedor_id);
-        break;
-      case "getCliente":
-        resultado = getCliente(e.parameter.nit);
-        break;
-      case "buscarCliente":
-        resultado = buscarCliente(e.parameter.q);
-        break;
-
-      // --- PREVENTAS ---
-      case "getPreventas":
-        resultado = getPreventas(e.parameter.vendedor_id, e.parameter.estado);
-        break;
-      case "getPreventa":
-        resultado = getPreventa(e.parameter.ap_id);
-        break;
-      case "getDetalleAP":
-        resultado = getDetalleAP(e.parameter.ap_id);
-        break;
-
-      // --- INVENTARIO DINÁMICO ---
-      case "getInventarioDinamico":
-        resultado = getInventarioDinamico();
-        break;
-      case "getDisponibleProducto":
-        resultado = getDisponibleProducto(e.parameter.tmcode);
-        break;
-
-      // --- PATIO ---
-      case "getDespachos":
-        resultado = getDespachos(e.parameter.ap_id);
-        break;
-      case "getCurados":
-        resultado = getCurados();
-        break;
-
-      // --- PRECIOS ---
-      case "getPrecios":
-        resultado = getPrecios(e.parameter.tmcode);
-        break;
-
-      // --- DASHBOARD ---
-      case "getDashboard":
-        resultado = getDashboard();
-        break;
-      case "getAlertasProduccion":
-        resultado = getAlertasProduccion();
-        break;
-
+      case "getProductos": resultado = getProductos(); break;
+          case "getTarifasFlete": resultado = getTarifasFlete(); break;
+      case "getViajesCompartidos": resultado = getViajesCompartidos(); break;
+      case "getNovedadesLogistica": resultado = getNovedadesLogistica(); break;
+      case "resetSistema": resultado = resetSistema(body); break;
+      case "getProducto": resultado = getProducto(e.parameter.tmcode); break;
+      case "getVendedores": resultado = getVendedores(); break;
+      case "getVendedor": resultado = getVendedor(e.parameter.correo); break;
+      case "getClientes": resultado = getClientes(e.parameter.vendedor_id); break;
+      case "getCliente": resultado = getCliente(e.parameter.nit); break;
+      case "buscarCliente": resultado = buscarCliente(e.parameter.q); break;
+      case "getPreventas": resultado = getPreventas(e.parameter.vendedor_id, e.parameter.estado); break;
+      case "getPreventa": resultado = getPreventa(e.parameter.ap_id); break;
+      case "getDetalleAP": resultado = getDetalleAP(e.parameter.ap_id); break;
+      case "getInventarioDinamico": resultado = getInventarioDinamico(); break;
+      case "getPendientesPorProducto": resultado = getPendientesPorProducto(e.parameter.vendedor_id); break;
+      case "getDisponibleProducto": resultado = getDisponibleProducto(e.parameter.tmcode); break;
+      case "getDespachos": resultado = getDespachos(e.parameter.ap_id); break;
+      case "getCurados": resultado = getCurados(); break;
+      case "getPrecios": resultado = getPrecios(e.parameter.tmcode); break;
+      case "getDashboard": resultado = getDashboard(); break;
+      case "getAlertasProduccion": resultado = getAlertasProduccion(); break;
       case "getPromociones":   resultado = getPromociones(); break;
       case "getConsecutivoAP": resultado = getConsecutivoAP(); break;
-      default:
-        resultado = { ok: true, mensaje: "SIVIL API v1.0 activa", timestamp: new Date().toISOString() };
+      case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(); break;
+      case "getFuncionarios": resultado = getFuncionarios(); break;
+      case "getCarpetasInformes": resultado = getCarpetasInformes(); break;
+      default: resultado = { ok: true, mensaje: "SIVIL API v1.0 activa", timestamp: new Date().toISOString() };
     }
-  } catch (err) {
-    resultado = { ok: false, error: err.message };
-  }
-
-  return ContentService
-    .createTextOutput(JSON.stringify(resultado))
-    .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) { resultado = { ok: false, error: err.message }; }
+  return ContentService.createTextOutput(JSON.stringify(resultado)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   let body, accion, resultado;
-
   try {
-    body   = JSON.parse(e.postData.contents);
+    body = JSON.parse(e.postData.contents);
     accion = body.accion || "";
-
     switch (accion) {
-      // --- VENDEDORES ---
-      case "crearVendedor":
-        resultado = crearVendedor(body);
-        break;
-      case "actualizarVendedor":
-        resultado = actualizarVendedor(body);
-        break;
-
-      // --- CLIENTES ---
-      case "crearCliente":
-        resultado = crearCliente(body);
-        break;
-      case "actualizarCliente":
-        resultado = actualizarCliente(body);
-        break;
-
-      // --- PREVENTAS ---
-      case "crearPreventa":
-        resultado = crearPreventa(body);
-        break;
-      case "agregarDetalleAP":
-        resultado = agregarDetalleAP(body);
-        break;
-      case "actualizarEstadoAP":
-        resultado = actualizarEstadoAP(body);
-        break;
-      case "anularAPPrueba":
-        resultado = anularOBorrarAPPrueba(body);
-        break;
-      case "modificarDetalleAP":
-        resultado = modificarDetalleAP(body);
-        break;
-
-      // --- PATIO ---
-      case "registrarDespacho":
-        resultado = registrarDespacho(body);
-        break;
-      case "registrarAveria":
-        resultado = registrarAveria(body);
-        break;
-      case "registrarNovedadDespacho":
-        resultado = registrarNovedadDespacho(body);
-        break;
-      case "registrarNovedad":
-        resultado = registrarNovedad(body);
-        break;
-      case "crearVehiculo":
-        resultado = crearVehiculo(body);
-        break;
-      case "importarClientesMasivo":
-        resultado = importarClientesMasivo(body);
-        break;
-      case "registrarCurado":
-        resultado = registrarCurado(body);
-        break;
-      case "liberarCurado":
-        resultado = liberarCurado(body);
-        break;
-      case "generarInformeDespacho":
-        resultado = generarInformeDespachoDesdeBody(body);
-        break;
-
-      // --- PRODUCTOS ---
-      case "actualizarStock":
-        resultado = actualizarStock(body);
-        break;
-
-      // --- PRECIOS ---
-      case "crearPrecio":
-        resultado = crearPrecio(body);
-        break;
-      case "actualizarPrecio":
-        resultado = actualizarPrecio(body);
-        break;
-
-      case "registrarSuministro":     resultado = registrarSuministro(body); break;
-      case "importarExistenciasDrive":   resultado = importarExistenciasDrive(body); break;
-      case "actualizarDescuentoSegunda":  resultado = actualizarDescuentoSegunda(body); break;
-      case "resetSistema":              resultado = resetSistema(body); break;
-      case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(e.parameter); break;
-      default:
-        resultado = { ok: false, error: `Acción desconocida: ${accion}` };
+      case "importarProductosMasivo": resultado = importarProductosMasivo(body); break;
+      case "importarExistenciasDrive": resultado = importarExistenciasDrive(body); break;
+      case "crearVendedor": resultado = crearVendedor(body); break;
+      case "actualizarFuncionario": resultado = actualizarFuncionario(body); break;
+      case "guardarInformePDF": resultado = guardarInformePDF(body); break;
+      case "actualizarVendedor": resultado = actualizarVendedor(body); break;
+      case "crearCliente": resultado = crearCliente(body); break;
+      case "actualizarCliente": resultado = actualizarCliente(body); break;
+      case "recibirLoteDatax": resultado = recibirLoteDatax(body); break;
+      case "unificarClientesDatax": resultado = unificarClientesDatax(); break;
+      case "cambiarNitCliente": resultado = cambiarNitCliente(body); break;
+      case "crearContacto": resultado = crearContacto(body); break;
+      case "marcarContactoPrincipal": resultado = marcarContactoPrincipal(body); break;
+      case "registrarEnsamble": resultado = registrarEnsamble(body); break;
+      case "actualizarContacto": resultado = actualizarContacto(body); break;
+      case "eliminarContacto": resultado = eliminarContacto(body); break;
+      case "crearPreventa": resultado = crearPreventa(body); break;
+      case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
+      case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
+      case "resetSistema": resultado = resetSistema(body); break;
+case "anularAPPrueba": resultado = anularOBorrarAPPrueba(body); break;
+      case "modificarDetalleAP": resultado = modificarDetalleAP(body); break;
+      case "registrarDespacho": resultado = registrarDespacho(body); break;
+      case "registrarAveria": resultado = registrarAveria(body); break;
+      case "registrarNovedad": resultado = registrarNovedad(body); break;
+      case "registrarVisita":
+        resultado = registrarVisita(body); break;
+      case "registrarNovedadLogistica": resultado = registrarNovedadLogistica(body); break;
+      case "actualizarStockMinimo": resultado = actualizarStockMinimo(body); break;
+      case "registrarViajeCompartido": resultado = registrarViajeCompartido(body); break;
+      case "desagruparViaje": resultado = desagruparViaje(body); break;
+      case "crearVehiculo": resultado = crearVehiculo(body); break;
+    case "resolverAprobacion": resultado = resolverAprobacion(body); break;
+    case "actualizarVehiculo": resultado = actualizarVehiculo(body); break;
+    case "eliminarVehiculo": resultado = eliminarVehiculo(body); break;
+      case "importarClientesMasivo": resultado = importarClientesMasivo(body); break;
+      case "crearPromocion":           resultado = crearPromocion(body); break;
+      case "desactivarPromocion":      resultado = desactivarPromocion(body); break;
+      case "reservarNumeroAP":         resultado = reservarNumeroAP(body); break;
+      case "inicializarConsecutivoAP": resultado = inicializarConsecutivoAP(body); break;
+      case "cargarLoteClientes": resultado = cargarLoteClientes(body); break;
+      case "registrarCurado": resultado = registrarCurado(body); break;
+      case "liberarCurado": resultado = liberarCurado(body); break;
+      case "editarCurado": resultado = liberarCurado(body); break;
+      case "liberarCuradosVencidos": resultado = liberarCuradosVencidos(body); break;
+      case "generarInformeDespacho": resultado = generarInformeDespachoDesdeBody(body); break;
+      case "actualizarStock": resultado = actualizarStock(body); break;
+      case "crearPrecio": resultado = crearPrecio(body); break;
+      case "actualizarPrecio": resultado = actualizarPrecio(body); break;
+    case "registrarSuministro": resultado = registrarSuministro(body); break;
+    case "guardarReceta": resultado = guardarReceta(body); break;
+      default: resultado = { ok: false, error: `Acción desconocida: ${accion}` };
     }
-  } catch (err) {
-    resultado = { ok: false, error: err.message };
-  }
-
-  return ContentService
-    .createTextOutput(JSON.stringify(resultado))
-    .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) { resultado = { ok: false, error: err.message }; }
+  return ContentService.createTextOutput(JSON.stringify(resultado)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// =============================================================================
-// INFORME DE DESPACHO — dispara la generación de PDF+Excel definida en el
-// script Informes.gs.gs (proyecto separado "SIVIL" bound al Sheet). Requiere
-// que la función generarInformeDespacho() de ese archivo esté disponible en
-// este MISMO proyecto (pégala aquí también si vive en otro proyecto Apps
-// Script, ya que un doPost solo puede llamar funciones de su propio proyecto).
-// =============================================================================
 function generarInformeDespachoDesdeBody(body) {
-  try {
-    const datos = JSON.parse(body.datos);
-    return generarInformeDespacho(datos);
-  } catch (err) {
-    return { ok: false, error: "Error generando informe de despacho: " + err.message };
-  }
+  try { const datos = JSON.parse(body.datos); return generarInformeDespacho(datos); }
+  catch (err) { return { ok: false, error: "Error generando informe: " + err.message }; }
 }
 
-// =============================================================================
-// UTILIDADES GENERALES
-// =============================================================================
 function getHoja(nombre) {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
   const hoja = ss.getSheetByName(nombre);
   if (!hoja) throw new Error(`Hoja '${nombre}' no encontrada`);
   return hoja;
@@ -239,216 +142,441 @@ function hojaAObjetos(hoja) {
   const datos = hoja.getDataRange().getValues();
   if (datos.length < 2) return [];
   const headers = datos[0].map(h => String(h).trim());
-  return datos.slice(1)
-    .filter(fila => fila.some(c => c !== ""))
-    .map(fila => {
-      const obj = {};
-      headers.forEach((h, i) => { obj[h] = fila[i] ?? ""; });
-      return obj;
-    });
+  return datos.slice(1).filter(fila => fila.some(c => c !== "")).map(fila => {
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = fila[i] ?? ""; });
+    return obj;
+  });
 }
 
 function siguienteId(hoja, columnaId) {
   const datos = hoja.getDataRange().getValues();
   if (datos.length < 2) return 1;
-  const ids = datos.slice(1)
-    .map(f => parseInt(f[columnaId]) || 0)
-    .filter(n => n > 0);
+  const ids = datos.slice(1).map(f => parseInt(f[columnaId]) || 0).filter(n => n > 0);
   return ids.length ? Math.max(...ids) + 1 : 1;
 }
 
-function formatFecha(fecha) {
-  if (!fecha) return "";
-  const d = fecha instanceof Date ? fecha : new Date(fecha);
-  return isNaN(d) ? String(fecha) : d.toISOString();
+function calcularDisponible(tmcode) {
+  const hProd = getHoja(HOJAS.PRODUCTOS);
+  const prods = hojaAObjetos(hProd);
+  const prod = prods.find(p => String(p.tmcode) === String(tmcode));
+  if (!prod) return null;
+  const stockBruto = parseFloat(prod.tmcant) || 0;
+  const stockSegundaBase = parseFloat(prod.stock_segunda) || 0;
+  const hPatio = getHoja(HOJAS.PATIO);
+  const patios = hojaAObjetos(hPatio).filter(p => String(p.tmcode) === String(tmcode));
+  // El curado se separa por calidad (primera/segunda) — aclaración reunión
+  // despacho: el curado no es solo de primera, y al liberarse debe sumar al
+  // inventario correspondiente según su calidad (ver liberarCurado).
+  const enCuradoPrimera = patios.reduce((acc, p) => {
+    const esSegunda = String(p.calidad_curado||"").toUpperCase() === "SEGUNDA";
+    return acc + (esSegunda ? 0 : (parseFloat(p.cant_en_curado) || 0));
+  }, 0);
+  const enCuradoSegunda = patios.reduce((acc, p) => {
+    const esSegunda = String(p.calidad_curado||"").toUpperCase() === "SEGUNDA";
+    return acc + (esSegunda ? (parseFloat(p.cant_en_curado) || 0) : 0);
+  }, 0);
+  // Lotes en curado vigentes (con fecha de disponibilidad) — para que Despacho
+  // sepa, al momento de despachar, si hay más unidades por salir de curado.
+  const lotesEnCurado = patios.filter(p => (parseFloat(p.cant_en_curado)||0) > 0).map(p => ({
+    cantidad: parseFloat(p.cant_en_curado) || 0,
+    calidad: String(p.calidad_curado || "PRIMERA").toUpperCase(),
+    fecha_disponible: p.fecha_liberacion_curado || ""
+  }));
+  const averias = patios.reduce((acc, p) => acc
+    + (parseFloat(p.cant_mermas_averias) || 0)
+    + (parseFloat(p.cant_averia_cargue) || 0)
+    + (parseFloat(p.cant_averia_restribado) || 0)
+    + (parseFloat(p.cant_reposicion) || 0), 0);
+  const saldosSegunda = patios.reduce((acc, p) => acc + (parseFloat(p.cant_merma_segunda) || 0), 0);
+  const hDetalle = getHoja(HOJAS.DETALLE);
+  const detalles = hojaAObjetos(hDetalle);
+  const hAP = getHoja(HOJAS.PREVENTAS);
+  const aps = hojaAObjetos(hAP);
+  const apsPendientes = new Set(aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap)).map(a => String(a.ap_id)));
+  const comprometido = detalles.filter(d => String(d.tmcode) === String(tmcode) && apsPendientes.has(String(d.ap_id)))
+    .reduce((acc, d) => acc + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
+  const disponible = stockBruto - enCuradoPrimera - averias - comprometido;
+  const disponibleSegunda = stockSegundaBase - enCuradoSegunda;
+  return { tmcode, tmdescrip: prod.tmdescrip, tmund: prod.tmund,
+    stock_bruto: stockBruto, en_curado: enCuradoPrimera, averias, saldos_segunda: saldosSegunda,
+    comprometido, disponible,
+    estado_semaforo: disponible > 10 ? "VERDE" : disponible > 0 ? "AMARILLO" : "ROJO",
+    stock_segunda_base: stockSegundaBase,
+    en_curado_segunda: enCuradoSegunda,
+    disponible_segunda: disponibleSegunda,
+    lotes_en_curado: lotesEnCurado
+  };
 }
 
-// =============================================================================
-// MOTOR DE INVENTARIO DINÁMICO
-// Disponible = tmcant - cant_en_curado - cant_mermas_averias - SUM(cantidad_solicitada pendiente)
-// =============================================================================
-// =============================================================================
-// MOTOR DE INVENTARIO — Lee TODO de una vez (1 lectura por hoja)
-// Retorna una entrada por (tmcode, calidad): PRIMERA y SEGUNDA separadas
-// =============================================================================
-
 function getInventarioDinamico() {
-  // ── Lectura única de cada hoja ─────────────────────────────────────────────
-  const prods    = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
-  const patios   = hojaAObjetos(getHoja(HOJAS.PATIO));
-  const detalles = hojaAObjetos(getHoja(HOJAS.DETALLE));
-  const aps      = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
-  const precios  = hojaAObjetos(getHoja(HOJAS.PRECIOS));
+  const hProd = getHoja(HOJAS.PRODUCTOS);
+  const prods = hojaAObjetos(hProd);
+  return { ok: true, data: prods.map(p => calcularDisponible(p.tmcode)).filter(Boolean) };
+}
 
-  // APs con unidades pendientes de despacho
-  const apsPend = new Set(
-    aps.filter(a => ["Pendiente","Despachado Parcial"].includes(a.estado_ap))
-       .map(a => String(a.ap_id))
+// Vendedores necesitan ver, por producto, cuánto tienen pendiente de
+// despachar entre todos sus AP activos — hasta ahora solo Despacho tenía
+// esta vista agregada (reunión despacho 08-09/09/2026, audio de sugerencias:
+// el reporte de pendientes debe organizarse por producto).
+function getPendientesPorProducto(vendedorId) {
+  const hAP = getHoja(HOJAS.PREVENTAS);
+  const aps = hojaAObjetos(hAP).filter(a =>
+    String(a.vendedor_id) === String(vendedorId) &&
+    ["Pendiente", "Despachado Parcial"].includes(a.estado_ap)
   );
+  const apIds = new Set(aps.map(a => String(a.ap_id)));
+  const hDetalle = getHoja(HOJAS.DETALLE);
+  const detalles = hojaAObjetos(hDetalle).filter(d => apIds.has(String(d.ap_id)));
 
-  // ── Comprometido por (tmcode, calidad) ─────────────────────────────────────
-  const comprMap = {};  // clave: "tmcode|calidad"
-  detalles.forEach(function(d) {
-    if (!apsPend.has(String(d.ap_id))) return;
-    const pend = Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0));
-    const calidad = String(d.calidad||"PRIMERA").trim().toUpperCase();
-    const key = String(d.tmcode).trim() + "|" + calidad;
-    comprMap[key] = (comprMap[key]||0) + pend;
+  const hProd = getHoja(HOJAS.PRODUCTOS);
+  const prods = hojaAObjetos(hProd);
+
+  const porProducto = {};
+  detalles.forEach(d => {
+    const pendiente = Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0));
+    if (pendiente <= 0) return;
+    const tc = String(d.tmcode);
+    if (!porProducto[tc]) {
+      const prod = prods.find(p => String(p.tmcode) === tc);
+      porProducto[tc] = { tmcode: tc, tmdescrip: prod ? prod.tmdescrip : `Código ${tc}`, tmund: prod ? prod.tmund : '', pendiente: 0, aps: new Set() };
+    }
+    porProducto[tc].pendiente += pendiente;
+    porProducto[tc].aps.add(String(d.ap_id));
   });
 
-  // ── Curado y averías por tmcode (patio no distingue calidad aún) ────────────
-  const patioMap = {};  // clave: tmcode
-  patios.forEach(function(p) {
-    const tc = String(p.tmcode).trim();
-    if (!patioMap[tc]) patioMap[tc] = { curado:0, averias:0, segunda:0 };
-    patioMap[tc].curado  += parseFloat(p.cant_en_curado)||0;
-    patioMap[tc].averias += (parseFloat(p.cant_mermas_averias)||0)
-                          + (parseFloat(p.cant_averia_cargue)||0)
-                          + (parseFloat(p.cant_averia_restribado)||0)
-                          + (parseFloat(p.cant_reposicion)||0);
-    patioMap[tc].segunda += parseFloat(p.cant_merma_segunda)||0;
-  });
-
-  // ── Precios por tmcode ──────────────────────────────────────────────────────
-  const precioMap = {};
-  precios.forEach(function(p) {
-    precioMap[String(p.tmcode).trim()] = p;
-  });
-
-  // ── Construir inventario por (tmcode, calidad) ─────────────────────────────
-  const semaforo = function(disp) {
-    return disp > 10 ? "VERDE" : disp > 0 ? "AMARILLO" : "ROJO";
-  };
-
-  const resultado = [];
-  prods.forEach(function(p) {
-    const tc      = String(p.tmcode).trim();
-    const calidad = String(p.calidad||"PRIMERA").trim().toUpperCase();
-    const key     = tc + "|" + calidad;
-
-    const stock   = parseFloat(p.tmcant) || 0;
-    const patio   = patioMap[tc] || { curado:0, averias:0, segunda:0 };
-    const compr   = comprMap[key] || 0;
-    const pr      = precioMap[tc] || {};
-
-    // La calidad PRIMERA se ve afectada por curado y averías
-    // La calidad SEGUNDA es independiente (es el saldo de segunda del patio)
-    const curado  = calidad === "PRIMERA" ? patio.curado  : 0;
-    const averias = calidad === "PRIMERA" ? patio.averias : 0;
-    const disp    = stock - curado - averias - compr;
-
-    resultado.push({
-      tmcode:              tc,
-      tmdescrip:           p.tmdescrip,
-      tmund:               p.tmund,
-      calidad:             calidad,
-      stock_bruto:         stock,
-      en_curado:           curado,
-      averias:             averias,
-      comprometido:        compr,
-      disponible:          disp,
-      semaforo:            semaforo(disp),
-      precio_base:         parseFloat(pr.precio_base_planta||0),
-      precio_zona_a:       parseFloat(pr.precio_zona_a||0),
-      precio_zona_b:       parseFloat(pr.precio_zona_b||0),
-      desc_max:            parseFloat(pr.desc_max||0),
-      descuento_segunda_pct: parseFloat(pr.descuento_segunda_pct||10),
-      flete_a:             parseFloat(pr.flete_zona_a||0),
-      flete_b:             parseFloat(pr.flete_zona_b||0)
-    });
-  });
+  const resultado = Object.values(porProducto).map(p => ({
+    tmcode: p.tmcode, tmdescrip: p.tmdescrip, tmund: p.tmund,
+    pendiente: p.pendiente, num_aps: p.aps.size, aps: Array.from(p.aps)
+  })).sort((a,b) => b.pendiente - a.pendiente);
 
   return { ok: true, data: resultado };
 }
 
-// Mantener compatibilidad con código que llama calcularDisponible
-function calcularDisponible(tmcode, calidad) {
-  const inv = getInventarioDinamico();
-  const cal = String(calidad||"PRIMERA").toUpperCase();
-  const item = inv.data.find(function(x){
-    return String(x.tmcode)===String(tmcode) && x.calidad===cal;
-  });
-  return item || null;
-}
-
 function getDisponibleProducto(tmcode) {
-  const items = getInventarioDinamico().data.filter(function(x){
-    return String(x.tmcode) === String(tmcode);
+  const d = calcularDisponible(tmcode);
+  if (!d) return { ok: false, error: `Producto ${tmcode} no encontrado` };
+  return { ok: true, data: d };
+}
+
+function getTarifasFlete() {
+  return { ok: true, data: hojaAObjetos(getHoja(HOJAS.TARIFAS)) };
+}
+
+// ============================================================
+// ============================================================
+// FUNCIONARIOS (lista compartida para notificaciones WhatsApp)
+// ============================================================
+function getFuncionarios() {
+var hoja = getHoja(HOJAS.FUNCIONARIOS);
+return { ok: true, data: hojaAObjetos(hoja) };
+}
+
+function actualizarFuncionario(body) {
+var hoja = getHoja(HOJAS.FUNCIONARIOS);
+var datos = hoja.getDataRange().getValues();
+var headers = datos[0].map(function(h){ return String(h).trim(); });
+var idxId = headers.indexOf("id");
+if (idxId === -1) return { ok: false, error: "La hoja FUNCIONARIOS no tiene columna id." };
+var idBuscado = String(body.id || '').trim();
+var filaNum = -1;
+for (var i = 1; i < datos.length; i++) {
+if (String(datos[i][idxId]).trim() === idBuscado) { filaNum = i + 1; break; }
+}
+var campos = ["nombre", "cargo", "wa", "recibe", "activo", "correo"];
+if (filaNum === -1) {
+var nuevoId = datos.length;
+var nueva = new Array(headers.length).fill('');
+nueva[idxId] = body.id || nuevoId;
+campos.forEach(function(c){
+var idx = headers.indexOf(c);
+if (idx !== -1 && body[c] !== undefined) nueva[idx] = body[c];
+});
+hoja.getRange(hoja.getLastRow() + 1, 1, 1, headers.length).setValues([nueva]);
+return { ok: true, creado: true };
+}
+campos.forEach(function(c){
+var idx = headers.indexOf(c);
+if (idx !== -1 && body[c] !== undefined) hoja.getRange(filaNum, idx + 1).setValue(body[c]);
+});
+return { ok: true, actualizado: true };
+
+}// IMPORTAR INVENTARIO DESDE GOOGLE DRIVE (BOD 03 Primeras / BOD 04 Segunda)
+// ============================================================
+const CARPETA_INVENTARIO_DRIVE_ID = "1RSWLgbEfx6nMnZghVuYhn80veshiliE1";
+
+function _normCode(x) {
+var s = String(x || '').trim();
+var n = s.replace(/^0+(?=\d)/, '');
+return n === '' ? s : n;
+}
+
+function _clasificarArchivoInventario(nombre) {
+var n = nombre.toUpperCase();
+var esPrimeras = /BOD[\s_-]?0?3/.test(n) && /PRIMERA/.test(n);
+var esSegunda = /BOD[\s_-]?0?4/.test(n) && /SEGUND/.test(n);
+return { esPrimeras: esPrimeras, esSegunda: esSegunda };
+}
+
+function getArchivosDriveInventario() {
+var folder = DriveApp.getFolderById(CARPETA_INVENTARIO_DRIVE_ID);
+var files = folder.getFiles();
+var out = [];
+while (files.hasNext()) {
+var f = files.next();
+var clas = _clasificarArchivoInventario(f.getName());
+out.push({
+id: f.getId(),
+nombre: f.getName(),
+fecha: f.getLastUpdated().toISOString(),
+esPrimeras: clas.esPrimeras,
+esSegunda: clas.esSegunda
+});
+}
+return { ok: true, data: out };
+}
+
+function _leerExistenciasDeArchivo(fileId) {
+var file = DriveApp.getFileById(fileId);
+var mime = file.getMimeType();
+var ssId = fileId;
+var temporal = null;
+if (mime !== MimeType.GOOGLE_SHEETS) {
+var copiado = Drive.Files.copy({ title: "TEMP_IMPORT_" + fileId, mimeType: MimeType.GOOGLE_SHEETS }, fileId);
+ssId = copiado.id;
+temporal = ssId;
+}
+var ss = SpreadsheetApp.openById(ssId);
+var hoja = ss.getSheets()[0];
+var datos = hoja.getDataRange().getValues();
+var headers = datos[0].map(function(h){ return String(h).trim().toLowerCase(); });
+var idxCode = headers.indexOf("tmcode");
+var idxCant = headers.indexOf("tmcant");
+var idxDesc = headers.indexOf("tmdescrip");
+var idxUnd = headers.indexOf("tmund");
+var filas = [];
+for (var i = 1; i < datos.length; i++) {
+var f2 = datos[i];
+if (!f2[idxCode]) continue;
+filas.push({
+tmcode: String(f2[idxCode]).trim(),
+tmcant: parseFloat(f2[idxCant]) || 0,
+tmdescrip: idxDesc >= 0 ? f2[idxDesc] : '',
+tmund: idxUnd >= 0 ? f2[idxUnd] : 'UND'
+});
+}
+if (temporal) {
+DriveApp.getFileById(temporal).setTrashed(true);
+}
+return filas;
+}
+
+function importarExistenciasDrive(body) {
+var folder = DriveApp.getFolderById(CARPETA_INVENTARIO_DRIVE_ID);
+var files = folder.getFiles();
+var archPrimeras = null, archSegunda = null;
+while (files.hasNext()) {
+var f = files.next();
+var clas = _clasificarArchivoInventario(f.getName());
+if (clas.esPrimeras && (!archPrimeras || f.getLastUpdated() > archPrimeras.getLastUpdated())) archPrimeras = f;
+if (clas.esSegunda && (!archSegunda || f.getLastUpdated() > archSegunda.getLastUpdated())) archSegunda = f;
+}
+if (!archPrimeras || !archSegunda) {
+return { ok: false, error: "Falta el archivo de Primeras o de Segunda en la carpeta de Drive." };
+}
+
+var filasPrimeras = _leerExistenciasDeArchivo(archPrimeras.getId()).map(function(f){
+f.calidad = 'PRIMERA'; return f;
+});
+var filasSegunda = _leerExistenciasDeArchivo(archSegunda.getId()).map(function(f){
+f.calidad = 'SEGUNDA'; return f;
+});
+var todas = filasPrimeras.concat(filasSegunda);
+
+var hoja = getHoja(HOJAS.PRODUCTOS);
+var datos = hoja.getDataRange().getValues();
+var headers = datos[0].map(function(h){ return String(h).trim(); });
+var idxCalidad = headers.indexOf("calidad");
+if (idxCalidad === -1) {
+idxCalidad = headers.length;
+hoja.getRange(1, idxCalidad + 1).setValue("calidad");
+headers.push("calidad");
+if (datos.length > 1) {
+var vals = [];
+for (var i = 1; i < datos.length; i++) vals.push(["PRIMERA"]);
+hoja.getRange(2, idxCalidad + 1, datos.length - 1, 1).setValues(vals);
+}
+}
+var idxCode = headers.indexOf("tmcode");
+var idxCant = headers.indexOf("tmcant");
+var idxDesc = headers.indexOf("tmdescrip");
+var idxUnd = headers.indexOf("tmund");
+
+var datos2 = hoja.getDataRange().getValues();
+var mapaFilas = {};
+for (var j = 1; j < datos2.length; j++) {
+var code = _normCode(datos2[j][idxCode]);
+var cal = String(datos2[j][idxCalidad] || 'PRIMERA').trim().toUpperCase();
+if (code) mapaFilas[code + '|' + cal] = j + 1;
+}
+
+var actualizados = 0, nuevos = 0;
+var filasNuevas = [];
+todas.forEach(function(p){
+var key = _normCode(p.tmcode) + '|' + p.calidad;
+var filaNum = mapaFilas[key];
+if (filaNum) {
+hoja.getRange(filaNum, idxCant + 1).setValue(p.tmcant);
+actualizados++;
+} else {
+var nueva = new Array(headers.length).fill('');
+nueva[idxCode] = p.tmcode;
+nueva[idxDesc] = p.tmdescrip;
+nueva[idxUnd] = p.tmund || 'UND';
+nueva[idxCant] = p.tmcant;
+nueva[idxCalidad] = p.calidad;
+filasNuevas.push(nueva);
+nuevos++;
+}
+});
+if (filasNuevas.length) {
+hoja.getRange(hoja.getLastRow() + 1, 1, filasNuevas.length, headers.length).setValues(filasNuevas);
+}
+
+return {
+ok: true,
+primeras: filasPrimeras.length,
+segunda: filasSegunda.length,
+resumen: { actualizados: actualizados, nuevos: nuevos }
+};
+}
+
+// ============================================================
+// TRIGGER AUTOMATICO - actualizar inventario cuando se agreguen archivos a Drive
+// ============================================================
+// ============================================================
+// GUARDAR INFORMES PDF EN DRIVE (Ventas / Despacho) - para consulta de Gerencia
+// ============================================================
+function _getOrCrearCarpetaInformes(nombre) {
+  var props = PropertiesService.getScriptProperties();
+  var key = 'carpeta_informe_' + nombre;
+  var id = props.getProperty(key);
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch(e) {}
+  }
+  var folders = DriveApp.getFoldersByName(nombre);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(nombre);
+  props.setProperty(key, folder.getId());
+  return folder;
+}
+
+function getCarpetasInformes() {
+  var ventas = _getOrCrearCarpetaInformes('SIVIL - Informes de Ventas');
+  var despachos = _getOrCrearCarpetaInformes('SIVIL - Informes de Despacho');
+  return { ok: true, ventas: ventas.getUrl(), despachos: despachos.getUrl() };
+}
+
+function guardarInformePDF(body) {
+  try {
+    var nombreCarpeta = (body.tipo === 'despacho') ? 'SIVIL - Informes de Despacho' : 'SIVIL - Informes de Ventas';
+    var folder = _getOrCrearCarpetaInformes(nombreCarpeta);
+    var bytes = Utilities.base64Decode(body.base64_pdf);
+    var nombreArchivo = body.nombre_archivo || ('Informe_' + Date.now() + '.pdf');
+    var blob = Utilities.newBlob(bytes, 'application/pdf', nombreArchivo);
+    var file = folder.createFile(blob);
+    return { ok: true, fileId: file.getId(), url: file.getUrl() };
+  } catch(e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function importarExistenciasDriveAuto() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var folder = DriveApp.getFolderById(CARPETA_INVENTARIO_DRIVE_ID);
+    var files = folder.getFiles();
+    var firmas = [];
+    while (files.hasNext()) {
+      var f = files.next();
+      firmas.push(f.getId() + ':' + f.getLastUpdated().getTime());
+    }
+    firmas.sort();
+    var firma = firmas.join('|');
+    var firmaAnterior = props.getProperty('inventario_firma_archivos');
+    if (!firmas.length || firma === firmaAnterior) return;
+    var resultado = importarExistenciasDrive();
+    if (resultado && resultado.ok) {
+      props.setProperty('inventario_firma_archivos', firma);
+    }
+  } catch(e) {
+    console.error('Error en importarExistenciasDriveAuto: ' + e.message);
+  }
+}
+
+function configurarTriggerInventarioAuto() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'importarExistenciasDriveAuto') {
+      ScriptApp.deleteTrigger(t);
+    }
   });
-  if (!items.length) return { ok: false, error: "Producto " + tmcode + " no encontrado" };
-  return { ok: true, data: items };
+  ScriptApp.newTrigger('importarExistenciasDriveAuto')
+    .timeBased()
+    .everyHours(2)
+    .create();
+  return { ok: true, mensaje: 'Trigger automatico configurado: revisa Drive cada 2 horas y actualiza el inventario si hay archivos nuevos.' };
 }
 
-// Alertas de producción — todos los productos en rojo o amarillo
-function getAlertasProduccion() {
-  const inv = getInventarioDinamico();
-  const alertas = inv.data.filter(function(x){ return x.semaforo !== "VERDE"; });
-  return { ok: true, data: alertas };
-}
-
-// =============================================================================
-// MÓDULO: PRODUCTOS
-// =============================================================================
 function getProductos() {
-  const datos = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
-  return { ok: true, data: datos };
+  var productos = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
+  var precios = getPrecios().data;
+  var mapPrecios = {};
+  precios.forEach(function(p){ mapPrecios[String(p.tmcode)] = p; });
+  var combinados = productos.map(function(prod){
+    var pv = mapPrecios[String(prod.tmcode)];
+    if (!pv) return prod;
+    var out = {};
+    for (var k in prod) out[k] = prod[k];
+    if (pv.precio_base_planta !== null && pv.precio_base_planta !== "" && pv.precio_base_planta !== undefined) out.precio_base = pv.precio_base_planta;
+    if (pv.precio_m2 !== null && pv.precio_m2 !== "" && pv.precio_m2 !== undefined) out.precio_m2 = pv.precio_m2;
+    if (pv.descuento_max_vendedor !== null && pv.descuento_max_vendedor !== "" && pv.descuento_max_vendedor !== undefined) out.descuento_max = pv.descuento_max_vendedor;
+    return out;
+  });
+  return { ok: true, data: combinados };
 }
-
 function getProducto(tmcode) {
-  const datos = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
-  const prod  = datos.find(p => String(p.tmcode) === String(tmcode));
-  if (!prod) return { ok: false, error: "Producto no encontrado" };
-  return { ok: true, data: prod };
+  var todos = getProductos();
+  var p = todos.data.find(function(p){ return String(p.tmcode) === String(tmcode); });
+  return p ? { ok: true, data: p } : { ok: false, error: "Producto no encontrado" };
 }
 
 function actualizarStock(body) {
-  const hoja  = getHoja(HOJAS.PRODUCTOS);
+  const hoja = getHoja(HOJAS.PRODUCTOS);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
-  const colCode = hdrs.indexOf("tmcode");
-  const colCant = hdrs.indexOf("tmcant");
-
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colCode = hdrs.indexOf("tmcode"), colCant = hdrs.indexOf("tmcant");
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colCode]) === String(body.tmcode)) {
-      hoja.getRange(i + 1, colCant + 1).setValue(body.tmcant);
+      hoja.getRange(i+1, colCant+1).setValue(body.tmcant);
       return { ok: true, mensaje: `Stock de ${body.tmcode} actualizado a ${body.tmcant}` };
     }
   }
   return { ok: false, error: "Producto no encontrado" };
 }
 
-// =============================================================================
-// MÓDULO: VENDEDORES
-// =============================================================================
-function getVendedores() {
-  const datos = hojaAObjetos(getHoja(HOJAS.VENDEDORES));
-  return { ok: true, data: datos.filter(v => v.estado === "Activo") };
-}
-
+function getVendedores() { return { ok: true, data: hojaAObjetos(getHoja(HOJAS.VENDEDORES)).filter(v => v.estado === "Activo") }; }
 function getVendedor(correo) {
-  const datos = hojaAObjetos(getHoja(HOJAS.VENDEDORES));
-  const v     = datos.find(x => x.correo_usuario === correo);
-  if (!v) return { ok: false, error: "Vendedor no encontrado" };
-  return { ok: true, data: v };
+  const v = hojaAObjetos(getHoja(HOJAS.VENDEDORES)).find(x => x.correo_usuario === correo);
+  return v ? { ok: true, data: v } : { ok: false, error: "Vendedor no encontrado" };
 }
-
 function crearVendedor(body) {
-  const hoja = getHoja(HOJAS.VENDEDORES);
-  hoja.appendRow([
-    body.id_vendedor,
-    body.nombre_vendedor,
-    body.correo_usuario,
-    body.estado || "Activo"
-  ]);
+  getHoja(HOJAS.VENDEDORES).appendRow([body.id_vendedor, body.nombre_vendedor, body.correo_usuario, body.estado || "Activo"]);
   return { ok: true, mensaje: "Vendedor creado", id: body.id_vendedor };
 }
-
 function actualizarVendedor(body) {
-  const hoja  = getHoja(HOJAS.VENDEDORES);
+  const hoja = getHoja(HOJAS.VENDEDORES);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
+  const hdrs = datos[0].map(h => String(h).trim());
   const colId = hdrs.indexOf("id_vendedor");
-
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.id_vendedor)) {
       if (body.nombre_vendedor !== undefined) hoja.getRange(i+1, hdrs.indexOf("nombre_vendedor")+1).setValue(body.nombre_vendedor);
@@ -460,244 +588,520 @@ function actualizarVendedor(body) {
   return { ok: false, error: "Vendedor no encontrado" };
 }
 
-// =============================================================================
-// MÓDULO: CLIENTES
-// =============================================================================
 function getClientes(vendedor_id) {
-  const datos = hojaAObjetos(getHoja(HOJAS.CLIENTES));
-  const res   = vendedor_id
-    ? datos.filter(c => String(c.vendedor_asignado) === String(vendedor_id))
-    : datos;
-  return { ok: true, data: res };
+  // Todos los clientes son visibles para todos los vendedores (decisión Gerencia 03/07/2026)
+  return { ok: true, data: hojaAObjetos(getHoja(HOJAS.CLIENTES)) };
 }
-
 function getCliente(nit) {
-  const datos = hojaAObjetos(getHoja(HOJAS.CLIENTES));
-  const c     = datos.find(x => String(x.cliente_nit) === String(nit));
-  if (!c) return { ok: false, error: "Cliente no encontrado" };
-  return { ok: true, data: c };
+  const c = hojaAObjetos(getHoja(HOJAS.CLIENTES)).find(x => String(x.cliente_nit) === String(nit));
+  return c ? { ok: true, data: c } : { ok: false, error: "Cliente no encontrado" };
 }
-
 function buscarCliente(q) {
-  const datos = hojaAObjetos(getHoja(HOJAS.CLIENTES));
-  const ql    = String(q).toLowerCase();
-  const res   = datos.filter(c =>
-    String(c.cliente_nit).includes(ql) ||
-    String(c.razon_social).toLowerCase().includes(ql)
-  );
+  const ql = String(q).toLowerCase();
+  const res = hojaAObjetos(getHoja(HOJAS.CLIENTES)).filter(c =>
+    String(c.cliente_nit).includes(ql) || String(c.razon_social).toLowerCase().includes(ql));
   return { ok: true, data: res };
 }
-
 function crearCliente(body) {
-  // Validar duplicado por NIT
   const check = getCliente(body.cliente_nit);
-  if (check.ok) return { ok: false, error: "NIT ya registrado. Cliente duplicado bloqueado." };
-
-  const hoja = getHoja(HOJAS.CLIENTES);
-  hoja.appendRow([
-    body.cliente_nit,
-    body.razon_social,
-    body.vendedor_asignado,
-    body.coordenadas_home || "",
-    body.foto_fachada_url || ""
-  ]);
+  if (check.ok) return { ok: false, error: "NIT ya registrado." };
+  getHoja(HOJAS.CLIENTES).appendRow([body.cliente_nit, body.razon_social, body.vendedor_asignado, body.coordenadas_home||"" , body.foto_fachada_url||""]);
   return { ok: true, mensaje: "Cliente creado", nit: body.cliente_nit };
 }
-
 function actualizarCliente(body) {
-  const hoja  = getHoja(HOJAS.CLIENTES);
+  // Blindaje (23/09/2026): versiones viejas de Comercial (antes de la C27)
+  // enviaban coordenadas GPS en el campo direccion y borraban la dirección
+  // real del cliente. Si llega un par lat,lon como dirección, se ignora.
+  if (body && typeof body.direccion === "string" && /^\s*-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*$/.test(body.direccion)) delete body.direccion;
+  const hoja = getHoja(HOJAS.CLIENTES);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
+  const hdrs = datos[0].map(h => String(h).trim());
   const colNit = hdrs.indexOf("cliente_nit");
-
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colNit]) === String(body.cliente_nit)) {
-      if (body.razon_social       !== undefined) hoja.getRange(i+1, hdrs.indexOf("razon_social")+1).setValue(body.razon_social);
-      if (body.vendedor_asignado  !== undefined) hoja.getRange(i+1, hdrs.indexOf("vendedor_asignado")+1).setValue(body.vendedor_asignado);
-      if (body.coordenadas_home   !== undefined) hoja.getRange(i+1, hdrs.indexOf("coordenadas_home")+1).setValue(body.coordenadas_home);
-      if (body.foto_fachada_url   !== undefined) hoja.getRange(i+1, hdrs.indexOf("foto_fachada_url")+1).setValue(body.foto_fachada_url);
+      if (body.razon_social      !== undefined) hoja.getRange(i+1, hdrs.indexOf("razon_social")+1).setValue(body.razon_social);
+      if (body.vendedor_asignado !== undefined) hoja.getRange(i+1, hdrs.indexOf("vendedor_asignado")+1).setValue(body.vendedor_asignado);
+      if (body.coordenadas_home  !== undefined) hoja.getRange(i+1, hdrs.indexOf("coordenadas_home")+1).setValue(body.coordenadas_home);
+      if (body.foto_fachada_url  !== undefined) hoja.getRange(i+1, hdrs.indexOf("foto_fachada_url")+1).setValue(body.foto_fachada_url);
+      if (body.telefono   !== undefined) hoja.getRange(i+1, hdrs.indexOf("telefono")+1).setValue(body.telefono);
+      if (body.ciudad     !== undefined) hoja.getRange(i+1, hdrs.indexOf("ciudad")+1).setValue(body.ciudad);
+      if (body.direccion  !== undefined) hoja.getRange(i+1, hdrs.indexOf("direccion")+1).setValue(body.direccion);
       return { ok: true, mensaje: "Cliente actualizado" };
     }
   }
   return { ok: false, error: "Cliente no encontrado" };
 }
 
-// Importación masiva desde DATAX. Se llama en lotes (batches) desde el
-// cliente para no exceder límites de payload. body.limpiar=true SOLO en el
-// primer lote, para borrar los clientes de prueba antes de cargar los reales.
-// Todos los vendedores pueden ver todos los clientes (decisión 03/07/2026);
-// vendedor_datax se guarda solo como referencia histórica del ERP, no se usa
-// para filtrar.
-function importarClientesMasivo(body) {
-  const hoja = getHoja(HOJAS.CLIENTES);
-  const hdrs = ["cliente_nit","razon_social","vendedor_asignado","coordenadas_home","foto_fachada_url","telefono","ciudad","vendedor_datax"];
+// =============================================================================
+// UNIFICACIÓN DE CLIENTES CON BASE DATAX (4301 registros, sep/2026) — pedido
+// de la reunión: "unifica los clientes, que quede la posibilidad de edición
+// y alimentación del MASTER". La hoja CLIENTES sigue siendo la que prevalece;
+// esta rutina la enriquece con datos que faltan y agrega los clientes nuevos
+// que aún no existían, sin pisar nunca lo que ya está bien en CLIENTES.
+//
+// Diseñado para ser REUTILIZABLE ("alimentación" continua del master): la
+// próxima vez que llegue una base nueva de DATAX, se repiten los mismos 2
+// pasos (recibirLoteDatax en lotes + unificarClientesDatax al final).
+// =============================================================================
 
-  if (body.limpiar) {
-    hoja.clearContents();
-    hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
-    hoja.getRange(1,1,1,hdrs.length).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
-    hoja.setFrozenRows(1);
+// Mapa código DATAX (vendedor_b) -> cédula real, usando la misma
+// convención ya establecida en la migración anterior de vendedor_asignado.
+const MAPA_VENDEDOR_B_CEDULA = {
+  "1": { cedula: "31409227", label: "Principal" },   // Gerencia/Nohra
+  "2": { cedula: "10243199", label: "Eduardo" },
+  "4": { cedula: "1144160845", label: "Juan Fernando" },
+  "5": { cedula: "16777882", label: "Felipe" },
+  "7": { cedula: "10243199", label: "Eduardo" },
+  "11": { cedula: "31434163", label: "Lorena" },
+  "13": { cedula: "1193585144", label: "Juan Jose" }
+  // códigos 6 ("Sin clasificar") y 14 ("Otros") y cualquier otro no mapeado
+  // quedan sin vendedor asignado — igual que la migración anterior.
+};
+
+// Recibe un lote de filas de la base DATAX y las guarda en una hoja
+// temporal (DATAX_TEMP). Se llama muchas veces seguidas (un lote pequeño
+// por llamada) para no exceder límites de tamaño de una sola petición.
+// Cada fila: [nit, nombre, ciudad, direccion, telefono, vendedor_b_code]
+function recibirLoteDatax(body) {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let hoja = ss.getSheetByName("DATAX_TEMP");
+  if (!hoja) {
+    hoja = ss.insertSheet("DATAX_TEMP");
+    hoja.appendRow(["nit", "nombre", "ciudad", "direccion", "telefono", "vendedor_b"]);
   }
-
-  const filas = (body.clientes || []).map(c => [
-    c.nit, c.nombre, "", "", "", c.telefono || "", c.ciudad || "", c.vendedor_datax || ""
-  ]);
+  const filas = body.filas || [];
   if (filas.length > 0) {
-    const inicio = hoja.getLastRow() + 1;
-    hoja.getRange(inicio, 1, filas.length, hdrs.length).setValues(filas);
+    hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, 6).setValues(filas);
+  }
+  return { ok: true, mensaje: `${filas.length} filas agregadas a DATAX_TEMP`, totalEnTemp: hoja.getLastRow() - 1 };
+}
+
+// Fusión final: recorre DATAX_TEMP, y por cada NIT decide si es un cliente
+// nuevo (se agrega a CLIENTES) o ya existe (se completan SOLO los campos
+// que estén vacíos — nunca se sobrescribe un dato que el vendedor ya
+// cargó o corrigió a mano).
+function unificarClientesDatax() {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  const hojaTemp = ss.getSheetByName("DATAX_TEMP");
+  if (!hojaTemp) return { ok: false, error: "No hay datos en DATAX_TEMP — sube los lotes primero" };
+  const datosTemp = hojaTemp.getDataRange().getValues();
+  const filasDatax = datosTemp.slice(1); // [nit, nombre, ciudad, direccion, telefono, vendedor_b]
+
+  const hojaCli = ss.getSheetByName(HOJAS.CLIENTES);
+  const datosCli = hojaCli.getDataRange().getValues();
+  const hdrsCli = datosCli[0].map(h => String(h).trim());
+  const colNit = hdrsCli.indexOf("cliente_nit");
+  const colRazon = hdrsCli.indexOf("razon_social");
+  const colVendAsig = hdrsCli.indexOf("vendedor_asignado");
+  const colTel = hdrsCli.indexOf("telefono");
+  const colCiudad = hdrsCli.indexOf("ciudad");
+  const colVendDatax = hdrsCli.indexOf("vendedor_datax");
+  const colDireccion = hdrsCli.indexOf("direccion");
+
+  // Índice NIT -> número de fila real en la hoja (1-based, incluye encabezado)
+  const indiceNit = {};
+  for (let i = 1; i < datosCli.length; i++) {
+    const nit = String(datosCli[i][colNit]).trim();
+    if (nit) indiceNit[nit] = i + 1;
   }
 
-  return { ok: true, mensaje: `${filas.length} clientes importados`, total_en_hoja: hoja.getLastRow() - 1 };
+  let nuevos = 0, enriquecidos = 0, sinCambio = 0;
+  const filasNuevas = [];
+  const vistos = new Set(); // evita duplicados dentro del mismo archivo DATAX
+
+  filasDatax.forEach(([nit, nombre, ciudad, direccion, telefono, vb]) => {
+    nit = String(nit || "").trim();
+    if (!nit || vistos.has(nit)) return;
+    vistos.add(nit);
+
+    const filaExistente = indiceNit[nit];
+    if (filaExistente) {
+      // Cliente ya existe — completar SOLO lo que esté vacío.
+      let cambio = false;
+      if (telefono && colTel > -1 && !String(hojaCli.getRange(filaExistente, colTel + 1).getValue()).trim()) {
+        hojaCli.getRange(filaExistente, colTel + 1).setValue(telefono); cambio = true;
+      }
+      if (ciudad && colCiudad > -1 && !String(hojaCli.getRange(filaExistente, colCiudad + 1).getValue()).trim()) {
+        hojaCli.getRange(filaExistente, colCiudad + 1).setValue(ciudad); cambio = true;
+      }
+      if (direccion && colDireccion > -1 && !String(hojaCli.getRange(filaExistente, colDireccion + 1).getValue()).trim()) {
+        hojaCli.getRange(filaExistente, colDireccion + 1).setValue(direccion); cambio = true;
+      }
+      if (cambio) enriquecidos++; else sinCambio++;
+    } else {
+      // Cliente nuevo — se agrega con el vendedor mapeado si el código es conocido.
+      const mapeo = MAPA_VENDEDOR_B_CEDULA[String(vb)];
+      const fila = [];
+      fila[colNit] = nit;
+      fila[colRazon] = nombre || `Cliente ${nit}`;
+      fila[colVendAsig] = mapeo ? mapeo.cedula : "";
+      fila[colTel] = telefono || "";
+      fila[colCiudad] = ciudad || "";
+      fila[colVendDatax] = mapeo ? mapeo.label : "";
+      fila[colDireccion] = direccion || "";
+      filasNuevas.push(fila);
+      nuevos++;
+    }
+  });
+
+  if (filasNuevas.length > 0) {
+    const numCols = hdrsCli.length;
+    const matriz = filasNuevas.map(f => {
+      const row = new Array(numCols).fill("");
+      for (let c = 0; c < numCols; c++) if (f[c] !== undefined) row[c] = f[c];
+      return row;
+    });
+    hojaCli.getRange(hojaCli.getLastRow() + 1, 1, matriz.length, numCols).setValues(matriz);
+  }
+
+  // Limpiar la hoja temporal — ya cumplió su función.
+  ss.deleteSheet(hojaTemp);
+
+  return { ok: true, nuevos, enriquecidos, sinCambio, totalProcesados: filasDatax.length };
+}
+function cambiarNitCliente(body) {
+  const nitActual = String(body.cliente_nit_actual || "").trim();
+  const nitNuevo  = String(body.cliente_nit_nuevo  || "").trim();
+  if (!nitActual) return { ok: false, error: "Falta cliente_nit_actual" };
+  if (!nitNuevo)  return { ok: false, error: "Falta cliente_nit_nuevo" };
+  if (nitActual === nitNuevo) return { ok: true, mensaje: "NIT sin cambios" };
+
+  const hojaCli = getHoja(HOJAS.CLIENTES);
+  const datosCli = hojaCli.getDataRange().getValues();
+  const hdrsCli = datosCli[0].map(h => String(h).trim());
+  const colNitCli = hdrsCli.indexOf("cliente_nit");
+
+  let filaActual = -1;
+  for (let i = 1; i < datosCli.length; i++) {
+    const nit = String(datosCli[i][colNitCli]);
+    if (nit === nitNuevo) return { ok: false, error: "El NIT nuevo ya esta en uso por otro cliente" };
+    if (nit === nitActual) filaActual = i;
+  }
+  if (filaActual === -1) return { ok: false, error: "Cliente (NIT actual) no encontrado" };
+
+  hojaCli.getRange(filaActual + 1, colNitCli + 1).setValue(nitNuevo);
+
+  const hojasCascada = [HOJAS.PREVENTAS, HOJAS.CONTACTOS, HOJAS.VISITAS];
+  const detalle = {};
+  hojasCascada.forEach(nombreHoja => {
+    const hoja = getHoja(nombreHoja);
+    const datos = hoja.getDataRange().getValues();
+    const hdrs = datos[0].map(h => String(h).trim());
+    const colNit = hdrs.indexOf("cliente_nit");
+    if (colNit === -1) return;
+    let n = 0;
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][colNit]) === nitActual) {
+        hoja.getRange(i + 1, colNit + 1).setValue(nitNuevo);
+        n++;
+      }
+    }
+    detalle[nombreHoja] = n;
+  });
+
+  return { ok: true, mensaje: "NIT actualizado y propagado", detalle: detalle };
 }
 
 // =============================================================================
-// MÓDULO: PREVENTAS (AP)
+// MODULO: CONTACTOS DE CLIENTE - varios contactos por cliente (NIT, correo,
+// telefono, nombre y cargo), pedido por los vendedores en reunion 24/08/2026.
+// Hoja separada CLIENTE_CONTACTOS (no se mezcla con CLIENTES) para permitir
+// N contactos por cada NIT.
 // =============================================================================
+function crearContacto(body) {
+  if (!body.cliente_nit)     return { ok: false, error: "Falta cliente_nit" };
+  if (!body.nombre_contacto) return { ok: false, error: "Falta nombre_contacto" };
+
+  const hoja = getHoja(HOJAS.CONTACTOS);
+  const id   = siguienteId(hoja, 0);
+  const _datosExist = hoja.getDataRange().getValues();
+  const _yaTieneContactos = _datosExist.slice(1).some(function(r){ return String(r[1]) === String(body.cliente_nit); });
+  const esPrincipal = !_yaTieneContactos;
+  hoja.appendRow([
+    id,
+    body.cliente_nit,
+    body.nombre_contacto,
+    body.cargo    || "",
+    body.telefono || "",
+    body.correo   || "",
+    new Date(),
+    body.vendedor_registro || "",
+    esPrincipal
+  ]);
+  return { ok: true, mensaje: "Contacto creado", id_contacto: id };
+}
+
+function marcarContactoPrincipal(body) {
+  if (!body.id_contacto || !body.cliente_nit) return { ok: false, error: "Faltan datos (id_contacto, cliente_nit)" };
+  const hoja = getHoja(HOJAS.CONTACTOS);
+  const datos = hoja.getDataRange().getValues();
+  const headers = datos[0];
+  const colPrincipal = headers.indexOf("es_principal");
+  if (colPrincipal === -1) return { ok: false, error: "Falta la columna es_principal" };
+  let encontrado = false;
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][1]) === String(body.cliente_nit)) {
+      const esEste = String(datos[i][0]) === String(body.id_contacto);
+      hoja.getRange(i + 1, colPrincipal + 1).setValue(esEste);
+      if (esEste) encontrado = true;
+    }
+  }
+  if (!encontrado) return { ok: false, error: "Contacto no encontrado para ese cliente" };
+  return { ok: true };
+}
+
+// =============================================================================
+// ENSAMBLES — reunión de ventas/despacho: la columna "ensambles" en
+// PRODUCTOS_MAESTRO es un ACUMULADO histórico (nunca se reinicia). Cada
+// registro diario desde Despacho suma a ese total y además queda en
+// REGISTRO_ENSAMBLES como historial/trazabilidad.
+// =============================================================================
+function registrarEnsamble(body) {
+  if (!body.tmcode) return { ok: false, error: "Falta tmcode" };
+  const cantidad = Number(body.cantidad);
+  if (!cantidad || cantidad <= 0) return { ok: false, error: "Cantidad inválida" };
+
+  const hojaProd = getHoja(HOJAS.PRODUCTOS);
+  const datosProd = hojaProd.getDataRange().getValues();
+  const hdrsProd = datosProd[0].map(h => String(h).trim());
+  const colTmcode = hdrsProd.indexOf("tmcode");
+  const colDescrip = hdrsProd.indexOf("tmdescrip");
+  const colEnsambles = hdrsProd.indexOf("ensambles");
+  if (colTmcode === -1 || colEnsambles === -1) {
+    return { ok: false, error: "Falta la columna ensambles en PRODUCTOS_MAESTRO" };
+  }
+
+  let filaProd = -1, descripcion = "";
+  for (let i = 1; i < datosProd.length; i++) {
+    if (String(datosProd[i][colTmcode]) === String(body.tmcode)) {
+      filaProd = i;
+      descripcion = datosProd[i][colDescrip] || "";
+      break;
+    }
+  }
+  if (filaProd === -1) return { ok: false, error: "Producto no encontrado" };
+
+  const totalActual = Number(datosProd[filaProd][colEnsambles]) || 0;
+  const nuevoTotal = totalActual + cantidad;
+  hojaProd.getRange(filaProd + 1, colEnsambles + 1).setValue(nuevoTotal);
+
+  // Historial en REGISTRO_ENSAMBLES para trazabilidad.
+  const hojaReg = getHoja(HOJAS.ENSAMBLES);
+  const id = siguienteId(hojaReg, 0);
+  hojaReg.appendRow([id, new Date(), body.tmcode, descripcion, cantidad, body.registrado_por || ""]);
+
+  return { ok: true, mensaje: "Ensamble registrado", nuevo_total: nuevoTotal };
+}
+
+function actualizarContacto(body) {
+  const hoja  = getHoja(HOJAS.CONTACTOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs  = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("id_contacto");
+
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.id_contacto)) {
+      if (body.nombre_contacto !== undefined) hoja.getRange(i+1, hdrs.indexOf("nombre_contacto")+1).setValue(body.nombre_contacto);
+      if (body.cargo           !== undefined) hoja.getRange(i+1, hdrs.indexOf("cargo")+1).setValue(body.cargo);
+      if (body.telefono        !== undefined) hoja.getRange(i+1, hdrs.indexOf("telefono")+1).setValue(body.telefono);
+      if (body.correo          !== undefined) hoja.getRange(i+1, hdrs.indexOf("correo")+1).setValue(body.correo);
+      return { ok: true, mensaje: "Contacto actualizado" };
+    }
+  }
+  return { ok: false, error: "Contacto no encontrado" };
+}
+
+function eliminarContacto(body) {
+  const hoja  = getHoja(HOJAS.CONTACTOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs  = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("id_contacto");
+
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.id_contacto)) {
+      hoja.deleteRow(i+1);
+      return { ok: true, mensaje: "Contacto eliminado" };
+    }
+  }
+  return { ok: false, error: "Contacto no encontrado" };
+}
+
 function getPreventas(vendedor_id, estado) {
-  const datos = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
-  let res = datos;
+  let res = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
   if (vendedor_id) res = res.filter(a => String(a.vendedor_id) === String(vendedor_id));
-  if (estado)      res = res.filter(a => a.estado_ap === estado);
+  if (estado) res = res.filter(a => a.estado_ap === estado);
   return { ok: true, data: res };
 }
-
 function getPreventa(ap_id) {
-  const datos = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
-  const ap    = datos.find(a => String(a.ap_id) === String(ap_id));
+  const ap = hojaAObjetos(getHoja(HOJAS.PREVENTAS)).find(a => String(a.ap_id) === String(ap_id));
   if (!ap) return { ok: false, error: "AP no encontrada" };
-  // Traer detalle incluido
-  const detalle = getDetalleAP(ap_id);
-  return { ok: true, data: { ...ap, detalle: detalle.data } };
+  return { ok: true, data: { ...ap, detalle: getDetalleAP(ap_id).data } };
 }
-
 function crearPreventa(body) {
   const hoja = getHoja(HOJAS.PREVENTAS);
   let ap_id;
-  if (body.ap_id_reservado) {
-    ap_id = parseInt(body.ap_id_reservado);
-    const datos = hoja.getDataRange().getValues();
-    const hdrs  = datos[0].map(h => String(h).trim());
-    const colId = hdrs.indexOf("ap_id");
-    const colEst = hdrs.indexOf("estado_ap");
-    for (let i = 1; i < datos.length; i++) {
-      if (String(datos[i][colId]) === String(ap_id) && datos[i][colEst] === "RESERVADO") {
-        hoja.getRange(i+1,1,1,11).setValues([[ap_id,body.cliente_nit,body.vendedor_id,new Date(),
-          body.tipo_entrega||"Venta en Planta","Pendiente",
-          body.fecha_entrega||"",body.obs_entrega||"",
-          body.direccion_obra||"",body.contacto_obra||"",body.cel_contacto||""]]);
-        SpreadsheetApp.flush();
-        if (body.detalle&&Array.isArray(body.detalle)) body.detalle.forEach(d=>agregarDetalleAP({ap_id,...d}));
-        return { ok: true, mensaje: "AP confirmada", ap_id };
+  if (body.ap_manual) {
+    ap_id = parseInt(body.ap_manual);
+    if (!ap_id || ap_id < 1) {
+      return { ok: false, error: "Numero de AP invalido" };
+    }
+    const datosExist = hoja.getDataRange().getValues();
+    for (let i = 1; i < datosExist.length; i++) {
+      if (String(datosExist[i][0]) === String(ap_id) && datosExist[i][5] !== "Cancelado") {
+        return { ok: false, error: "AP #" + ap_id + " ya existe y esta activa. Verifica el numero." };
       }
     }
-  }
-  if (body.modo_prueba === true) {
-    const rp = siguienteConsecutivoPrueba();
-    if (rp.error) return { ok: false, error: rp.error };
-    ap_id = rp.ap_id;
   } else {
-    ap_id = incrementarConsecutivo();
+    ap_id = body.modo_prueba === true ? siguienteConsecutivoPrueba() : siguienteId(hoja, 0);
   }
   hoja.appendRow([
     ap_id,
     body.cliente_nit,
     body.vendedor_id,
     new Date(),
-    body.tipo_entrega      || "Venta en Planta",
+    body.tipo_entrega||"Venta en Planta",
     "Pendiente",
-    body.fecha_entrega     || "",   // Fecha de entrega solicitada
-    body.obs_entrega       || "",   // Observaciones de entrega
-    body.direccion_obra    || "",   // Dirección de la obra
-    body.contacto_obra     || "",   // Nombre contacto en obra
-    body.cel_contacto      || ""    // Celular contacto en obra
+    body.destino||"",
+    body.flete_valor||0,
+    body.orden_compra_cliente||"",
+    body.cotizacion_ref||"",
+    body.condiciones_pago||"",
+    body.nombre_obra||"",
+    body.flete_sugerido||0,
+    body.transportista_flete||"",
+    body.flete_negociado === true,
+    body.plan_entregas||"",
+    body.flete_incorporado === true,
+    body.flete_contra_entrega === true,
+    "",
+    "",
+    body.es_apoyo === true,
+    body.creado_por_apoyo || ""
   ]);
-
-  // Agregar líneas de detalle si vienen incluidas
-  if (body.detalle && Array.isArray(body.detalle)) {
-    body.detalle.forEach(d => {
-      agregarDetalleAP({ ap_id, ...d });
-    });
-  }
-
+  try { _setCamposExtraAP(hoja, hoja.getLastRow(), body); } catch (e) {}
+  if (body.detalle && Array.isArray(body.detalle)) body.detalle.forEach(d => agregarDetalleAP({ ap_id, ...d }));
   return { ok: true, mensaje: "AP creada", ap_id };
 }
-
 function actualizarEstadoAP(body) {
-  const hoja  = getHoja(HOJAS.PREVENTAS);
+  const hoja = getHoja(HOJAS.PREVENTAS);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
-  const colId  = hdrs.indexOf("ap_id");
-  const colEst = hdrs.indexOf("estado_ap");
-
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("ap_id"), colEst = hdrs.indexOf("estado_ap");
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.ap_id)) {
-      hoja.getRange(i+1, colEst+1).setValue(body.estado_ap);
-      return { ok: true, mensaje: `AP ${body.ap_id} → ${body.estado_ap}` };
+      if (body.estado_ap !== undefined) hoja.getRange(i+1, colEst+1).setValue(body.estado_ap);
+      if (body.detalle_flete_despacho !== undefined) {
+        let colDF = hdrs.indexOf("detalle_flete_despacho");
+        if (colDF === -1) { hoja.getRange(1, hdrs.length+1).setValue("detalle_flete_despacho"); colDF = hdrs.length + 1; }
+        else colDF = colDF + 1;
+        hoja.getRange(i+1, colDF).setValue(body.detalle_flete_despacho);
+      }
+      // Cargue manual — reportado por Valentina: antes se capturaba en el
+      // formulario de despacho pero nunca quedaba guardado en ningún lado.
+      if (body.cargue_manual_requerido !== undefined) {
+        const colCMR = hdrs.indexOf("cargue_manual_requerido");
+        if (colCMR > -1) hoja.getRange(i+1, colCMR+1).setValue(body.cargue_manual_requerido);
+      }
+      if (body.cargue_manual_fecha !== undefined) {
+        const colCMF = hdrs.indexOf("cargue_manual_fecha");
+        if (colCMF > -1) hoja.getRange(i+1, colCMF+1).setValue(body.cargue_manual_fecha);
+      }
+      if (body.cargue_manual_nota !== undefined) {
+        const colCMN = hdrs.indexOf("cargue_manual_nota");
+        if (colCMN > -1) hoja.getRange(i+1, colCMN+1).setValue(body.cargue_manual_nota);
+      }
+      return { ok: true, mensaje: `AP ${body.ap_id} → ${body.estado_ap||"(sin cambio de estado)"}` };
     }
   }
   return { ok: false, error: "AP no encontrada" };
 }
-
-// =============================================================================
-// MÓDULO: DETALLE AP
-// =============================================================================
 function getDetalleAP(ap_id) {
-  const datos = hojaAObjetos(getHoja(HOJAS.DETALLE));
-  const res   = datos.filter(d => String(d.ap_id) === String(ap_id));
-  return { ok: true, data: res };
+  return { ok: true, data: hojaAObjetos(getHoja(HOJAS.DETALLE)).filter(d => String(d.ap_id) === String(ap_id)) };
 }
-
 function agregarDetalleAP(body) {
-  const hoja       = getHoja(HOJAS.DETALLE);
+  const hoja = getHoja(HOJAS.DETALLE);
   const detalle_id = siguienteId(hoja, 0);
-
-  // Regla global: sin tope de descuento — validarDescuento() ya no bloquea,
-  // se llama solo para trazabilidad (no se usa su resultado para abortar).
-  validarDescuento(body.tmcode, body.descuento_aplicado || 0);
-
-  // Asegurar columnas valor_estiba / valor_postes (comparación con el
-  // FORMATO AP en Excel: cargos por unidad que se suman al precio antes
-  // del IVA, igual que el flete prorrateado). Se crean solas la primera
-  // vez que se necesitan, para no depender de editar la hoja a mano.
-  const hdrsDetalle = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(h => String(h).trim());
-  if (hdrsDetalle.indexOf("valor_estiba") === -1) {
-    hoja.getRange(1, hoja.getLastColumn() + 1).setValue("valor_estiba");
+  const precioCheck = validarDescuento(body.tmcode, body.descuento_aplicado||0);
+  const hdrsRow = hoja.getRange(1,1,1,Math.max(hoja.getLastColumn(),1)).getValues()[0].map(h=>String(h).trim());
+  function asegurarCol(nombre){
+    let idx = hdrsRow.indexOf(nombre);
+    if (idx === -1) { hoja.getRange(1, hdrsRow.length+1).setValue(nombre); hdrsRow.push(nombre); idx = hdrsRow.length-1; }
+    return idx+1;
   }
-  if (hdrsDetalle.indexOf("valor_postes") === -1) {
-    hoja.getRange(1, hoja.getLastColumn() + 1).setValue("valor_postes");
+  const colCalidad = asegurarCol("calidad");
+  const colPrecioBase = asegurarCol("precio_base");
+  const colEstiba = asegurarCol("valor_estiba");
+  const colPostes = asegurarCol("valor_postes");
+  hoja.appendRow([detalle_id, body.ap_id, body.tmcode, body.cantidad_solicitada, body.cantidad_despachada||0, body.descuento_aplicado||0]);
+  const filaNueva = hoja.getLastRow();
+  hoja.getRange(filaNueva, colCalidad).setValue(body.calidad||"PRIMERA");
+  hoja.getRange(filaNueva, colPrecioBase).setValue(body.precio_base||0);
+  hoja.getRange(filaNueva, colEstiba).setValue(body.valor_estiba||0);
+  hoja.getRange(filaNueva, colPostes).setValue(body.valor_postes||0);
+  if (precioCheck.excede_referencia) {
+    try {
+      const apRow = hojaAObjetos(getHoja(HOJAS.PREVENTAS)).find(a => String(a.ap_id) === String(body.ap_id));
+      const vend = apRow ? hojaAObjetos(getHoja(HOJAS.VENDEDORES)).find(v => String(v.id_vendedor) === String(apRow.vendedor_id)) : null;
+      const cli = apRow ? hojaAObjetos(getHoja(HOJAS.CLIENTES)).find(c => String(c.cliente_nit) === String(apRow.cliente_nit)) : null;
+      const prod = hojaAObjetos(getHoja(HOJAS.PRODUCTOS)).find(p => String(p.tmcode) === String(body.tmcode));
+      let hojaAprob;
+      try { hojaAprob = getHoja(HOJAS.APROBACIONES); }
+      catch (eHoja) {
+        const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+        hojaAprob = ss.insertSheet(HOJAS.APROBACIONES);
+        hojaAprob.appendRow(["id","ap_id","detalle_id","tmcode","producto_nombre","vendedor","cliente","descuento","desc_max","estado","fecha","resuelto_por","fecha_resolucion"]);
+      }
+      const idAprob = siguienteId(hojaAprob, 0);
+      hojaAprob.appendRow([
+        idAprob, body.ap_id, detalle_id, body.tmcode,
+        prod ? prod.tmdescrip : body.tmcode,
+        vend ? vend.nombre_vendedor : (apRow ? apRow.vendedor_id : ""),
+        cli ? cli.razon_social : (apRow ? apRow.cliente_nit : ""),
+        body.descuento_aplicado||0, precioCheck.referencia_historica||0,
+        "pendiente", new Date(), "", ""
+      ]);
+    } catch (errAprob) {
+      // No bloquear el guardado del pedido si falla el registro de la aprobación
+    }
   }
-
-  hoja.appendRow([
-    detalle_id,
-    body.ap_id,
-    body.tmcode,
-    body.cantidad_solicitada,
-    body.cantidad_despachada || 0,
-    body.descuento_aplicado  || 0,
-    body.calidad             || "PRIMERA",
-    body.precio_base         || 0,
-    body.valor_estiba        || 0,
-    body.valor_postes        || 0
-  ]);
-  return { ok: true, mensaje: "Línea agregada", detalle_id };
+  return { ok: true, mensaje: "Línea agregada", detalle_id, excede_referencia: precioCheck.excede_referencia||false, referencia_historica: precioCheck.referencia_historica||0 };
 }
 
-function modificarDetalleAP(body) {
-  // Al modificar se marca la AP como "Modificado" pero conserva el mismo ap_id
-  const hoja  = getHoja(HOJAS.DETALLE);
+function resolverAprobacion(body) {
+  const hoja = getHoja(HOJAS.APROBACIONES);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("id");
+  const colEstado = hdrs.indexOf("estado");
+  const colResueltoPor = hdrs.indexOf("resuelto_por");
+  const colFechaRes = hdrs.indexOf("fecha_resolucion");
+  const colApId = hdrs.indexOf("ap_id");
+  const colDetalleId = hdrs.indexOf("detalle_id");
+  const colDescMax = hdrs.indexOf("desc_max");
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.id)) {
+      hoja.getRange(i+1, colEstado+1).setValue(body.decision);
+      hoja.getRange(i+1, colResueltoPor+1).setValue(body.resuelto_por||"Gerencia");
+      hoja.getRange(i+1, colFechaRes+1).setValue(new Date());
+      if (body.decision === "rechazada") {
+        modificarDetalleAP({ ap_id: datos[i][colApId], detalle_id: datos[i][colDetalleId], descuento_aplicado: parseFloat(datos[i][colDescMax])||0 });
+      }
+      return { ok: true, mensaje: "Aprobacion " + body.decision };
+    }
+  }
+  return { ok: false, error: "Solicitud no encontrada" };
+}
+function modificarDetalleAP(body) {
+  const hoja = getHoja(HOJAS.DETALLE);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
   const colId = hdrs.indexOf("detalle_id");
-
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.detalle_id)) {
       if (body.cantidad_solicitada !== undefined) hoja.getRange(i+1, hdrs.indexOf("cantidad_solicitada")+1).setValue(body.cantidad_solicitada);
-      if (body.descuento_aplicado  !== undefined) {
-        // Regla global: sin tope de descuento — no se bloquea la actualización.
-        validarDescuento(datos[i][hdrs.indexOf("tmcode")], body.descuento_aplicado);
+      if (body.descuento_aplicado !== undefined) {
         hoja.getRange(i+1, hdrs.indexOf("descuento_aplicado")+1).setValue(body.descuento_aplicado);
       }
-      // Marcar AP como Modificado
       actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Modificado" });
       return { ok: true, mensaje: "Línea modificada" };
     }
@@ -705,475 +1109,274 @@ function modificarDetalleAP(body) {
   return { ok: false, error: "Detalle no encontrado" };
 }
 
-// =============================================================================
-// MÓDULO: PRECIOS Y VALIDACIÓN DE DESCUENTOS
-// =============================================================================
 function getPrecios(tmcode) {
-  const datos  = hojaAObjetos(getHoja(HOJAS.PRECIOS));
-  const hoy    = new Date();
-  const vigentes = datos.filter(p => {
+  const hoy = new Date();
+  const vigentes = hojaAObjetos(getHoja(HOJAS.PRECIOS)).filter(p => {
     const ini = p.fecha_vigencia_inicio ? new Date(p.fecha_vigencia_inicio) : new Date(0);
-    const fin = p.fecha_vigencia_fin    ? new Date(p.fecha_vigencia_fin)    : new Date("2099-12-31");
-    const enVigencia = hoy >= ini && hoy <= fin;
-    return enVigencia && (!tmcode || String(p.tmcode) === String(tmcode));
+    const fin = p.fecha_vigencia_fin ? new Date(p.fecha_vigencia_fin) : new Date("2099-12-31");
+    return hoy >= ini && hoy <= fin && (!tmcode || String(p.tmcode) === String(tmcode));
   });
   return { ok: true, data: vigentes };
 }
-
 function validarDescuento(tmcode, descuento) {
-  // Regla global (2026-07-14): se elimina el tope de descuento para el
-  // vendedor. Esta función YA NO bloquea el guardado — el vendedor tiene
-  // libertad total para aplicar el descuento que requiera. Se conserva la
-  // comparación contra descuento_max_vendedor únicamente como referencia
-  // informativa (para el reporte de descuentos de Gerencia), nunca para
-  // impedir la escritura.
   const precios = getPrecios(tmcode);
   if (!precios.ok || precios.data.length === 0) return { ok: true };
-  const politica = precios.data[0];
-  const maxDesc  = parseFloat(politica.descuento_max_vendedor) || 0;
-  const excedeReferencia = parseFloat(descuento) > maxDesc;
-  return {
-    ok: true,
-    excede_referencia: excedeReferencia,
-    referencia_historica: maxDesc
-  };
+  const maxDesc = parseFloat(precios.data[0].descuento_max_vendedor) || 0;
+  const excede = parseFloat(descuento) > maxDesc;
+  return { ok: true, excede_referencia: excede, referencia_historica: maxDesc };
 }
-
 function crearPrecio(body) {
-  const hoja  = getHoja(HOJAS.PRECIOS);
-  const id    = siguienteId(hoja, 0);
-  hoja.appendRow([
-    id,
-    body.tmcode,
-    body.precio_base_planta,
-    body.descuento_max_vendedor,
-    body.costo_flete_unidad_zonaA || 0,
-    body.costo_flete_unidad_zonaB || 0,
-    body.fecha_vigencia_inicio    || "",
-    body.fecha_vigencia_fin       || ""
-  ]);
-  return { ok: true, mensaje: "Política de precio creada", id_precio: id };
+  const hoja = getHoja(HOJAS.PRECIOS);
+  const id = siguienteId(hoja, 0);
+  hoja.appendRow([id, body.tmcode, body.precio_base_planta, body.descuento_max_vendedor, body.costo_flete_unidad_zonaA||0, body.costo_flete_unidad_zonaB||0, body.fecha_vigencia_inicio||"", body.fecha_vigencia_fin||""]);
+  return { ok: true, mensaje: "Precio creado", id_precio: id };
 }
-
 function actualizarPrecio(body) {
-  const hoja  = getHoja(HOJAS.PRECIOS);
+  const hoja = getHoja(HOJAS.PRECIOS);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
+  const hdrs = datos[0].map(h => String(h).trim());
   const colId = hdrs.indexOf("id_precio");
-
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.id_precio)) {
-      const campos = ["precio_base_planta","descuento_max_vendedor",
-                      "costo_flete_unidad_zonaA","costo_flete_unidad_zonaB",
-                      "fecha_vigencia_inicio","fecha_vigencia_fin"];
-      campos.forEach(campo => {
-        if (body[campo] !== undefined)
-          hoja.getRange(i+1, hdrs.indexOf(campo)+1).setValue(body[campo]);
-      });
+      ["precio_base_planta","descuento_max_vendedor","costo_flete_unidad_zonaA","costo_flete_unidad_zonaB","fecha_vigencia_inicio","fecha_vigencia_fin"]
+        .forEach(campo => { if (body[campo] !== undefined) hoja.getRange(i+1, hdrs.indexOf(campo)+1).setValue(body[campo]); });
       return { ok: true, mensaje: "Precio actualizado" };
     }
   }
   return { ok: false, error: "Precio no encontrado" };
 }
 
-// =============================================================================
-// MÓDULO: PATIO Y LOGÍSTICA
-// =============================================================================
 function registrarDespacho(body) {
-  // Registrar alerta de cargue manual si aplica
-  if (body.cargue_manual && body.cargue_manual.requiere) {
-    try {
-      const ss    = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-      let hCM     = ss.getSheetByName("ALERTAS_CARGUE_MANUAL");
-      if (!hCM) {
-        hCM = ss.insertSheet("ALERTAS_CARGUE_MANUAL");
-        hCM.getRange(1,1,1,5).setValues([["ap_id","fecha_cargue","nota","estado","fecha_registro"]]);
-        hCM.getRange(1,1,1,5).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
-        hCM.setFrozenRows(1);
-      }
-      hCM.appendRow([
-        body.ap_id||"",
-        body.cargue_manual.fecha||"",
-        body.cargue_manual.nota||"",
-        "Pendiente",
-        new Date()
-      ]);
-    } catch(e) { Logger.log("Alerta cargue manual: " + e.message); }
-  }
-
-
-  const hoja       = getHoja(HOJAS.PATIO);
+  const hoja = getHoja(HOJAS.PATIO);
   const despacho_id = siguienteId(hoja, 0);
-  const cantReal   = parseFloat(body.cant_real_cargada) || 0;
-
-  hoja.appendRow([
-    despacho_id,
-    body.ap_id,
-    body.tmcode || "",
-    0,           // cant_en_curado
-    "",          // fecha_liberacion_curado
-    0,           // cant_mermas_averias
-    body.placa_vehiculo    || "",
-    body.evidencia_carga_url || "",
-    new Date()
-  ]);
-
-  // Actualizar cantidad despachada en DETALLE_AP
-  if (body.detalle_id && cantReal > 0) {
-    actualizarCantDespachada(body.detalle_id, body.ap_id, cantReal);
-  }
-
-  // Revisar si hay saldo (remanente)
+  const cantReal = parseFloat(body.cant_real_cargada) || 0;
+  hoja.appendRow([despacho_id, body.ap_id, body.tmcode||"", 0, "", 0, body.placa_vehiculo||"", body.evidencia_carga_url||"", new Date()]);
+  // Cantidad real cargada en ESTE viaje (23/09/2026): antes solo se guardaba
+  // el acumulado en DETALLE_AP, y Comercial no podía mostrar cuánto salió en
+  // cada entrega. Se escribe por nombre de encabezado (se crea si no existe).
+  try {
+    const hdrsP = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    let colV = hdrsP.indexOf("cant_despachada_viaje");
+    if (colV < 0) { colV = hdrsP.length; hoja.getRange(1, colV + 1).setValue("cant_despachada_viaje"); }
+    hoja.getRange(hoja.getLastRow(), colV + 1).setValue(cantReal);
+  } catch (eViaje) { Logger.log("cant_despachada_viaje: " + eViaje.message); }
+  if (body.detalle_id && cantReal > 0) actualizarCantDespachada(body.detalle_id, body.ap_id, cantReal);
   const cantSol = parseFloat(body.cantidad_solicitada) || 0;
-  const saldo   = cantSol - cantReal;
+  const saldo = cantSol - cantReal;
   if (saldo > 0) {
-    // La AP pasa a "Despachado Parcial" y el saldo queda visible
     actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Despachado Parcial" });
-    return {
-      ok: true,
-      mensaje: `Despacho registrado. Saldo pendiente: ${saldo} ${body.tmund || "UND"}`,
-      despacho_id,
-      saldo,
-      estado_ap: "Despachado Parcial"
-    };
+    return { ok: true, mensaje: `Saldo pendiente: ${saldo}`, despacho_id, saldo, estado_ap: "Despachado Parcial" };
   }
-
   actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Despachado Total" });
-  return { ok: true, mensaje: "Despacho total registrado", despacho_id, saldo: 0, estado_ap: "Despachado Total" };
+  return { ok: true, mensaje: "Despacho total", despacho_id, saldo: 0, estado_ap: "Despachado Total" };
 }
-
 function actualizarCantDespachada(detalle_id, ap_id, cantDespachada) {
-  const hoja  = getHoja(HOJAS.DETALLE);
+  const hoja = getHoja(HOJAS.DETALLE);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
-  const colId = hdrs.indexOf("detalle_id");
-  const colD  = hdrs.indexOf("cantidad_despachada");
-
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("detalle_id"), colD = hdrs.indexOf("cantidad_despachada");
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(detalle_id)) {
-      const actual   = parseFloat(datos[i][colD]) || 0;
-      hoja.getRange(i+1, colD+1).setValue(actual + cantDespachada);
+      hoja.getRange(i+1, colD+1).setValue((parseFloat(datos[i][colD])||0) + cantDespachada);
       return;
     }
   }
 }
 
-// Mantenida por compatibilidad — usa la categoría "cargue" por defecto.
-// A partir del 03/07/2026, usar registrarNovedad(body) con body.categoria.
-// Guarda una novedad de despacho (varado, reprogramado, etc.) en una
-// hoja dedicada NOVEDADES_DESPACHO para trazabilidad y auditoría.
-// El WhatsApp lo gestiona el frontend; aquí solo persistimos el registro.
-function registrarNovedadDespacho(body) {
-  const ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-  let hoja   = ss.getSheetByName("NOVEDADES_DESPACHO");
-  if (!hoja) {
-    hoja = ss.insertSheet("NOVEDADES_DESPACHO");
-    hoja.getRange(1, 1, 1, 7).setValues([["id","ap_id","tipo_novedad","detalle","nueva_fecha","resumen","fecha_registro"]]);
-    hoja.getRange(1, 1, 1, 7).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
-    hoja.setFrozenRows(1);
-  }
-  const id = hoja.getLastRow();  // ID simple = número de fila
-  hoja.appendRow([
-    id,
-    body.ap_id        || "",
-    body.tipo_novedad || "",
-    body.detalle_novedad || "",
-    body.nueva_fecha  || "",
-    body.resumen      || "",
-    new Date()
-  ]);
-
-  // También actualizar el estado de la AP si aplica
-  if (body.tipo_novedad && body.tipo_novedad.includes("Cancelada")) {
-    actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Cancelado" });
-  } else if (body.tipo_novedad && body.tipo_novedad.includes("Reprogramada")) {
-    actualizarEstadoAP({ ap_id: body.ap_id, estado_ap: "Pendiente" });
-  }
-
-  return { ok: true, mensaje: "Novedad registrada: " + (body.tipo_novedad || ""), id };
-}
-
-// =============================================================================
-// CONSECUTIVO GLOBAL DE AP — ATÓMICO CON LOCKSERVICE
-// =============================================================================
-
-function getConfigHoja() {
-  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-  let hoja = ss.getSheetByName(HOJAS.CONFIG);
-  if (!hoja) {
-    hoja = ss.insertSheet(HOJAS.CONFIG);
-    hoja.getRange(1,1,1,2).setValues([["clave","valor"]]);
-    hoja.getRange(1,1,1,2).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
-    hoja.appendRow(["ultimo_ap_id", 1967]);
-    hoja.appendRow(["fecha_inicio_sivil", new Date().toISOString()]);
-    hoja.setFrozenRows(1);
-  }
-  return hoja;
-}
-
-function getConsecutivoAP() {
-  const hoja  = getConfigHoja();
-  const datos = hoja.getDataRange().getValues();
-  const fila  = datos.find(r => r[0] === "ultimo_ap_id");
-  return { ok: true, ultimo_ap_id: fila ? parseInt(fila[1]) : 1967, siguiente: fila ? parseInt(fila[1])+1 : 1968 };
-}
-
-// =============================================================================
-// PRUEBAS DE CAMPO — AP de prueba con numeración corta (1-99, separada del
-// consecutivo real que arranca en 1968) + anular/borrar sin afectar el
-// inventario real.
-//
-// Por qué no afecta el inventario: "Disponible" (ver getInventarioDinamico)
-// SIEMPRE se calcula en vivo restando de tmcant lo comprometido en AP
-// Pendiente/Despachado Parcial y lo registrado en CONTROL_PATIO_Y_LOGISTICA.
-// tmcant nunca se descuenta directamente al crear o despachar una AP. Por
-// eso, anular = sacar la AP de esos dos cálculos (cambiar su estado y borrar
-// sus filas de patio), no hay que "devolver" stock a ningún lado.
-// =============================================================================
-
-function siguienteConsecutivoPrueba() {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(8000);
-    const hoja  = getConfigHoja();
-    const datos = hoja.getDataRange().getValues();
-    for (let i = 1; i < datos.length; i++) {
-      if (datos[i][0] === "ultimo_ap_id_prueba") {
-        const nuevo = parseInt(datos[i][1]) + 1;
-        if (nuevo > 99) {
-          return { error: "Se llegó al máximo de 99 AP de prueba (rango 1-99). Anula o borra las AP de prueba anteriores desde Gerencia antes de crear más." };
-        }
-        hoja.getRange(i+1, 2).setValue(nuevo);
-        SpreadsheetApp.flush();
-        return { ap_id: nuevo };
-      }
-    }
-    hoja.appendRow(["ultimo_ap_id_prueba", 1]);
-    SpreadsheetApp.flush();
-    return { ap_id: 1 };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// Borra todas las filas de una hoja cuya columna "ap_id" coincida (recorre de
-// abajo hacia arriba para que borrar una fila no desfase los índices).
-function borrarFilasPorApId(nombreHoja, ap_id) {
-  const hoja = getHoja(nombreHoja);
-  if (!hoja) return 0;
-  const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
-  const colApId = hdrs.indexOf("ap_id");
-  if (colApId < 0) return 0;
-  let borradas = 0;
-  for (let i = datos.length - 1; i >= 1; i--) {
-    if (String(datos[i][colApId]) === String(ap_id)) {
-      hoja.deleteRow(i + 1);
-      borradas++;
-    }
-  }
-  return borradas;
-}
-
-function anularOBorrarAPPrueba(body) {
-  const ap_id = parseInt(body.ap_id);
-  const modo  = body.modo === "borrar" ? "borrar" : "anular"; // por defecto, el modo mas seguro (no destructivo)
-
-  if (!ap_id) return { ok: false, error: "ap_id inválido" };
-  if (ap_id >= 1000 && body.confirmar_real !== true) {
-    return { ok: false, error: "Esta acción es para AP de prueba (id 1-99). La AP " + ap_id + " parece una AP real — si de verdad quieres anularla/borrarla, usa el flujo normal de novedades de despacho." };
-  }
-
-  // 1) Sacar la AP de Pendiente/Despachado Parcial -> ya no cuenta como "comprometido" en el inventario
-  const resEstado = actualizarEstadoAP({ ap_id: ap_id, estado_ap: "Cancelado" });
-
-  // 2) Borrar sus registros de CONTROL_PATIO_Y_LOGISTICA (curado/averías) -> ya no restan del disponible
-  const patioBorradas = borrarFilasPorApId(HOJAS.PATIO, ap_id);
-
-  let detalleBorradas = 0, apBorrada = false;
-  if (modo === "borrar") {
-    // 3) Borrado definitivo: también quitar DETALLE_AP y la fila de PREVENTAS_AP
-    detalleBorradas = borrarFilasPorApId(HOJAS.DETALLE, ap_id);
-    apBorrada = borrarFilasPorApId(HOJAS.PREVENTAS, ap_id) > 0;
-  }
-
-  return {
-    ok: true,
-    mensaje: modo === "borrar"
-      ? "AP " + ap_id + " borrada por completo (AP, detalle y " + patioBorradas + " registro(s) de patio). El inventario disponible ya refleja esto."
-      : "AP " + ap_id + " anulada (estado Cancelado" + (patioBorradas ? " + " + patioBorradas + " registro(s) de patio borrados" : "") + "). El inventario disponible ya refleja esto.",
-    ap_id: ap_id,
-    modo: modo,
-    estado_actualizado: resEstado.ok === true,
-    patio_filas_borradas: patioBorradas,
-    detalle_filas_borradas: detalleBorradas,
-    ap_borrada: apBorrada
-  };
-}
-
-function incrementarConsecutivo() {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(8000);
-    const hoja  = getConfigHoja();
-    const datos = hoja.getDataRange().getValues();
-    for (let i = 1; i < datos.length; i++) {
-      if (datos[i][0] === "ultimo_ap_id") {
-        const nuevo = parseInt(datos[i][1]) + 1;
-        hoja.getRange(i+1, 2).setValue(nuevo);
-        SpreadsheetApp.flush();
-        return nuevo;
-      }
-    }
-    hoja.appendRow(["ultimo_ap_id", 1968]);
-    SpreadsheetApp.flush();
-    return 1968;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function reservarNumeroAP(body) {
-  try {
-    const ap_id = incrementarConsecutivo();
-    getHoja(HOJAS.PREVENTAS).appendRow([ap_id,body.cliente_nit||"",body.vendedor_id||"",
-      new Date(),body.tipo_entrega||"Venta en Planta","RESERVADO","","","","",""]);
-    SpreadsheetApp.flush();
-    return { ok: true, ap_id, mensaje: `AP #${ap_id} reservada` };
-  } catch(e) {
-    return { ok: false, error: "Error al reservar: " + e.message };
-  }
-}
-
-function inicializarConsecutivoAP(body) {
-  const n = parseInt(body.numero_inicial);
-  if (!n || n < 1) return { ok: false, error: "Número inválido" };
-  const hoja  = getConfigHoja();
-  const datos = hoja.getDataRange().getValues();
-  for (let i = 1; i < datos.length; i++) {
-    if (datos[i][0] === "ultimo_ap_id") {
-      hoja.getRange(i+1, 2).setValue(n);
-      SpreadsheetApp.flush();
-      return { ok: true, mensaje: `Consecutivo en ${n}. Próxima AP: #${n+1}` };
-    }
-  }
-  hoja.appendRow(["ultimo_ap_id", n]);
-  SpreadsheetApp.flush();
-  return { ok: true, mensaje: `Consecutivo en ${n}. Próxima AP: #${n+1}` };
-}
-
-// =============================================================================
-// PROMOCIONES CON VIGENCIA POR FECHAS
-// =============================================================================
-
-function getPromociones() {
-  const ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-  const hoja = ss.getSheetByName(HOJAS.PROMOCIONES);
-  if (!hoja) return { ok: true, data: [], activas: 0, promociones_activas: [] };
-  const hoy  = new Date();
-  const todas = hojaAObjetos(hoja);
-  const act  = todas.filter(p => {
-    if (String(p.activa) === "No") return false;
-    const ini = p.fecha_inicio ? new Date(p.fecha_inicio) : new Date(0);
-    const fin = p.fecha_fin    ? new Date(p.fecha_fin)    : new Date("2099-12-31");
-    fin.setHours(23,59,59);
-    return hoy >= ini && hoy <= fin;
-  });
-  return { ok: true, data: todas, activas: act.length, promociones_activas: act };
-}
-
-function crearPromocion(body) {
-  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-  let hoja  = ss.getSheetByName(HOJAS.PROMOCIONES);
-  if (!hoja) {
-    hoja = ss.insertSheet(HOJAS.PROMOCIONES);
-    const h = ["id_promo","titulo","descripcion","tmcode","descuento_pct","fecha_inicio","fecha_fin","activa","creado_por","fecha_creacion"];
-    hoja.getRange(1,1,1,h.length).setValues([h]);
-    hoja.getRange(1,1,1,h.length).setBackground("#7c3200").setFontColor("#fff").setFontWeight("bold");
-    hoja.setFrozenRows(1);
-  }
-  const id = siguienteId(hoja, 0);
-  hoja.appendRow([id,body.titulo||"",body.descripcion||"",body.tmcode||"",
-    parseFloat(body.descuento_pct)||0,
-    body.fecha_inicio||new Date().toISOString().slice(0,10),
-    body.fecha_fin||"","Sí",body.creado_por||"Gerencia",new Date()]);
-  return { ok: true, mensaje: `Promoción "${body.titulo}" creada`, id_promo: id };
-}
-
-function desactivarPromocion(body) {
-  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID || SHEET_ID);
-  const h   = ss.getSheetByName(HOJAS.PROMOCIONES);
-  if (!h) return { ok: false, error: "Sin promociones" };
-  const d   = h.getDataRange().getValues();
-  const hdr = d[0].map(x => String(x).trim());
-  const ci  = hdr.indexOf("id_promo"), ca = hdr.indexOf("activa");
-  for (let i = 1; i < d.length; i++) {
-    if (String(d[i][ci]) === String(body.id_promo)) {
-      h.getRange(i+1,ca+1).setValue("No");
-      return { ok: true, mensaje: `Promoción #${body.id_promo} desactivada` };
-    }
-  }
-  return { ok: false, error: "No encontrada" };
-}
-
-function registrarAveria(body) {
-  return registrarNovedad({ ...body, categoria: "cargue" });
-}
-
-// Categorías válidas: "cargue", "restribado", "reposicion", "merma_segunda"
-// (definidas en la reunión de Gerencia del 02/07/2026). Las 3 primeras
-// descuentan del stock bruto; "merma_segunda" NO descuenta — reclasifica
-// unidades que siguen siendo vendibles a otra condición de precio.
-const COLUMNA_POR_CATEGORIA = {
-  cargue:        "cant_averia_cargue",
-  restribado:    "cant_averia_restribado",
-  reposicion:    "cant_reposicion",
-  merma_segunda: "cant_merma_segunda"
-};
-
+function registrarAveria(body) { return registrarNovedad({ ...body, categoria: "cargue" }); }
+const COLUMNA_POR_CATEGORIA = { cargue: "cant_averia_cargue", restribado: "cant_averia_restribado", reposicion: "cant_reposicion", merma_segunda: "cant_merma_segunda" };
 function registrarNovedad(body) {
   const categoria = body.categoria || "cargue";
   const colNombre = COLUMNA_POR_CATEGORIA[categoria];
-  if (!colNombre) return { ok: false, error: "Categoría de novedad no reconocida: " + categoria };
-
-  const hoja  = getHoja(HOJAS.PATIO);
+  if (!colNombre) return { ok: false, error: "Categoría no reconocida: " + categoria };
+  const hoja = getHoja(HOJAS.PATIO);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
+  const hdrs = datos[0].map(h => String(h).trim());
   const colAp = hdrs.indexOf("ap_id");
-  let colCat  = hdrs.indexOf(colNombre);
-
-  // Auto-migración: si la columna de esta categoría aún no existe, se crea.
-  if (colCat === -1) {
-    colCat = hdrs.length;
-    hoja.getRange(1, colCat + 1).setValue(colNombre);
-  }
-
+  const colTmcode = hdrs.indexOf("tmcode");
+  const colDespachoId = hdrs.indexOf("despacho_id");
+  const colFechaReg = hdrs.indexOf("fecha_registro");
+  let colCat = hdrs.indexOf(colNombre);
+  if (colCat === -1) { colCat = hdrs.length; hoja.getRange(1, colCat+1).setValue(colNombre); }
   const cantidad = parseFloat(body.cantidad ?? body.cant_averias) || 0;
+  const etiquetas = { cargue: "Avería por cargue", restribado: "Avería por restribado", reposicion: "Reposición (cortesía)", merma_segunda: "Merma / saldo de segunda" };
 
-  for (let i = 1; i < datos.length; i++) {
-    if (String(datos[i][colAp]) === String(body.ap_id)) {
-      const actual = parseFloat(datos[i][colCat]) || 0;
-      hoja.getRange(i + 1, colCat + 1).setValue(actual + cantidad);
-
-      // Solo las categorías que reducen stock afectan tmcant directamente.
-      if (categoria !== "merma_segunda") {
-        actualizarStock({ tmcode: body.tmcode, tmcant: obtenerStockBruto(body.tmcode) - cantidad });
+  // Si viene una AP y ya existe una fila de esa AP, se acumula ahí (permite
+  // varias novedades de la misma AP en un solo registro). Si la AP viene
+  // vacía (es "opcional" en el formulario) o no hay ninguna fila con ese
+  // ap_id, se crea un registro nuevo — ANTES esto fallaba silenciosamente
+  // con "Despacho no encontrado" mientras el frontend mostraba éxito de
+  // todas formas, así que ninguna novedad sin AP asociada llegaba a
+  // guardarse (reportado por Valentina: registraba una reposición y nunca
+  // aparecía en ningún lado, ni en Despacho ni en Gerencia).
+  if (body.ap_id) {
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][colAp]) === String(body.ap_id)) {
+        hoja.getRange(i+1, colCat+1).setValue((parseFloat(datos[i][colCat])||0) + cantidad);
+        if (categoria !== "merma_segunda") actualizarStock({ tmcode: body.tmcode, tmcant: obtenerStockBruto(body.tmcode) - cantidad });
+        return { ok: true, mensaje: `${etiquetas[categoria]}: ${cantidad} unidades` };
       }
-
-      const etiquetas = {
-        cargue: "Avería por cargue", restribado: "Avería por restribado",
-        reposicion: "Reposición (cortesía)", merma_segunda: "Merma / saldo de segunda"
-      };
-      return { ok: true, mensaje: `${etiquetas[categoria]}: ${cantidad} unidades registradas` };
     }
   }
-  return { ok: false, error: "Despacho no encontrado para esa AP" };
+
+  const numCols = hdrs.length;
+  const fila = new Array(numCols).fill("");
+  if (colDespachoId > -1) {
+    const maxId = datos.slice(1).reduce((m,r) => Math.max(m, parseFloat(r[colDespachoId])||0), 0);
+    fila[colDespachoId] = maxId + 1;
+  }
+  if (colAp > -1) fila[colAp] = body.ap_id || "";
+  if (colTmcode > -1) fila[colTmcode] = body.tmcode || "";
+  if (colFechaReg > -1) fila[colFechaReg] = new Date();
+  fila[colCat] = cantidad;
+  hoja.getRange(hoja.getLastRow()+1, 1, 1, numCols).setValues([fila]);
+  if (categoria !== "merma_segunda") actualizarStock({ tmcode: body.tmcode, tmcant: obtenerStockBruto(body.tmcode) - cantidad });
+  return { ok: true, mensaje: `${etiquetas[categoria]}: ${cantidad} unidades` };
 }
 
-// Crea un vehículo nuevo en la biblioteca compartida VEHICULOS, o lo
-// actualiza si la placa ya existe (upsert por placa — nunca borra flota
-// existente). Conectado al botón "Agregar vehículo" de la app Despacho,
-// que ya existía en el frontend pero no tenía backend (corregido 03/07/2026).
+function registrarVisita(body) {
+  const hoja = getHoja(HOJAS.VISITAS);
+  const id = siguienteId(hoja, 0);
+  hoja.appendRow([
+    id,
+    new Date(),
+    body.id_vendedor || "",
+    body.nombre_vendedor || "",
+    body.cliente_nit || "",
+    body.razon_social || "",
+    body.canal || "",
+    body.gps || "",
+    body.contacto_nombre || "",
+    body.contacto_cel || "",
+    body.notas || "",
+    body.num_fotos || 0,
+    body.num_archivos || 0
+  ]);
+  return { ok: true, mensaje: "Visita registrada", visita_id: id };
+}
+
+function registrarNovedadLogistica(body) {
+  const categoria = body.categoria || "";
+  const etiquetas = {
+    transporte_varado: "Transporte varado",
+    logistica_cancelada: "Logistica cancelada por el cliente",
+    regresado_patio: "Producto regresado al patio",
+    incidencia_entrega: "Incidencia directa en la entrega"
+  };
+  if (!etiquetas[categoria]) return { ok: false, error: "Categoria no reconocida: " + categoria };
+  const hoja = getHoja(HOJAS.NOVEDADES);
+  const id = siguienteId(hoja, 0);
+  hoja.appendRow([
+    id,
+    new Date(),
+    body.ap_id || "",
+    categoria,
+    etiquetas[categoria],
+    body.descripcion || "",
+    body.usuario || "",
+    body.placa_vehiculo || ""
+  ]);
+  return { ok: true, mensaje: etiquetas[categoria] + " registrada" };
+}
+
+function actualizarStockMinimo(body) {
+  const tmcode = String(body.tmcode || "").trim();
+  if (!tmcode) return { ok: false, error: "tmcode requerido" };
+  const stockMinimo = parseFloat(body.stock_minimo);
+  if (isNaN(stockMinimo) || stockMinimo < 0) return { ok: false, error: "stock_minimo invalido" };
+  const hoja = getHoja(HOJAS.PRODUCTOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colCode = hdrs.indexOf("tmcode");
+  let colMin = hdrs.indexOf("stock_minimo");
+  if (colMin === -1) { colMin = hdrs.length; hoja.getRange(1, colMin + 1).setValue("stock_minimo"); }
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colCode]) === tmcode) {
+      hoja.getRange(i + 1, colMin + 1).setValue(stockMinimo);
+      return { ok: true, mensaje: "Stock minimo actualizado para " + tmcode };
+    }
+  }
+  return { ok: false, error: "Producto no encontrado: " + tmcode };
+}
+
+function registrarViajeCompartido(body) {
+  const apIds = (Array.isArray(body.ap_ids) ? body.ap_ids : String(body.ap_ids||'').split(',')).map(x => String(x).trim()).filter(Boolean);
+  if (apIds.length < 2) return { ok:false, error: 'Se requieren al menos 2 pedidos para un viaje compartido' };
+
+  const hoja = getHoja(HOJAS.PREVENTAS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colApId    = hdrs.indexOf('ap_id');
+  const colEstado  = hdrs.indexOf('estado_ap');
+  const colDestino = hdrs.indexOf('destino');
+  let colViaje = hdrs.indexOf('viaje_compartido_id');
+  if (colViaje === -1) { colViaje = hdrs.length; hoja.getRange(1, colViaje+1).setValue('viaje_compartido_id'); }
+
+  const filas = [];
+  let destinoComun = null;
+  for (const apId of apIds) {
+    let encontrado = false;
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][colApId]) === apId) {
+        encontrado = true;
+        const estado = datos[i][colEstado];
+        if (estado !== 'Pendiente' && estado !== 'Despachado Parcial') {
+          return { ok:false, error: 'AP #' + apId + ' no esta pendiente (estado: ' + estado + ')' };
+        }
+        const viajeActual = datos[i][colViaje];
+        if (viajeActual) {
+          return { ok:false, error: 'AP #' + apId + ' ya pertenece al viaje ' + viajeActual };
+        }
+        const destino = datos[i][colDestino] || '';
+        if (destinoComun === null) destinoComun = destino;
+        else if (destino !== destinoComun) {
+          return { ok:false, error: 'Los pedidos deben tener el mismo destino/zona (AP #' + apId + ' es "' + destino + '", esperado "' + destinoComun + '")' };
+        }
+        filas.push(i);
+        break;
+      }
+    }
+    if (!encontrado) return { ok:false, error: 'AP #' + apId + ' no encontrada' };
+  }
+
+  const viajeId = 'VJ' + new Date().getTime();
+  filas.forEach(i => hoja.getRange(i+1, colViaje+1).setValue(viajeId));
+
+  const hojaViajes = getHoja(HOJAS.VIAJES);
+  hojaViajes.appendRow([viajeId, new Date(), destinoComun, apIds.join(', '), body.placa_vehiculo||'', body.notas||'', body.usuario||'']);
+
+  return { ok:true, viaje_id: viajeId, mensaje: 'Viaje compartido registrado con ' + apIds.length + ' pedidos' };
+}
+
+function desagruparViaje(body) {
+  const viajeId = String(body.viaje_id||'').trim();
+  if (!viajeId) return { ok:false, error: 'viaje_id requerido' };
+  const hoja = getHoja(HOJAS.PREVENTAS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colViaje = hdrs.indexOf('viaje_compartido_id');
+  if (colViaje === -1) return { ok:false, error: 'Columna viaje_compartido_id no existe' };
+  let n = 0;
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colViaje]) === viajeId) {
+      hoja.getRange(i+1, colViaje+1).setValue('');
+      n++;
+    }
+  }
+  return { ok:true, mensaje: 'Viaje ' + viajeId + ' desagrupado (' + n + ' pedidos liberados)' };
+}
+
+function getViajesCompartidos() {
+  const hoja = getHoja(HOJAS.VIAJES);
+  return hojaAObjetos(hoja);
+}
+
+
+function getNovedadesLogistica() {
+  const hoja = getHoja(HOJAS.NOVEDADES);
+  return hojaAObjetos(hoja);
+}
+
 function crearVehiculo(body) {
   const hoja = getHoja(HOJAS.VEHICULOS);
   const datos = hoja.getDataRange().getValues();
@@ -1181,576 +1384,437 @@ function crearVehiculo(body) {
   const colPlaca = hdrs.indexOf("placa");
   const placa = String(body.placa || "").trim().toUpperCase();
   if (!placa) return { ok: false, error: "Placa requerida" };
-
-  const fila = [
-    body.vehiculo_id || Date.now(),
-    placa,
-    body.marca || "",
-    body.modelo || "",
-    body.color || "",
-    body.capacidad_und || "",
-    body.conductor_nombre || "",
-    body.conductor_cel || "",
-    body.conductor_cc || "",
-    body.estado || "Activo",
-    body.notas || ""
-  ];
-
+  const fila = [body.vehiculo_id||Date.now(), placa, body.marca||"", body.modelo||"", body.color||"", body.capacidad_und||"", body.conductor_nombre||"", body.conductor_cel||"", body.conductor_cc||"", body.estado||"Activo", body.notas||""];
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colPlaca]).trim().toUpperCase() === placa) {
-      hoja.getRange(i + 1, 1, 1, fila.length).setValues([fila]);
+      hoja.getRange(i+1, 1, 1, fila.length).setValues([fila]);
       return { ok: true, mensaje: `Vehículo ${placa} actualizado` };
     }
   }
   hoja.appendRow(fila);
-  return { ok: true, mensaje: `Vehículo ${placa} agregado a la biblioteca` };
+  return { ok: true, mensaje: `Vehículo ${placa} agregado` };
+}
+function actualizarVehiculo(body) {
+  const hoja = getHoja(HOJAS.VEHICULOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("vehiculo_id");
+  const colPlacaOriginal = hdrs.indexOf("placa");
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.vehiculo_id)) {
+      const placa = String(body.placa || datos[i][colPlacaOriginal] || "").trim().toUpperCase();
+      const fila = [body.vehiculo_id, placa, body.marca||"", body.modelo||"", body.color||"", body.capacidad_und||"", body.conductor_nombre||"", body.conductor_cel||"", body.conductor_cc||"", body.estado||"Activo", body.notas||""];
+      hoja.getRange(i+1, 1, 1, fila.length).setValues([fila]);
+      return { ok: true, mensaje: `Vehículo ${placa} actualizado` };
+    }
+  }
+  return { ok: false, error: "Vehículo no encontrado" };
+}
+
+function eliminarVehiculo(body) {
+  const hoja = getHoja(HOJAS.VEHICULOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("vehiculo_id");
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.vehiculo_id)) {
+      hoja.deleteRow(i+1);
+      return { ok: true, mensaje: "Vehículo eliminado" };
+    }
+  }
+  return { ok: false, error: "Vehículo no encontrado" };
+}
+
+function cargarLoteClientes(body) {
+  const hoja = getHoja(HOJAS.CLIENTES);
+  const datos = body.datos;
+  if (!Array.isArray(datos) || datos.length === 0) return { ok: false, error: "Sin datos" };
+  const startRow = body.start_row || 2;
+  hoja.getRange(startRow, 1, datos.length, datos[0].length).setValues(datos);
+  SpreadsheetApp.flush();
+  return { ok: true, mensaje: "Lote cargado: " + datos.length + " clientes desde fila " + startRow };
+}
+
+// Suma unidades liberadas de curado al inventario correspondiente según su
+// calidad — aclaración reunión despacho: el curado no es solo de primera, y
+// al liberarse debe reflejarse como MÁS producto disponible (antes solo se
+// dejaba de restar, pero nunca se sumaba realmente al stock).
+function _sumarStockPorCurado(tmcode, cantidad, calidad) {
+  if (!tmcode || !cantidad) return;
+  const hoja = getHoja(HOJAS.PRODUCTOS);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colTmcode = hdrs.indexOf("tmcode");
+  const colCalidad = hdrs.indexOf("calidad");
+  const colTmcant = hdrs.indexOf("tmcant");
+  if (colTmcode === -1 || colTmcant === -1) return;
+  const calidadBuscada = String(calidad || "PRIMERA").toUpperCase();
+  // PRODUCTOS_MAESTRO tiene una fila POR CALIDAD para cada tmcode (una fila
+  // PRIMERA y otra SEGUNDA, cada una con su propio tmcant) — descubierto al
+  // revisar por qué el inventario mostraba cantidades negativas en SEGUNDA
+  // tras liberar curado (el sistema anterior sumaba a una columna nueva que
+  // ninguna pantalla real lee). Ahora se busca la fila EXACTA por tmcode +
+  // calidad; si no existe esa combinación, se cae a la primera fila con ese
+  // tmcode como respaldo (para no perder la actualización silenciosamente).
+  let filaExacta = -1, filaCualquiera = -1;
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colTmcode]) === String(tmcode)) {
+      if (filaCualquiera === -1) filaCualquiera = i;
+      const calFila = colCalidad > -1 ? String(datos[i][colCalidad] || "PRIMERA").toUpperCase() : "PRIMERA";
+      if (calFila === calidadBuscada) { filaExacta = i; break; }
+    }
+  }
+  const fila = filaExacta > -1 ? filaExacta : filaCualquiera;
+  if (fila === -1) return;
+  const actual = parseFloat(datos[fila][colTmcant]) || 0;
+  hoja.getRange(fila + 1, colTmcant + 1).setValue(actual + cantidad);
 }
 
 function registrarCurado(body) {
   const hoja = getHoja(HOJAS.PATIO);
-  const id   = siguienteId(hoja, 0);
-  hoja.appendRow([
-    id,
-    body.ap_id || "",
-    body.tmcode || "",
-    body.cant_en_curado,
-    body.fecha_liberacion_curado || "",
-    0, "", "", new Date()
-  ]);
-  return { ok: true, mensaje: `Lote de ${body.cant_en_curado} unidades en curado hasta ${body.fecha_liberacion_curado}`, despacho_id: id };
+  const id = siguienteId(hoja, 0);
+  let fechaLib = body.fecha_liberacion_curado || "";
+  let dias = body.dias_curado_aplicado || null;
+  if (!fechaLib) {
+    const prod = hojaAObjetos(getHoja(HOJAS.PRODUCTOS)).find(p => String(p.tmcode) === String(body.tmcode));
+    dias = dias || calcularDiasCurado(prod ? prod.tmdescrip : "");
+    const f = new Date(); f.setDate(f.getDate() + dias);
+    fechaLib = Utilities.formatDate(f, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  hoja.appendRow([id, body.ap_id||"", body.tmcode||"", body.cant_en_curado, fechaLib, 0, "", "", new Date(), dias||"", "", "", "", "", body.calidad_curado || "PRIMERA"]);
+  return { ok: true, mensaje: `${body.cant_en_curado} unidades en curado hasta ${fechaLib}`, despacho_id: id };
 }
-
 function liberarCurado(body) {
-  const hoja  = getHoja(HOJAS.PATIO);
+  const hoja = getHoja(HOJAS.PATIO);
   const datos = hoja.getDataRange().getValues();
-  const hdrs  = datos[0].map(h => String(h).trim());
-  const colId = hdrs.indexOf("despacho_id");
-  const colC  = hdrs.indexOf("cant_en_curado");
-
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("despacho_id"), colC = hdrs.indexOf("cant_en_curado");
+    const colTmcode = hdrs.indexOf("tmcode"), colCalidad = hdrs.indexOf("calidad_curado");
+  const colOrigen = hdrs.indexOf("origen_liberacion"), colFechaReal = hdrs.indexOf("fecha_liberacion_real");
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.despacho_id)) {
-      hoja.getRange(i+1, colC+1).setValue(0); // Ya liberado
-      return { ok: true, mensaje: "Lote liberado del curado" };
+      _sumarStockPorCurado(datos[i][colTmcode], parseFloat(datos[i][colC])||0, datos[i][colCalidad]);
+      hoja.getRange(i+1, colC+1).setValue(0);
+      if (colOrigen > -1) hoja.getRange(i+1, colOrigen+1).setValue("manual");
+      if (colFechaReal > -1) hoja.getRange(i+1, colFechaReal+1).setValue(new Date());
+      return { ok: true, mensaje: "Lote liberado" };
     }
   }
-  return { ok: false, error: "Registro de curado no encontrado" };
+  return { ok: false, error: "Registro no encontrado" };
+}
+
+// Edición de un lote en curado ya registrado — Valentina reportó que no
+// había forma de corregir un error (cantidad, fecha o calidad mal
+// digitada) una vez guardado. Solo permite editar lotes que SIGUEN en
+// curado (cant_en_curado > 0); uno ya liberado no se toca desde aquí.
+function editarCurado(body) {
+  const hoja = getHoja(HOJAS.PATIO);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colId = hdrs.indexOf("despacho_id");
+  const colC = hdrs.indexOf("cant_en_curado");
+  const colFecha = hdrs.indexOf("fecha_liberacion_curado");
+  const colCalidad = hdrs.indexOf("calidad_curado");
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][colId]) === String(body.despacho_id)) {
+      const cantActual = parseFloat(datos[i][colC]) || 0;
+      if (cantActual <= 0) return { ok: false, error: "Este lote ya fue liberado, no se puede editar" };
+      if (body.cant_en_curado !== undefined) hoja.getRange(i+1, colC+1).setValue(body.cant_en_curado);
+      if (body.fecha_liberacion_curado !== undefined) hoja.getRange(i+1, colFecha+1).setValue(body.fecha_liberacion_curado);
+      if (body.calidad_curado !== undefined && colCalidad > -1) hoja.getRange(i+1, colCalidad+1).setValue(body.calidad_curado);
+      return { ok: true, mensaje: "Lote de curado actualizado" };
+    }
+  }
+  return { ok: false, error: "Registro no encontrado" };
+}
+
+function liberarCuradosVencidos() {
+  const hoja = getHoja(HOJAS.PATIO);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const colC = hdrs.indexOf("cant_en_curado");
+  const colFecha = hdrs.indexOf("fecha_liberacion_curado");
+  const colTmcode = hdrs.indexOf("tmcode"), colCalidad = hdrs.indexOf("calidad_curado");
+  const colOrigen = hdrs.indexOf("origen_liberacion");
+  const colFechaReal = hdrs.indexOf("fecha_liberacion_real");
+  const hoy = new Date();
+  let liberados = [];
+  for (let i = 1; i < datos.length; i++) {
+    const cant = parseFloat(datos[i][colC]) || 0;
+    const fLib = datos[i][colFecha];
+    if (cant > 0 && fLib && new Date(fLib) <= hoy) {
+      _sumarStockPorCurado(datos[i][colTmcode], cant, datos[i][colCalidad]);
+      hoja.getRange(i+1, colC+1).setValue(0);
+      if (colOrigen > -1) hoja.getRange(i+1, colOrigen+1).setValue("automatico");
+      if (colFechaReal > -1) hoja.getRange(i+1, colFechaReal+1).setValue(hoy);
+      liberados.push(datos[i][0]);
+    }
+  }
+  return { ok: true, liberados: liberados.length, ids: liberados };
+}
+
+function instalarTriggerCurado() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'liberarCuradosVencidos') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('liberarCuradosVencidos').timeBased().everyDays(1).atHour(6).create();
+}
+
+function calcularDiasCurado(tmdescripRaw) {
+  const d = String(tmdescripRaw || '').toUpperCase();
+  if (d.includes('POSTE')) {
+    // Formato real: LARGOxRESISTENCIA (ej. "10x1350"), donde el segundo valor
+    // es la resistencia CHR (Carga Horizontal de Rotura) en KGF — NO es peso.
+    // Aclaración reunión despacho 08/09/2026.
+    let kgf = null;
+    const mDim = d.match(/\d+\s*[xX]\s*(\d{3,4})/);
+    if (mDim) {
+      kgf = parseInt(mDim[1], 10);
+    } else {
+      const mSufijo = d.match(/(\d{3,4})\s*(KGF|KG|KD)/);
+      if (mSufijo) kgf = parseInt(mSufijo[1], 10);
+    }
+    if (kgf !== null) {
+      if (kgf < 1000) return 15; // 300–999 KGF
+      return 21;                 // ≥1000 KGF
+    }
+    return 15;
+  }
+  if (d.includes('BLOQUE')) return 7;
+  // "Pisos" (adoquín, loseta, baldosa) — corrección reunión despacho: 10 días.
+  if (d.includes('ADOQUIN') || d.includes('ADOQUÍN') || d.includes('PISO') || d.includes('LOSETA') || d.includes('BALDOSA')) return 10;
+  // Bordillo/sardinel — prefabricados base: 7 días (siempre editable manualmente).
+  if (d.includes('BORDILLO') || d.includes('SARDINEL')) return 7;
+  if (d.includes('ALFAJIA') || d.includes('ALFAJÍA') || d.includes('RAYUELA') || d.includes('TAPA') || d.includes('CAÑUELA') || d.includes('ALCORQUE')) return 14;
+  if (d.includes('BANCA') || d.includes('BOLARDO') || d.includes('TOPELLANTA')) return 21;
+  if (d.includes('ZAPATA')) return 14;
+  if (d.includes('VIGA') || d.includes('COLUMNA')) return 21;
+  return 7;
 }
 
 function getDespachos(ap_id) {
   const datos = hojaAObjetos(getHoja(HOJAS.PATIO));
-  const res   = ap_id ? datos.filter(d => String(d.ap_id) === String(ap_id)) : datos;
-  return { ok: true, data: res };
+  return { ok: true, data: ap_id ? datos.filter(d => String(d.ap_id) === String(ap_id)) : datos };
 }
-
 function getCurados() {
-  const datos = hojaAObjetos(getHoja(HOJAS.PATIO));
-  const hoy   = new Date();
-  const res   = datos.filter(d => (parseFloat(d.cant_en_curado) || 0) > 0);
-  return {
-    ok: true,
-    data: res.map(d => ({
-      ...d,
-      dias_restantes: d.fecha_liberacion_curado
-        ? Math.ceil((new Date(d.fecha_liberacion_curado) - hoy) / 86400000)
-        : null
-    }))
-  };
+  const hoy = new Date();
+  const res = hojaAObjetos(getHoja(HOJAS.PATIO)).filter(d => (parseFloat(d.cant_en_curado)||0) > 0);
+  return { ok: true, data: res.map(d => ({ ...d, dias_restantes: d.fecha_liberacion_curado ? Math.ceil((new Date(d.fecha_liberacion_curado)-hoy)/86400000) : null })) };
 }
-
 function obtenerStockBruto(tmcode) {
-  const datos = hojaAObjetos(getHoja(HOJAS.PRODUCTOS));
-  const prod  = datos.find(p => String(p.tmcode) === String(tmcode));
-  return prod ? (parseFloat(prod.tmcant) || 0) : 0;
+  const p = hojaAObjetos(getHoja(HOJAS.PRODUCTOS)).find(p => String(p.tmcode) === String(tmcode));
+  return p ? (parseFloat(p.tmcant)||0) : 0;
 }
-
-// =============================================================================
-// MÓDULO: DASHBOARD Y ALERTAS
-// =============================================================================
 function getDashboard() {
-  const aps      = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
-  const detalles = hojaAObjetos(getHoja(HOJAS.DETALLE));
-  const vendedores = hojaAObjetos(getHoja(HOJAS.VENDEDORES));
-
-  // Ventas por vendedor
-  const ventasPorVendedor = {};
-  aps.filter(a => a.estado_ap !== "Cancelado").forEach(ap => {
-    const v = String(ap.vendedor_id);
-    if (!ventasPorVendedor[v]) ventasPorVendedor[v] = { ap_count: 0, vendedor_id: v };
-    ventasPorVendedor[v].ap_count++;
-  });
-
-  // APs por estado
+  const aps = hojaAObjetos(getHoja(HOJAS.PREVENTAS));
   const porEstado = {};
-  aps.forEach(ap => {
-    porEstado[ap.estado_ap] = (porEstado[ap.estado_ap] || 0) + 1;
-  });
-
-  // Productos con stock negativo (alerta de producción)
+  aps.forEach(ap => { porEstado[ap.estado_ap] = (porEstado[ap.estado_ap]||0)+1; });
   const inv = getInventarioDinamico().data || [];
-  const alertasNegativas = inv.filter(p => p.disponible <= 0);
-
-  return {
-    ok: true,
-    data: {
-      total_aps:           aps.length,
-      aps_por_estado:      porEstado,
-      ventas_por_vendedor: Object.values(ventasPorVendedor),
-      alertas_negativas:   alertasNegativas.length,
-      inventario_resumen:  inv
-    }
-  };
+  return { ok: true, data: { total_aps: aps.length, aps_por_estado: porEstado, alertas_negativas: inv.filter(p=>p.disponible<=0).length, inventario_resumen: inv } };
 }
-
 function getAlertasProduccion() {
-  const inv = getInventarioDinamico().data || [];
-  const alertas = inv
-    .filter(p => p.disponible <= 0)
-    .map(p => ({
-      tmcode:      p.tmcode,
-      tmdescrip:   p.tmdescrip,
-      disponible:  p.disponible,
-      unidades_a_producir: Math.abs(p.disponible) + 5, // Buffer sugerido
-      urgencia:    p.disponible < -10 ? "CRÍTICA" : "ALTA"
-    }));
+  const alertas = (getInventarioDinamico().data||[]).filter(p=>p.disponible<=0).map(p => ({ tmcode: p.tmcode, tmdescrip: p.tmdescrip, disponible: p.disponible, unidades_a_producir: Math.abs(p.disponible)+5, urgencia: p.disponible<-10?"CRÍTICA":"ALTA" }));
   return { ok: true, data: alertas };
 }
 
-// =============================================================================
-// SETUP: Crear estructura del Google Sheet automáticamente
-// Ejecutar UNA SOLA VEZ desde el editor de GAS
-// =============================================================================
-function inicializarSheet() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-
-  const estructura = {
-    [HOJAS.PRODUCTOS]:  ["tmcode","tmdescrip","tmund","tmcant"],
-    [HOJAS.VENDEDORES]: ["id_vendedor","nombre_vendedor","correo_usuario","estado"],
-    [HOJAS.CLIENTES]:   ["cliente_nit","razon_social","vendedor_asignado","coordenadas_home","foto_fachada_url"],
-    [HOJAS.PREVENTAS]:  ["ap_id","cliente_nit","vendedor_id","fecha_creacion","tipo_entrega","estado_ap"],
-    [HOJAS.DETALLE]:    ["detalle_id","ap_id","tmcode","cantidad_solicitada","cantidad_despachada","descuento_aplicado"],
-    [HOJAS.PATIO]:      ["despacho_id","ap_id","tmcode","cant_en_curado","fecha_liberacion_curado","cant_mermas_averias","placa_vehiculo","evidencia_carga_url","fecha_registro","cant_averia_cargue","cant_averia_restribado","cant_reposicion","cant_merma_segunda"],
-    [HOJAS.PRECIOS]:    ["id_precio","tmcode","precio_base_planta","descuento_max_vendedor","costo_flete_unidad_zonaA","costo_flete_unidad_zonaB","fecha_vigencia_inicio","fecha_vigencia_fin"]
-  };
-
-  Object.entries(estructura).forEach(([nombre, cols]) => {
-    let hoja = ss.getSheetByName(nombre);
-    if (!hoja) {
-      hoja = ss.insertSheet(nombre);
-    }
-    hoja.getRange(1, 1, 1, cols.length).setValues([cols]);
-    hoja.getRange(1, 1, 1, cols.length)
-      .setBackground("#1a3a5c")
-      .setFontColor("#ffffff")
-      .setFontWeight("bold");
-    hoja.setFrozenRows(1);
-    Logger.log(`✅ Hoja '${nombre}' configurada`);
-  });
-
-  // Datos de prueba: Vendedores
-  const hV = ss.getSheetByName(HOJAS.VENDEDORES);
-  if (hV.getLastRow() < 2) {
-    hV.getRange("A2:D4").setValues([
-      [1093945001, "Jose Eduardo Ramírez",  "joseduardo@postecsa.com",  "Activo"],
-      [1093945002, "Felipe Andrés Muñoz",   "felipeandres@postecsa.com","Activo"],
-      [1093945003, "Valentina Torres",      "valentina@postecsa.com",   "Activo"]
-    ]);
-  }
-
-  // Datos de prueba: Productos de muestra
-  const hP = ss.getSheetByName(HOJAS.PRODUCTOS);
-  if (hP.getLastRow() < 2) {
-    hP.getRange("A2:D6").setValues([
-      [1001, "Poste Centrifugado 8M x 300kg",  "UND", 45],
-      [1002, "Poste Centrifugado 10M x 400kg", "UND", 30],
-      [1003, "Poste Vibro-compactado 6M",       "UND", 60],
-      [1004, "Adoquín Tipo A 20x10x8",          "M2",  200],
-      [1005, "Bordillo Prefabricado BV-1",       "ML",  150]
-    ]);
-  }
-
-  Logger.log("✅ SIVEL: Inicialización completa");
-  return "Inicialización exitosa";
-}
-
-// =============================================================================
-// SUMINISTROS — Registro de notas de compra para Lorena
-// =============================================================================
-function registrarSuministro(body) {
-  const ss  = SpreadsheetApp.openById(SIVIL_SHEET_ID);
-  let hoja  = ss.getSheetByName("SUMINISTROS_NOTAS");
-  if (!hoja) {
-    hoja = ss.insertSheet("SUMINISTROS_NOTAS");
-    const hdrs = ["id","tmcode","tmdescrip","tmund","disponible",
-                  "estado","nota","cantidad","fecha_llegada_estimada",
-                  "registrado_por","fecha_registro"];
-    hoja.getRange(1,1,1,hdrs.length).setValues([hdrs]);
-    hoja.getRange(1,1,1,hdrs.length)
-        .setBackground("#14532d").setFontColor("#fff").setFontWeight("bold");
-    hoja.setFrozenRows(1);
-  }
-  const id = siguienteId(hoja, 0);
-  hoja.appendRow([
-    id,
-    body.tmcode              || "",
-    body.tmdescrip           || "",
-    body.tmund               || "",
-    body.disponible          || 0,
-    body.estado              || "pendiente",
-    body.nota                || "",
-    body.cantidad            || 0,
-    body.fecha_llegada_estimada || "",
-    body.registrado_por      || "",
-    new Date()
-  ]);
+function importarClientesMasivo(body) {
+  const hoja = getHoja(HOJAS.CLIENTES);
+  const datos = body.datos;
+  if (!Array.isArray(datos)||!datos.length) return {ok:false,error:"Sin datos"};
+  const start = parseInt(body.start_row)||2;
+  hoja.getRange(start,1,datos.length,datos[0].length).setValues(datos);
   SpreadsheetApp.flush();
-  return { ok: true, mensaje: "Suministro registrado #" + id, id };
+  return {ok:true,mensaje:"Lote:"+datos.length+" desde fila "+start};
 }
-
-// =============================================================================
-// RESET DEL SISTEMA — Solo para ADMIN antes de salir a producción
-// =============================================================================
 function resetSistema(body) {
-  if (body.confirmacion !== "RESET_CONFIRMADO") {
-    return { ok: false, error: "Confirmación incorrecta" };
-  }
-  const ss      = SpreadsheetApp.openById(SIVIL_SHEET_ID);
-  const aLimpiar = ["PREVENTAS_AP","DETALLE_AP","NOVEDADES_DESPACHO",
-                    "SUMINISTROS_NOTAS","ALERTAS_CARGUE_MANUAL"];
-  const resumen = [];
-  aLimpiar.forEach(function(nombre) {
-    var h = ss.getSheetByName(nombre);
-    if (!h) { resumen.push(nombre+":no-existe"); return; }
-    var last = h.getLastRow();
-    if (last > 1) {
-      h.getRange(2,1,last-1,h.getLastColumn()).clearContent();
-      resumen.push(nombre+":"+(last-1)+"f-borradas");
-    } else {
-      resumen.push(nombre+":vacia");
-    }
+  if (body.confirmacion !== "RESET_CONFIRMADO") return { ok: false, error: "Confirmacion incorrecta" };
+  const numeroInicial = parseInt(body.numero_inicial);
+  if (!numeroInicial || numeroInicial < 1) return { ok: false, error: "Debes indicar el numero de AP inicial del libro fisico (numero_inicial)" };
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  const hojas = ["PREVENTAS_AP","DETALLE_AP","CONTROL_PATIO_Y_LOGISTICA","APROBACIONES","VIAJES_COMPARTIDOS","NOVEDADES_LOGISTICA","SUMINISTROS_NOTAS"];
+  const res = [];
+  hojas.forEach(n => {
+    const h = ss.getSheetByName(n);
+    if (!h) { res.push(n+":no-existe"); return; }
+    const last = h.getLastRow();
+    if (last > 1) { h.getRange(2,1,last-1,h.getLastColumn()).clearContent(); res.push(n+":"+(last-1)+"f"); }
+    else res.push(n+":vacia");
   });
-  // Reiniciar consecutivo AP
-  var cfg = ss.getSheetByName("CONFIG_SIVIL");
+  const cfg = ss.getSheetByName("CONFIG_SIVIL");
   if (cfg) {
-    var d = cfg.getDataRange().getValues();
-    for (var i=1;i<d.length;i++) {
-      if (d[i][0]==="ultimo_ap_id") {
-        cfg.getRange(i+1,2).setValue(1967);
-        resumen.push("consecutivo:1967");
-        break;
-      }
-    }
-  }
-  SpreadsheetApp.flush();
-  Logger.log("RESET COMPLETADO: " + resumen.join(" | "));
-  return { ok: true, mensaje: "Reset completado", resumen: resumen };
-}
-
-// =============================================================================
-// IMPORTAR EXISTENCIAS DESDE GOOGLE DRIVE
-// Carpeta: 1JJz8mD2qQpUfTNo55b3js-xpDA3_j5wk
-// Detecta automáticamente BOD_03 (PRIMERAS) y BOD_04 (SEGUNDA)
-// =============================================================================
-var INVENTARIO_FOLDER_ID = "1RSWLgbEfx6nMnZghVuYhn80veshiliE1"; // 01_INVENTARIO_DIARIO (confirmado con Abdiel 10/07/2026)
-
-function importarExistenciasDrive(body) {
-  try {
-    var folder;
-    try { folder = DriveApp.getFolderById(INVENTARIO_FOLDER_ID); }
-    catch(e) { return { ok: false, error: "No se puede acceder a la carpeta de Drive: " + e.message }; }
-
-    var files = folder.getFiles();
-    var archPrimeras = null, archSegunda = null;
-    var fechaP = null, fechaS = null;
-
-    while (files.hasNext()) {
-      var f = files.next();
-      var name = f.getName().toUpperCase();
-      var mime = f.getMimeType();
-      // Ignorar carpetas y archivos temporales
-      if (mime === "application/vnd.google-apps.folder") continue;
-      if (name.startsWith("_TEMP_")) continue;
-
-      var fecha = f.getLastUpdated();
-      if ((name.indexOf("BOD_03") >= 0 || name.indexOf("PRIMER") >= 0)) {
-        if (!fechaP || fecha > fechaP) { archPrimeras = f; fechaP = fecha; }
-      }
-      if ((name.indexOf("BOD_04") >= 0 || name.indexOf("SEGUND") >= 0)) {
-        if (!fechaS || fecha > fechaS) { archSegunda = f; fechaS = fecha; }
-      }
-    }
-
-    if (!archPrimeras) return { ok: false, error: "No se encontró archivo BOD_03/PRIMERAS en la carpeta" };
-    if (!archSegunda)  return { ok: false, error: "No se encontró archivo BOD_04/SEGUNDA en la carpeta" };
-
-    var datosPrimeras = leerArchivoInventario(archPrimeras);
-    var datosSegunda  = leerArchivoInventario(archSegunda);
-
-    var resumen = actualizarProductosMaestroConCalidad(datosPrimeras, datosSegunda);
-
-    return {
-      ok: true,
-      mensaje: "Importación completada",
-      fecha_archivo_primeras: archPrimeras.getName(),
-      fecha_archivo_segunda:  archSegunda.getName(),
-      primeras: datosPrimeras.length,
-      segunda:  datosSegunda.length,
-      resumen:  resumen
-    };
-  } catch(e) {
-    return { ok: false, error: "Error en importación: " + e.message };
-  }
-}
-
-function leerArchivoInventario(file) {
-  var mime = file.getMimeType();
-  var rows = [];
-
-  if (mime === "application/vnd.google-apps.spreadsheet") {
-    // Ya es Google Sheets — leer directo
-    var ss = SpreadsheetApp.openById(file.getId());
-    rows = ss.getSheets()[0].getDataRange().getValues();
-  } else {
-    // XLS / XLSX: convertir a Sheets temporalmente
-    var tempId = null;
-    try {
-      var resource = {
-        title: "_TEMP_INV_" + Date.now(),
-        mimeType: "application/vnd.google-apps.spreadsheet"
-      };
-      var converted = Drive.Files.copy(resource, file.getId());
-      tempId = converted.id;
-      var ss = SpreadsheetApp.openById(tempId);
-      rows = ss.getSheets()[0].getDataRange().getValues();
-    } catch(e2) {
-      // Fallback: leer como texto CSV (si el ERP exporta CSV con extensión .xls)
-      try {
-        var txt = file.getBlob().getDataAsString("ISO-8859-1");
-        var lineas = txt.split("\n").filter(function(l){ return l.trim(); });
-        rows = lineas.map(function(l){ return l.split("\t"); });
-        if (rows[0].length < 3) rows = lineas.map(function(l){ return l.split(";"); });
-        if (rows[0].length < 3) rows = lineas.map(function(l){ return l.split(","); });
-      } catch(e3) {
-        throw new Error("No se pudo leer el archivo: " + file.getName());
-      }
-    } finally {
-      if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch(e){} }
-    }
-  }
-
-  if (!rows.length) return [];
-
-  // Mapear columnas por header
-  var hdr = rows[0].map(function(h){ return String(h||"").toLowerCase().trim(); });
-  var iCode  = hdr.indexOf("tmcode");
-  var iDesc  = hdr.indexOf("tmdescrip");
-  var iUnd   = hdr.indexOf("tmund");
-  var iCant  = hdr.indexOf("tmcant");
-  var iGrupo = hdr.indexOf("tmgrupo");
-  var iLinea = hdr.indexOf("tmlinea");
-  var iRef   = hdr.indexOf("tmref");
-
-  if (iCode < 0 || iCant < 0) {
-    throw new Error("El archivo no tiene columnas tmcode/tmcant: " + hdr.join("|"));
-  }
-
-  return rows.slice(1).map(function(r) {
-    var code = String(r[iCode] || "").trim();
-    var cant = parseFloat(r[iCant]) || 0;
-    if (!code) return null;
-    return {
-      tmcode:   code,
-      tmref:    iRef   >= 0 ? String(r[iRef]   || code).trim() : code,
-      tmdescrip: iDesc >= 0 ? String(r[iDesc]  || "").trim()   : "",
-      tmund:    iUnd   >= 0 ? String(r[iUnd]   || "UND").trim(): "UND",
-      tmcant:   cant,
-      tmgrupo:  iGrupo >= 0 ? String(r[iGrupo] || "").trim()   : "",
-      tmlinea:  iLinea >= 0 ? String(r[iLinea] || "").trim()   : ""
-    };
-  }).filter(function(r){ return r !== null && r.tmcode !== ""; });
-}
-
-function actualizarProductosMaestroConCalidad(primeras, segunda) {
-  var ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID);
-  var hoja = ss.getSheetByName("PRODUCTOS_MAESTRO");
-  if (!hoja) throw new Error("Hoja PRODUCTOS_MAESTRO no encontrada");
-
-  var lastCol  = hoja.getLastColumn();
-  var hdrs     = hoja.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
-  var iCalidad = hdrs.indexOf("calidad");
-
-  // Agregar columna calidad si no existe (después de tmref, posición 3)
-  if (iCalidad === -1) {
-    hoja.insertColumnAfter(2);
-    hoja.getRange(1, 3).setValue("calidad").setFontWeight("bold").setBackground("#1a3a5c").setFontColor("#fff");
-    hdrs     = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(String);
-    iCalidad = hdrs.indexOf("calidad");
-    // Marcar todos los registros existentes como PRIMERA
-    var lastRow = hoja.getLastRow();
-    if (lastRow > 1) {
-      hoja.getRange(2, iCalidad + 1, lastRow - 1, 1).setValue("PRIMERA");
-    }
-  }
-
-  // Re-leer headers
-  lastCol  = hoja.getLastColumn();
-  hdrs     = hoja.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
-  iCalidad = hdrs.indexOf("calidad");
-  var iCode  = hdrs.indexOf("tmcode");
-  var iCant  = hdrs.indexOf("tmcant");
-  var iDesc  = hdrs.indexOf("tmdescrip");
-  var iUnd   = hdrs.indexOf("tmund");
-  var iRef   = hdrs.indexOf("tmref");
-  var iGrupo = hdrs.indexOf("tmgrupo");
-  var iLinea = hdrs.indexOf("tmlinea");
-
-  // Construir mapa por "tmcode|calidad" → número de fila
-  var lastRow = hoja.getLastRow();
-  var mapa = {};
-  if (lastRow > 1) {
-    var datos = hoja.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    datos.forEach(function(r, i) {
-      var key = String(r[iCode]).trim() + "|" + String(r[iCalidad] || "PRIMERA").trim().toUpperCase();
-      mapa[key] = i + 2; // fila real (1-indexed + header)
-    });
-  }
-
-  var actualizados = 0, nuevos = 0;
-  var rowsNuevas = [];
-
-  function procesarLote(lista, calidad) {
-    lista.forEach(function(p) {
-      var key = p.tmcode + "|" + calidad;
-      if (mapa[key]) {
-        // Actualizar solo tmcant
-        hoja.getRange(mapa[key], iCant + 1).setValue(p.tmcant);
-        actualizados++;
-      } else {
-        // Fila nueva
-        var nr = new Array(lastCol).fill("");
-        if (iCode  >= 0) nr[iCode]  = p.tmcode;
-        if (iRef   >= 0) nr[iRef]   = p.tmref || p.tmcode;
-        if (iCalidad>=0) nr[iCalidad]= calidad;
-        if (iDesc  >= 0) nr[iDesc]  = p.tmdescrip;
-        if (iUnd   >= 0) nr[iUnd]   = p.tmund;
-        if (iCant  >= 0) nr[iCant]  = p.tmcant;
-        if (iGrupo >= 0) nr[iGrupo] = p.tmgrupo;
-        if (iLinea >= 0) nr[iLinea] = p.tmlinea;
-        rowsNuevas.push(nr);
-        nuevos++;
-      }
-    });
-  }
-
-  procesarLote(primeras, "PRIMERA");
-  procesarLote(segunda,  "SEGUNDA");
-
-  // Agregar nuevas filas en lote (más eficiente)
-  if (rowsNuevas.length > 0) {
-    hoja.getRange(hoja.getLastRow() + 1, 1, rowsNuevas.length, lastCol).setValues(rowsNuevas);
-  }
-
-  SpreadsheetApp.flush();
-  Logger.log("Importación: " + actualizados + " actualizados, " + nuevos + " nuevos");
-  return { actualizados: actualizados, nuevos: nuevos };
-}
-
-// ── Consultar qué archivos hay en la carpeta (para mostrar en Gerencia) ──────
-function getArchivosDriveInventario(body) {
-  try {
-    var folder = DriveApp.getFolderById(INVENTARIO_FOLDER_ID);
-    var files   = folder.getFiles();
-    var lista   = [];
-    while (files.hasNext()) {
-      var f = files.next();
-      var mime = f.getMimeType();
-      if (mime === "application/vnd.google-apps.folder") continue;
-      if (f.getName().toUpperCase().indexOf("_TEMP_") >= 0) continue;
-      lista.push({
-        id:     f.getId(),
-        nombre: f.getName(),
-        fecha:  f.getLastUpdated().toISOString(),
-        mime:   mime,
-        esPrimeras: /BOD_03|PRIMER/i.test(f.getName()),
-        esSegunda:  /BOD_04|SEGUND/i.test(f.getName())
-      });
-    }
-    lista.sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
-    return { ok: true, data: lista };
-  } catch(e) {
-    return { ok: false, error: e.message };
-  }
-}
-
-// =============================================================================
-// RESET DEL SISTEMA — Solo ADMIN
-// =============================================================================
-function resetSistema(body) {
-  if (!body || body.confirmacion !== "RESET_CONFIRMADO") {
-    return { ok: false, error: "Confirmacion incorrecta" };
-  }
-  var ss      = SpreadsheetApp.openById(SIVIL_SHEET_ID);
-  var aLimpiar = ["PREVENTAS_AP","DETALLE_AP","NOVEDADES_DESPACHO",
-                  "SUMINISTROS_NOTAS","ALERTAS_CARGUE_MANUAL"];
-  var res = [];
-  aLimpiar.forEach(function(nombre) {
-    var h = ss.getSheetByName(nombre);
-    if (!h) { res.push(nombre+":no-existe"); return; }
-    var last = h.getLastRow();
-    if (last > 1) {
-      h.getRange(2,1,last-1,h.getLastColumn()).clearContent();
-      res.push(nombre+":"+(last-1)+"f-borradas");
-    } else { res.push(nombre+":vacia"); }
-  });
-  var cfg = ss.getSheetByName("CONFIG_SIVIL");
-  if (cfg) {
-    var d = cfg.getDataRange().getValues();
-    for (var i=1;i<d.length;i++) {
-      if (d[i][0]==="ultimo_ap_id") {
-        cfg.getRange(i+1,2).setValue(1967);
-        res.push("consecutivo:1967");
-        break;
-      }
-    }
+    const d = cfg.getDataRange().getValues();
+    let actualizado = false;
+    for (let i=1;i<d.length;i++) { if(d[i][0]==="ultimo_ap_id"){cfg.getRange(i+1,2).setValue(numeroInicial);res.push("consecutivo:"+numeroInicial);actualizado=true;break;} }
+    if (!actualizado) { cfg.appendRow(["ultimo_ap_id", numeroInicial]); res.push("consecutivo:"+numeroInicial); }
   }
   SpreadsheetApp.flush();
   return { ok: true, mensaje: "Reset completado", resumen: res };
 }
 
-// =============================================================================
-// ACTUALIZAR DESCUENTO DE SEGUNDA CALIDAD EN PRECIOS_GERENCIA
-// =============================================================================
-function actualizarDescuentoSegunda(body) {
-  var ss   = SpreadsheetApp.openById(SIVIL_SHEET_ID);
-  var hoja = ss.getSheetByName("PRECIOS_GERENCIA");
-  if (!hoja) return { ok: false, error: "Hoja PRECIOS_GERENCIA no encontrada" };
-
-  var hdrs = hoja.getRange(1,1,1,hoja.getLastColumn()).getValues()[0].map(String);
-  var iTmcode = hdrs.indexOf("tmcode");
-  var iPrecio = hdrs.indexOf("precio_base_planta");
-
-  // Asegurar que existe la columna descuento_segunda_pct
-  var iDscto = hdrs.indexOf("descuento_segunda_pct");
-  if (iDscto === -1) {
-    hoja.getRange(1, hoja.getLastColumn()+1).setValue("descuento_segunda_pct")
-        .setFontWeight("bold").setBackground("#f59e0b").setFontColor("#fff");
-    iDscto = hoja.getLastColumn() - 1;
-    hdrs.push("descuento_segunda_pct");
+function registrarSuministro(body) {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let hoja = ss.getSheetByName("SUMINISTROS_NOTAS");
+  const headers = ["tmcode","tmdescrip","tmund","disponible","estado","nota","cantidad","fecha_llegada_estimada","registrado_por","fecha_registro"];
+  if (!hoja) {
+    hoja = ss.insertSheet("SUMINISTROS_NOTAS");
+    hoja.getRange(1,1,1,headers.length).setValues([headers]);
+    hoja.getRange(1,1,1,headers.length).setBackground("#4c1d95").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
   }
-
-  var lastRow = hoja.getLastRow();
-  var datos   = lastRow > 1 ? hoja.getRange(2,1,lastRow-1,hoja.getLastColumn()).getValues() : [];
-
-  var fila = -1;
-  for (var i=0;i<datos.length;i++) {
-    if (String(datos[i][iTmcode]).trim() === String(body.tmcode).trim()) { fila = i+2; break; }
-  }
-  if (fila < 0) return { ok: false, error: "Producto " + body.tmcode + " no encontrado en PRECIOS_GERENCIA" };
-
-  var pct     = parseFloat(body.pct) || 0;
-  var precio1 = parseFloat(datos[fila-2][iPrecio]) || 0;
-  var precio2 = Math.round(precio1 * (1 - pct/100));
-
-  hoja.getRange(fila, iDscto+1).setValue(pct);
+  const fila = headers.map(h => body[h] !== undefined ? body[h] : "");
+  hoja.appendRow(fila);
   SpreadsheetApp.flush();
-  return { ok: true, tmcode: body.tmcode, pct: pct, precio_primera: precio1, precio_segunda: precio2 };
+  return { ok: true };
 }
+
+function guardarReceta(body) {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let hoja = ss.getSheetByName("RECETAS");
+  const headers = ["producto_codigo","producto_nombre","material_descripcion","cantidad","unidad","actualizado_por","fecha_actualizacion"];
+  if (!hoja) {
+    hoja = ss.insertSheet("RECETAS");
+    hoja.getRange(1,1,1,headers.length).setValues([headers]);
+    hoja.getRange(1,1,1,headers.length).setBackground("#4c1d95").setFontColor("#fff").setFontWeight("bold");
+    hoja.setFrozenRows(1);
+  }
+  const productoCodigo = String(body.producto_codigo || "");
+  const datos = hoja.getDataRange().getValues();
+  const filasABorrar = [];
+  for (let i = datos.length - 1; i >= 1; i--) {
+    if (String(datos[i][0]) === productoCodigo) filasABorrar.push(i + 1);
+  }
+  filasABorrar.forEach(function(fila) { hoja.deleteRow(fila); });
+  SpreadsheetApp.flush();
+
+  const materiales = body.materiales || [];
+  const ahora = new Date().toISOString();
+  const filasNuevas = materiales.map(function(mat) {
+    return [
+      productoCodigo,
+      body.producto_nombre || "",
+      mat.descripcion || "",
+      mat.cantidad || 0,
+      mat.unidad || "",
+      body.actualizado_por || "",
+      ahora
+    ];
+  });
+  if (filasNuevas.length) {
+    const ultima = hoja.getLastRow();
+    hoja.getRange(ultima + 1, 1, filasNuevas.length, headers.length).setValues(filasNuevas);
+  }
+  SpreadsheetApp.flush();
+  return { ok: true, guardados: filasNuevas.length };
+}
+
+
+function importarProductosMasivo(body) {
+  const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const productos = body.productos || [];
+  if (!productos.length) return { ok:false, error:"Sin productos para importar" };
+
+  // PRODUCTOS_MAESTRO: agregar columna es_tercero si no existe
+  const hojaProd = ss.getSheetByName("PRODUCTOS_MAESTRO");
+  const lastColProd = hojaProd.getLastColumn();
+  const headersProd = hojaProd.getRange(1,1,1,lastColProd).getValues()[0];
+  let colEsTercero = headersProd.indexOf("es_tercero");
+  if (colEsTercero === -1) {
+    hojaProd.getRange(1, lastColProd+1).setValue("es_tercero");
+    colEsTercero = lastColProd;
+  }
+
+  const datosProd = hojaProd.getDataRange().getValues();
+  const codigosExistentes = {};
+  for (let i = 1; i < datosProd.length; i++) codigosExistentes[String(datosProd[i][0])] = true;
+
+  const filasProd = [];
+  productos.forEach(p => {
+    if (codigosExistentes[String(p.tmcode)]) return;
+    const obs = p.es_tercero ? "PRODUCTO DE TERCEROS - compra a proveedor externo para reventa" : "";
+    filasProd.push([p.tmcode, p.tmdescrip, p.tmund, 0, p.precio_base, p.flete_cali, 0, 0, 0.05, obs, "", "", "G", "", "PRIMERA", !!p.es_tercero]);
+  });
+  if (filasProd.length > 0) {
+    hojaProd.getRange(hojaProd.getLastRow()+1, 1, filasProd.length, 16).setValues(filasProd);
+  }
+
+  // PRECIOS_GERENCIA
+  const hojaPrecios = ss.getSheetByName("PRECIOS_GERENCIA");
+  const datosPrecios = hojaPrecios.getDataRange().getValues();
+  const tmcodesConPrecio = {};
+  for (let i = 1; i < datosPrecios.length; i++) tmcodesConPrecio[String(datosPrecios[i][1])] = true;
+  let siguienteId = datosPrecios.length;
+
+  const filasPrecios = [];
+  productos.forEach(p => {
+    if (tmcodesConPrecio[String(p.tmcode)]) return;
+    const fleteB = p.flete_cali ? Math.round(p.flete_cali * 1.3) : 0;
+    filasPrecios.push([siguienteId++, p.tmcode, p.precio_base, 0.05, p.flete_cali, fleteB, new Date(2026,6,25), new Date(2099,11,31), 0, p.tmdescrip, p.tmund, "", ""]);
+  });
+  if (filasPrecios.length > 0) {
+    hojaPrecios.getRange(hojaPrecios.getLastRow()+1, 1, filasPrecios.length, 13).setValues(filasPrecios);
+  }
+
+  return {
+    ok: true,
+    productos_agregados: filasProd.length,
+    productos_ya_existian: productos.length - filasProd.length,
+    precios_agregados: filasPrecios.length,
+    precios_ya_existian: productos.length - filasPrecios.length
+  };
+}
+
+
+/**
+ * LIMPIEZA ÚNICA (23/09/2026) — Ejecutar UNA vez desde el editor.
+ * Borra de CLIENTES.direccion los valores que son coordenadas GPS (lat,lon),
+ * escritos por error por Comercial antes de la Compilación 27. Las
+ * coordenadas reales del cliente siguen en coordenadas_home (no se tocan).
+ * Deja la lista de clientes afectados en la hoja LIMPIEZA_DIRECCIONES para
+ * que los vendedores puedan volver a registrar la dirección real.
+ * Es seguro re-ejecutarla: si ya no hay coordenadas en direccion, no hace nada.
+ */
+function limpiarDireccionesConCoordenadas() {
+  const hoja = getHoja(HOJAS.CLIENTES);
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  const cNit = hdrs.indexOf("cliente_nit"), cRs = hdrs.indexOf("razon_social"), cDir = hdrs.indexOf("direccion"), cCoord = hdrs.indexOf("coordenadas_home");
+  if (cDir < 0) { Logger.log("No existe la columna direccion"); return; }
+  const re = /^\s*-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*$/;
+  const afectados = [];
+  for (let i = 1; i < datos.length; i++) {
+    const dir = String(datos[i][cDir] || "");
+    if (re.test(dir)) {
+      afectados.push([datos[i][cNit], datos[i][cRs], dir, cCoord >= 0 ? datos[i][cCoord] : "", new Date()]);
+      hoja.getRange(i + 1, cDir + 1).setValue("");
+    }
+  }
+  if (afectados.length) {
+    const ss = hoja.getParent();
+    let log = ss.getSheetByName("LIMPIEZA_DIRECCIONES");
+    if (!log) {
+      log = ss.insertSheet("LIMPIEZA_DIRECCIONES");
+      log.getRange(1, 1, 1, 5).setValues([["cliente_nit", "razon_social", "valor_borrado_de_direccion", "coordenadas_home", "fecha_limpieza"]]);
+      log.getRange(1, 1, 1, 5).setBackground("#1a3a5c").setFontColor("#fff").setFontWeight("bold");
+      log.setFrozenRows(1);
+    }
+    log.getRange(log.getLastRow() + 1, 1, afectados.length, 5).setValues(afectados);
+  }
+  Logger.log("Direcciones con coordenadas limpiadas: " + afectados.length);
+  return afectados.length;
+}
+
+
+// ===== Tabla oficial de productos y precios (carga unica, clave requerida) =====
+function _setCamposExtraAP(hoja, fila, body) {
+  const extra = { numero_viajes: body.numero_viajes || '', lleva_estiba: body.lleva_estiba || '', flete_gravado: body.flete_gravado || '' };
+  let lc = hoja.getLastColumn();
+  const hdr = hoja.getRange(1, 1, 1, lc).getValues()[0].map(String);
+  Object.keys(extra).forEach(function (k) {
+    let ix = hdr.indexOf(k);
+    if (ix < 0) { lc++; hoja.getRange(1, lc).setValue(k); hdr.push(k); ix = hdr.length - 1; }
+    hoja.getRange(fila, ix + 1).setValue(extra[k]);
+  });
+}
+
+
