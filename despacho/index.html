@@ -1244,7 +1244,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // Se muestra UNA sola vez por compilación (guardado en localStorage con la
 // clave de esta compilación). Si se sube una nueva compilación, cambiar
 // BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 8;
+const BUILD_ACTUAL = 9;
 function mostrarNovedadesBuild() {
   // Clave con prefijo propio (desde C7): Comercial usa 'sivil_update_visto_build'
   // en el mismo dominio, y un número de compilación repetido podía ocultar el aviso.
@@ -1255,10 +1255,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#7c3200;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">4 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">5 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>💲 Precios, IVA, pesos, estiba y unidades por viaje actualizados con la <strong>tabla oficial de Gerencia</strong></li>
-      <li>🚚 El <strong>flete por unidad</strong> ahora solo aparece cuando el flete va <strong>incluido en el precio</strong>, y se reparte por peso si el pedido lleva varias referencias</li>
+      <li>📦 Las entregas "por tandas" ahora se llaman <strong>Despachos por porcentajes</strong> y muestran el % del pedido de cada despacho</li>
+      <li>🥇🥈 El disponible por calidad en Inventario ya es exacto: lo comprometido en primera ya no se descuenta de segunda, ni al revés</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1446,7 +1446,11 @@ function calcularInventario() {
     const averias = S.patio.filter(x => String(x.tmcode) === code)
       .reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
     const comprometido = S.detalles
-      .filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id)))
+      .filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id))
+    // Solo lo comprometido en la MISMA calidad de la fila (DETALLE_AP trae la
+    // calidad de cada línea). Antes lo pedido en primera también se restaba de
+    // segunda y viceversa — mismo error que ya se había corregido en curado.
+    && ((String(d.calidad||'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA') === calidadFila))
       .reduce((s,d) => s + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
     const disponible = bruto - curado - averias - comprometido;
     const precio = S.precios.find(pr => String(pr.tmcode) === code) || {};
@@ -1708,7 +1712,7 @@ function renderAPs() {
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: $'+Number(ap.flete_valor).toLocaleString('es-CO') : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
 ${ap.viaje_compartido_id ? `<div style="font-size:0.70rem;color:#7c3aed;margin-top:2px;font-weight:600;">🔗 Viaje compartido ${ap.viaje_compartido_id}</div>` : ''}
 ${ap.transportista_flete ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">🚛 ${ap.transportista_flete}</div>` : ''}
-${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Entrega por tandas:</b> '+t.map(function(x){return (x.fecha||'?')+' — '+(x.descripcion||'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
+${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Despachos por porcentajes:</b> '+t.map(function(x){return (x.fecha||'?')+(x.porcentaje?' — <b>'+x.porcentaje+'%</b>':'')+(x.descripcion?' — '+x.descripcion:'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
         </div>
         ${badge}
       </div>
