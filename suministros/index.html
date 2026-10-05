@@ -215,7 +215,7 @@ function mostrarAvisoActualizacion(reg) {
     <div id="loginError" class="login-error">❌ Correo o PIN incorrecto</div>
     <div style="text-align:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e5e7eb;">
       <div style="font-size:.65rem;color:#9ca3af;">Desarrollado por <strong>Abdiel Cícar Moreno Velásquez</strong></div>
-      <div style="font-size:.62rem;color:#9ca3af;">POSTEC DE OCCIDENTE S.A.S. · v1.1 · 2026</div>
+      <div style="font-size:.62rem;color:#9ca3af;">POSTEC DE OCCIDENTE S.A.S. · v1.2 · 2026</div>
     </div>
   </div>
 </div>
@@ -257,10 +257,12 @@ function mostrarAvisoActualizacion(reg) {
   <!-- PANTALLA: INVENTARIO COMPLETO -->
   <div id="screenInventario" class="screen">
     <div class="content">
+      <input id="buscarSum" class="form-control" style="margin-bottom:.6rem;" placeholder="🔍 Buscar por código o nombre..." oninput="renderInventario()">
       <div class="filtro-chips">
         <div class="chip rojo active" onclick="filtrarInv('ROJO',this)">🔴 Agotado</div>
         <div class="chip amarillo" onclick="filtrarInv('AMARILLO',this)">🟡 Stock bajo</div>
-        <div class="chip active" onclick="filtrarInv('TODOS',this)">📦 Todos</div>
+        <div class="chip" onclick="filtrarInv('ALERTA',this)">⚠️ Con alerta</div>
+        <div class="chip" onclick="filtrarInv('TODOS',this)">📦 Todos</div>
       </div>
       <div id="listaInventario"><div class="loading"><div class="spinner"></div></div></div>
     </div>
@@ -437,9 +439,47 @@ function fmt(n) {
   return num.toLocaleString('es-CO');
 }
 
+// Las fechas llegan de Sheets como "Date(2026,9,5,...)" (gviz, mes base 0)
+// o como texto ISO. new Date("Date(...)") daba "Invalid Date".
+function parseFecha(s) {
+  if (!s) return null;
+  if (s instanceof Date) return s;
+  const m = String(s).match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);
+  if (m) return new Date(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
 function fmtFecha(s) {
-  if (!s) return '—';
-  try { return new Date(s).toLocaleDateString('es-CO'); } catch { return s; }
+  const d = parseFecha(s);
+  return d ? d.toLocaleDateString('es-CO') : '—';
+}
+function fechaInput(s) { // yyyy-mm-dd para <input type="date">
+  const d = parseFecha(s); if (!d) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function escAttr(t) { return String(t || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+// Lectura gviz VALIDADA: si la hoja pedida no existe, Google devuelve la
+// PRIMERA hoja del libro (USUARIOS_MAESTRO). Antes Suministros mostraba esos
+// usuarios como si fueran notas de compra. Ahora, si no aparece la columna
+// esperada, se trata como hoja vacía.
+async function leerHoja(nombre, columnaEsperada) {
+  const r = await fetch(GVIZ + encodeURIComponent(nombre) + '&_=' + Date.now(), { cache: 'no-store' });
+  const txt = await r.text();
+  if (!txt.includes('table')) return [];
+  const j = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
+  const cols = (j.table?.cols||[]).map(c=>String(c.label||'').trim());
+  if (columnaEsperada && !cols.includes(columnaEsperada)) return [];
+  return (j.table?.rows||[]).map(row=>{ const o={}; cols.forEach((h,i)=>o[h]=row.c?.[i]?.v??''); return o; });
+}
+
+// Escritura con verificación real de la respuesta del backend. Antes se usaba
+// mode:'no-cors', que siempre mostraba "guardado" aunque el backend fallara.
+async function escribirGAS(payload) {
+  const r = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload) });
+  let j; try { j = await r.json(); } catch(e) { throw new Error('Respuesta inválida del servidor'); }
+  if (!j || j.ok === false) throw new Error((j && j.error) || 'El servidor no confirmó el guardado');
+  return j;
 }
 
 function irA(screenId) {
@@ -476,11 +516,6 @@ async function hacerLogin() {
   if (!correo || !pin) { toast('Completa correo y PIN'); return; }
 
   try {
-    const resp = await fetch(`${GAS_URL}?accion=getVendedores`);
-    const data = await resp.json();
-    const todos = data.data || [];
-
-    // También buscar en todos los usuarios (incluyendo Suministros)
     const respU = await fetch(GVIZ + 'USUARIOS_MAESTRO&_=' + Date.now(), { cache: 'no-store' });
     const txtU  = await respU.text();
     const jU    = JSON.parse(txtU.slice(txtU.indexOf('(')+1, txtU.lastIndexOf(')')));
@@ -507,6 +542,29 @@ async function hacerLogin() {
       return;
     }
 
+    try { localStorage.setItem(SESION_KEY, JSON.stringify({ correo: usuario.correo, ts: Date.now() })); } catch(e) {}
+    entrarApp(usuario);
+  } catch(e) {
+    toast('Error de conexión: ' + e.message);
+  }
+}
+
+// Sesión recordada (como en Comercial): se guarda solo el correo, nunca el PIN,
+// y al volver se revalida contra USUARIOS_MAESTRO que siga ACTIVO y con rol permitido.
+const SESION_KEY = 'sivil_sesion_suministros';
+const SESION_VIGENCIA_MS = 7 * 24 * 3600 * 1000;
+async function restaurarSesion() {
+  let g = null; try { g = JSON.parse(localStorage.getItem(SESION_KEY) || 'null'); } catch(e) {}
+  if (!g || !g.correo || Date.now() - (g.ts||0) > SESION_VIGENCIA_MS) return;
+  try {
+    const usuarios = await leerHoja('USUARIOS_MAESTRO', 'correo');
+    const u = usuarios.find(x => String(x.correo||'').toLowerCase() === String(g.correo).toLowerCase() && x.estado === 'ACTIVO' && ROL_PERMITIDOS.includes(x.rol));
+    if (u) entrarApp(u); else localStorage.removeItem(SESION_KEY);
+  } catch(e) { /* sin red: se queda en el login */ }
+}
+
+function entrarApp(usuario) {
+  {
     S.usuario = usuario;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'block';
@@ -514,12 +572,12 @@ async function hacerLogin() {
     document.getElementById('headerSub').textContent = usuario.cargo || 'Suministros';
     mostrarBienvenidaApp(usuario.nombre_completo, usuario.rol || usuario.cargo || '', '#4c1d95', 'SIVIL Suministros', 'tu app de Compras');
     cargarTodo();
-  } catch(e) {
-    toast('Error de conexión: ' + e.message);
+    mostrarNovedadesBuild();
   }
 }
 
 function cerrarSesion() {
+  try { localStorage.removeItem(SESION_KEY); } catch(e) {}
   S = { usuario:null, inventario:[], notas:{}, historial:[], filtroInv:'ROJO', recetas:null, filasManualesReceta:[] };
   document.getElementById('mainApp').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -530,56 +588,71 @@ function cerrarSesion() {
 async function cargarTodo() {
   toast('⏳ Cargando productos...');
   try {
-    // Leer PRODUCTOS_MAESTRO vía gviz (ultrarrápido — sin cálculos)
-    const r = await fetch(GVIZ + 'PRODUCTOS_MAESTRO&_=' + Date.now(), { cache: 'no-store' });
-    const txt = await r.text();
-    const j   = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-    const cols = (j.table?.cols||[]).map(c=>c.label);
-    const rows = (j.table?.rows||[]).map(row=>{
-      const o={}; cols.forEach((h,i)=>o[h]=row.c?.[i]?.v??''); return o;
-    }).filter(p=>p.tmcode);
-
-    // Asignar semáforo simple basado en stock bruto
-    // (Lorena ve qué hay en bodega — cálculo dinámico es secundario)
-    S.inventario = rows.map(p => {
-      const stock = parseFloat(p.tmcant)||0;
-      return {
-        tmcode:    p.tmcode,
-        tmdescrip: p.tmdescrip,
-        tmund:     p.tmund,
-        disponible: stock,
-        stock_bruto: stock,
-        comprometido: 0,
-        curado: 0,
-        semaforo: stock <= 0 ? 'ROJO' : stock <= 50 ? 'AMARILLO' : 'VERDE'
-      };
+    // Mismo criterio que Comercial y Despacho: disponible = stock físico
+    // − en curado − averías − comprometido en APs pendientes. Antes Suministros
+    // mostraba el stock bruto y "Comprometido: 0 · Curado: 0" siempre.
+    const [prods, patio, dets, aps] = await Promise.all([
+      leerHoja('PRODUCTOS_MAESTRO', 'tmcode'),
+      leerHoja('CONTROL_PATIO_Y_LOGISTICA', 'tmcode').catch(() => []),
+      leerHoja('DETALLE_AP', 'tmcode').catch(() => []),
+      leerHoja('PREVENTAS_AP', 'estado_ap').catch(() => [])
+    ]);
+    const apsPend = new Set(aps.filter(a => ['Pendiente','Despachado Parcial'].includes(a.estado_ap)).map(a => String(a.ap_id)));
+    const cal = v => String(v || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA';
+    const fila = p => {
+      const code = String(p.tmcode), c = cal(p.calidad);
+      const bruto = parseFloat(p.tmcant) || 0;
+      const curado = patio.filter(x => String(x.tmcode) === code && cal(x.calidad_curado) === c)
+        .reduce((t,x) => t + (parseFloat(x.cant_en_curado)||0), 0);
+      const averias = c === 'PRIMERA' ? patio.filter(x => String(x.tmcode) === code)
+        .reduce((t,x) => t + (parseFloat(x.cant_mermas_averias)||0), 0) : 0;
+      // Comprometido por producto Y calidad (DETALLE_AP trae la calidad de cada línea).
+      const comprometido = dets.filter(d => String(d.tmcode) === code && cal(d.calidad) === c && apsPend.has(String(d.ap_id)))
+        .reduce((t,d) => t + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
+      return { bruto, curado, averias, comprometido, disponible: bruto - curado - averias - comprometido };
+    };
+    // PRODUCTOS_MAESTRO tiene una fila por calidad: se agrupa por código para
+    // no mostrar cada producto dos veces. El semáforo se calcula con PRIMERA;
+    // SEGUNDA se muestra como información.
+    const porCodigo = {};
+    prods.filter(p => p.tmcode).forEach(p => {
+      const code = String(p.tmcode);
+      const g = porCodigo[code] || (porCodigo[code] = { tmcode: code, tmdescrip: p.tmdescrip, tmund: p.tmund, stock_minimo: 0, primera: null, segunda: null });
+      const f = fila(p);
+      if (cal(p.calidad) === 'SEGUNDA') g.segunda = f; else { g.primera = f; g.tmdescrip = p.tmdescrip; g.tmund = p.tmund; }
+      g.stock_minimo = Math.max(g.stock_minimo, parseFloat(p.stock_minimo) || 0);
     });
+    S.inventario = Object.values(porCodigo).map(g => {
+      const pr = g.primera || { bruto:0, curado:0, averias:0, comprometido:0, disponible:0 };
+      // Umbral de "stock bajo": el stock mínimo que define Gerencia; si no hay, 50.
+      const umbral = g.stock_minimo > 0 ? g.stock_minimo : UMBRAL_DEFECTO;
+      return {
+        ...g,
+        stock_bruto: pr.bruto, curado: pr.curado, averias: pr.averias,
+        comprometido: pr.comprometido, disponible: pr.disponible, umbral,
+        semaforo: pr.disponible <= 0 ? 'ROJO' : pr.disponible <= umbral ? 'AMARILLO' : 'VERDE'
+      };
+    }).sort((a,b) => a.disponible - b.disponible);
 
     await cargarNotas();
     renderDashboard();
+    if (document.getElementById('screenInventario').classList.contains('active')) renderInventario();
     const rojos = S.inventario.filter(p=>p.semaforo==='ROJO').length;
     toast(`✅ ${S.inventario.length} productos | ${rojos} agotados`);
   } catch(e) {
     toast('Error al cargar: ' + e.message);
   }
 }
+const UMBRAL_DEFECTO = 50;
 
 async function cargarNotas() {
   try {
-    const r = await fetch(GVIZ + 'SUMINISTROS_NOTAS&_=' + Date.now());
-    const txt = await r.text();
-    if (!txt.includes('table')) { S.notas={}; S.historial=[]; return; }
-    const j = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-    const cols = (j.table?.cols||[]).map(c=>c.label);
-    const rows = (j.table?.rows||[]).map(row=>{
-      const o={}; cols.forEach((h,i)=>o[h]=row.c?.[i]?.v??''); return o;
-    });
+    const rows = await leerHoja('SUMINISTROS_NOTAS', 'tmcode');
+    rows.forEach(n => { n._f = parseFecha(n.fecha_registro); });
+    rows.sort((a,b) => (b._f||0) - (a._f||0));      // más recientes primero
     S.historial = rows;
     S.notas = {};
-    rows.forEach(n=>{
-      if (!S.notas[n.tmcode] || n.fecha_registro > S.notas[n.tmcode].fecha_registro)
-        S.notas[n.tmcode] = n;
-    });
+    rows.forEach(n => { const k = String(n.tmcode); if (!S.notas[k]) S.notas[k] = n; });
   } catch(e) { S.notas={}; S.historial=[]; }
 }
 
@@ -613,10 +686,10 @@ function renderDashboard() {
     contN.innerHTML = '<div style="font-size:.78rem;color:#aaa;text-align:center;">Sin notas activas — abre Inventario para gestionar una compra</div>';
   } else {
     contN.innerHTML = notasActivas.slice(0,3).map(n => `
-      <div style="padding:.5rem 0;border-bottom:1px solid var(--borde);" onclick="abrirNota('${n.tmcode}','${(n.tmdescrip||'').replace(/'/g,'&apos;')}')">
+      <div style="padding:.5rem 0;border-bottom:1px solid var(--borde);cursor:pointer;" onclick="abrirNota('${escAttr(n.tmcode)}','${escAttr(n.tmdescrip)}')">
         <div style="font-size:.8rem;font-weight:700;">${n.tmdescrip || 'COD '+n.tmcode}</div>
         <div style="font-size:.72rem;color:#555;margin-top:2px;">${estadoLabel(n.estado)} · ${fmtFecha(n.fecha_llegada_estimada)}</div>
-        ${n.nota ? `<div style="font-size:.70rem;color:#888;margin-top:2px;">${n.nota.slice(0,60)}${n.nota.length>60?'...':''}</div>` : ''}
+        ${n.nota ? `<div style="font-size:.70rem;color:#888;margin-top:2px;">${String(n.nota).slice(0,60)}${String(n.nota).length>60?'...':''}</div>` : ''}
       </div>`).join('');
   }
 }
@@ -638,49 +711,52 @@ function filtrarInv(filtro, chip) {
 }
 
 function renderInventario() {
-  const inv = S.inventario;
-  let lista = filtro => {
-    if (filtro === 'ROJO')     return inv.filter(p => p.semaforo === 'ROJO');
-    if (filtro === 'AMARILLO') return inv.filter(p => p.semaforo === 'AMARILLO');
-    return inv.filter(p => ['ROJO','AMARILLO'].includes(p.semaforo));
-  };
-  const filtrados = lista(S.filtroInv);
+  const q = (document.getElementById('buscarSum')?.value || '').trim().toLowerCase();
+  let lista = S.inventario;
+  if (q) lista = lista.filter(p => String(p.tmcode).includes(q) || String(p.tmdescrip||'').toLowerCase().includes(q));
+  else if (S.filtroInv === 'ROJO')     lista = lista.filter(p => p.semaforo === 'ROJO');
+  else if (S.filtroInv === 'AMARILLO') lista = lista.filter(p => p.semaforo === 'AMARILLO');
+  else if (S.filtroInv === 'ALERTA')   lista = lista.filter(p => p.semaforo !== 'VERDE');
   const cont = document.getElementById('listaInventario');
-
-  if (!filtrados.length) {
-    cont.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;">Sin productos en esta categoría 🎉</div>';
+  if (!lista.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#888;padding:2rem;">' + (q ? 'Sin resultados para la búsqueda' : 'Sin productos en esta categoría 🎉') + '</div>';
     return;
   }
-  cont.innerHTML = filtrados.map(p => tarjetaProducto(p, false)).join('');
+  const max = 150;
+  cont.innerHTML = lista.slice(0, max).map(p => tarjetaProducto(p, false)).join('')
+    + (lista.length > max ? `<div style="text-align:center;font-size:.75rem;color:#888;padding:.6rem;">Mostrando ${max} de ${lista.length}. Usa el buscador para encontrar uno en particular.</div>` : '');
 }
 
 function tarjetaProducto(p, compacto) {
-  const urgente  = p.semaforo === 'ROJO';
-  const nota     = S.notas[String(p.tmcode)];
-  const aProd    = Math.abs(p.disponible || 0) + (p.comprometido || 0) + 10;
-  const cls      = urgente ? '' : 'amarillo';
-
-  return `<div class="prod-alert ${cls}" onclick="abrirNota('${p.tmcode}','${(p.tmdescrip||'').replace(/'/g,"\\'")}')">
+  const urgente = p.semaforo === 'ROJO', ok = p.semaforo === 'VERDE';
+  const nota    = S.notas[String(p.tmcode)];
+  // Sugerido: lo que falta para volver al umbral (stock mínimo de Gerencia o 50).
+  const aProd   = Math.max(0, Math.ceil(p.umbral - p.disponible));
+  const cls     = urgente ? '' : 'amarillo';
+  const badge   = urgente ? '<span class="badge-urgente">URGENTE</span>' : ok ? '<span style="font-size:.6rem;font-weight:800;color:#15803d;">OK</span>' : '<span class="badge-alta">STOCK BAJO</span>';
+  const seg     = p.segunda && (p.segunda.bruto || p.segunda.comprometido)
+    ? `<div style="font-size:.66rem;color:#92400e;margin-top:2px;">🥈 Segunda: ${fmt(p.segunda.disponible)} disponibles (stock ${fmt(p.segunda.bruto)})</div>` : '';
+  return `<div class="prod-alert ${cls}" style="${ok?'border-left-color:#16a34a;':''}" onclick="abrirNota('${escAttr(p.tmcode)}','${escAttr(p.tmdescrip)}')">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
       <div style="flex:1;">
         <div class="prod-code">COD ${p.tmcode} · ${p.tmund || 'UND'}</div>
         <div class="prod-nombre">${p.tmdescrip || '—'}</div>
         ${!compacto ? `<div style="font-size:.70rem;color:#666;margin-top:3px;">
-          🔒 Comprometido: ${fmt(p.comprometido)} · ⏳ Curado: ${fmt(p.curado||0)} · 📦 Stock: ${fmt(p.stock_bruto||0)}
-        </div>` : ''}
+          📦 Stock: ${fmt(p.stock_bruto)} · ⏳ Curado: ${fmt(p.curado)} · 🔒 Comprometido: ${fmt(p.comprometido)}${p.averias ? ' · ⚠️ Averías: ' + fmt(p.averias) : ''}
+        </div>${seg}` : ''}
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:8px;">
-        <div class="prod-num" style="color:${urgente?'var(--rojo)':'#92400e'};">${fmt(p.disponible)}</div>
+        <div class="prod-num" style="color:${urgente?'var(--rojo)':ok?'#15803d':'#92400e'};">${fmt(p.disponible)}</div>
         <div style="font-size:.62rem;color:#888;">disponible</div>
-        <div style="margin-top:4px;">${urgente ? '<span class="badge-urgente">URGENTE</span>' : '<span class="badge-alta">STOCK BAJO</span>'}</div>
+        <div style="margin-top:4px;">${badge}</div>
       </div>
     </div>
-    ${!compacto ? `<div style="margin-top:.5rem;background:var(--gris);border-radius:6px;padding:4px 8px;font-size:.70rem;">
-      💡 Producir aprox. <b>${fmt(aProd)}</b> ${p.tmund||'UND'} para normalizar stock
+    ${!compacto && aProd > 0 ? `<div style="margin-top:.5rem;background:var(--gris);border-radius:6px;padding:4px 8px;font-size:.70rem;">
+      💡 Faltan aprox. <b>${fmt(aProd)}</b> ${p.tmund||'UND'} para llegar al mínimo (${fmt(p.umbral)}${p.stock_minimo > 0 ? ', definido por Gerencia' : ', valor por defecto'})${p.curado ? ` · ya vienen ${fmt(p.curado)} en curado` : ''}
     </div>` : ''}
     <div class="nota-area ${nota && nota.estado !== 'pendiente' ? 'con-nota' : ''}">
       ${nota && nota.estado !== 'pendiente'
-        ? `${estadoLabel(nota.estado)} — ${nota.nota ? nota.nota.slice(0,50)+'...' : 'sin detalle'}`
+        ? `${estadoLabel(nota.estado)} — ${nota.nota ? String(nota.nota).slice(0,50)+(String(nota.nota).length>50?'...':'') : 'sin detalle'}`
         : '📝 Toca para registrar gestión de compra'}
     </div>
   </div>`;
@@ -694,7 +770,7 @@ function abrirNota(tmcode, tmdescrip) {
   document.getElementById('notaEstado').value        = nota.estado || 'pendiente';
   document.getElementById('notaTexto').value         = nota.nota   || '';
   document.getElementById('notaCantidad').value      = nota.cantidad || '';
-  document.getElementById('notaFecha').value         = nota.fecha_llegada_estimada || '';
+  document.getElementById('notaFecha').value         = fechaInput(nota.fecha_llegada_estimada);
   document.getElementById('modalNota').classList.add('show');
 }
 
@@ -729,11 +805,7 @@ async function guardarNota() {
   const btnNota = document.querySelector('button[onclick="guardarNota()"]');
   if (btnNota) { btnNota.disabled = true; btnNota.dataset._txt = btnNota.textContent; btnNota.textContent = 'Guardando...'; }
   try {
-    await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify(payload)
-    });
+    await escribirGAS(payload);
 
     // Actualizar estado local
     S.notas[String(tmcode)] = {
@@ -741,7 +813,7 @@ async function guardarNota() {
       estado, nota, cantidad, fecha_llegada_estimada: fecha,
       registrado_por: S.usuario?.nombre_completo
     };
-    S.historial.unshift({...S.notas[String(tmcode)], fecha_registro: new Date().toISOString()});
+    S.historial.unshift({...S.notas[String(tmcode)], tmund: prod?.tmund || '', fecha_registro: new Date().toISOString()});
 
     cerrarModal();
     toast('✅ Nota guardada correctamente');
@@ -749,7 +821,7 @@ async function guardarNota() {
     if (document.getElementById('screenInventario').classList.contains('active')) renderInventario();
     if (document.getElementById('screenNotas').classList.contains('active')) renderTodasNotas();
   } catch(e) {
-    toast('Error al guardar: ' + e.message);
+    toast('❌ No se guardó la nota: ' + e.message, 6000);
   } finally {
     _guardandoNota = false;
     if (btnNota) { btnNota.disabled = false; btnNota.textContent = btnNota.dataset._txt || '💾 Guardar nota'; }
@@ -776,14 +848,14 @@ function renderTodasNotas() {
           <div class="prod-nombre">${p.tmdescrip}</div>
           <div style="font-size:.70rem;color:${p.disponible<0?'var(--rojo)':'#92400e'};font-weight:700;">Disponible: ${fmt(p.disponible)} ${p.tmund}</div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="abrirNota('${p.tmcode}','${(p.tmdescrip||'').replace(/'/g,"\\'")}')">
+        <button class="btn btn-outline btn-sm" onclick="abrirNota('${escAttr(p.tmcode)}','${escAttr(p.tmdescrip)}')">
           ${nota.estado && nota.estado !== 'pendiente' ? '✏️ Editar' : '➕ Gestionar'}
         </button>
       </div>
       ${nota.estado && nota.estado !== 'pendiente' ? `
       <div style="margin-top:.5rem;padding:.5rem;background:var(--gris);border-radius:8px;font-size:.72rem;">
         <div>${estadoLabel(nota.estado)} ${nota.fecha_llegada_estimada ? '· Llega: '+fmtFecha(nota.fecha_llegada_estimada) : ''}</div>
-        ${nota.nota ? `<div style="color:#555;margin-top:2px;">${nota.nota.slice(0,80)}</div>` : ''}
+        ${nota.nota ? `<div style="color:#555;margin-top:2px;">${String(nota.nota).slice(0,80)}</div>` : ''}
       </div>` : ''}
     </div>`;
   }).join('');
@@ -810,15 +882,7 @@ function renderHistorial() {
 // ─── RECETAS / BOM ───────────────────────────────────────────
 async function cargarRecetas() {
   try {
-    const r = await fetch(GVIZ + 'RECETAS&_=' + Date.now());
-    const txt = await r.text();
-    if (!txt.includes('table')) { S.recetas = {}; return; }
-    const j = JSON.parse(txt.slice(txt.indexOf('(')+1, txt.lastIndexOf(')')));
-    const cols = (j.table?.cols||[]).map(c=>c.label);
-    if (!cols.length) { S.recetas = {}; return; }
-    const rows = (j.table?.rows||[]).map(row=>{
-      const o={}; cols.forEach((h,i)=>o[h]=row.c?.[i]?.v??''); return o;
-    }).filter(r => r.producto_codigo);
+    const rows = (await leerHoja('RECETAS', 'producto_codigo')).filter(r => r.producto_codigo);
 
     const agrupado = {};
     rows.forEach(r => {
@@ -985,20 +1049,51 @@ async function enviarReceta() {
     actualizado_por: S.usuario?.nombre_completo || 'Suministros'
   };
 
+  if (_guardandoReceta) return;
+  _guardandoReceta = true;
+  const btnR = document.querySelector('button[onclick="enviarReceta()"]');
+  if (btnR) { btnR.disabled = true; btnR.textContent = 'Guardando...'; }
   try {
-    await fetch(GAS_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify(payload)
-    });
+    await escribirGAS(payload);
     toast('✅ Receta guardada');
     cerrarModalReceta();
     S.recetas = null;
     renderRecetas();
   } catch(e) {
-    toast('Error al guardar receta: ' + e.message);
+    toast('❌ No se guardó la receta: ' + e.message, 6000);
+  } finally {
+    _guardandoReceta = false;
+    if (btnR) { btnR.disabled = false; btnR.textContent = '💾 Guardar receta'; }
   }
 }
+let _guardandoReceta = false;
+
+// ─── AVISO DE NOVEDADES POR COMPILACIÓN ─────────────────────
+const BUILD_ACTUAL = 1;
+function mostrarNovedadesBuild() {
+  const clave = 'sivil_suministros_update_visto_build' + BUILD_ACTUAL;
+  try { if (localStorage.getItem(clave)) return; } catch(e) { return; }
+  if (document.getElementById('btnCerrarAvisoUpdate')) return;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  ov.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:1.3rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <div style="font-size:1.6rem;">🎉</div>
+    <div style="font-weight:800;color:#4c1d95;font-size:1.05rem;margin:.3rem 0 .2rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">5 oct 2026</div>
+    <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
+      <li>📦 El <b>disponible</b> ahora descuenta lo que está en curado y lo comprometido en pedidos pendientes, igual que en Comercial y Despacho</li>
+      <li>🥇🥈 Cada producto aparece una sola vez; la segunda calidad se muestra aparte</li>
+      <li>🔍 Buscador en Inventario y filtro de todos los productos</li>
+      <li>📝 Las notas de compra y las recetas ahora confirman si de verdad se guardaron</li>
+      <li>🔐 La app recuerda tu sesión por 7 días</li>
+    </ul>
+    <button id="btnCerrarAvisoUpdate" style="width:100%;background:#4c1d95;color:#fff;border:none;border-radius:10px;padding:.8rem;font-weight:800;cursor:pointer;">Entendido</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('btnCerrarAvisoUpdate').onclick = () => { try { localStorage.setItem(clave, '1'); } catch(e) {} ov.remove(); };
+}
+
+restaurarSesion();
 
 // ─── CIERRE MODAL CON CLICK FUERA ───────────────────────────
 document.getElementById('modalNota').addEventListener('click', function(e) {
