@@ -658,12 +658,14 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <label class="form-label">📦 Compromiso de entrega</label>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
     <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="unica" onclick="seleccionarModoEntrega('unica')" style="font-size:0.78rem;border-color:#16a34a;background:#f0fdf4;color:#14532d;">📅 Entrega única</button>
-    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="tandas" onclick="seleccionarModoEntrega('tandas')" style="font-size:0.78rem;">📦 Por tandas</button>
+    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="tandas" onclick="seleccionarModoEntrega('tandas')" style="font-size:0.78rem;">📦 Despachos por porcentajes</button>
   </div>
   <input type="hidden" id="modoEntregaInput" value="unica">
   <div id="tandasContainer" style="display:none;margin-top:8px;">
+    <div style="display:grid;grid-template-columns:130px 64px 1fr 28px;gap:6px;font-size:.65rem;color:#888;font-weight:700;margin-bottom:3px;"><span>Fecha</span><span>% pedido</span><span>Detalle</span><span></span></div>
     <div id="tandasLista"></div>
-    <button type="button" class="btn btn-outline btn-sm" onclick="agregarTanda()">+ Agregar tanda</button>
+    <div id="tandasTotal" style="font-size:.72rem;font-weight:700;margin:2px 0 6px;"></div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="agregarTanda()">+ Agregar despacho</button>
   </div>
 </div>
 <!-- PASO 3: Agregar productos -->
@@ -1672,7 +1674,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 29;
+const BUILD_ACTUAL = 30;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1681,13 +1683,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">4 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">5 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>💲 <b>Precios oficiales nuevos</b> de la tabla de Gerencia (con IVA, peso, estiba y unidades por viaje) y 44 productos nuevos</li>
-      <li>💳 <b>Forma de pago</b>: Contado o Crédito (pide los días de crédito)</li>
-      <li>🚚 <b>Flete</b>: ahora pregunta <b>con o sin flete</b> y si va <b>incluido en el costo del producto</b>. Si va incluido, reparte el flete por unidad o por peso, pide el <b>número de viajes</b> y verifica la capacidad por viaje</li>
-      <li>🧱 Pregunta <b>¿lleva costo de estiba?</b> con el valor oficial por unidad</li>
-      <li>🧾 El IVA del flete sigue la regla de Gerencia (gravado, excluido o mixto)</li>
+      <li>📦 "Por tandas" ahora se llama <b>Despachos por porcentajes</b>: cada despacho lleva su fecha y el <b>% del pedido</b>, y la app te avisa si la suma no da 100%</li>
+      <li>🥇🥈 El disponible por calidad ya es exacto: lo pedido en <b>primera</b> ya no se descuenta de <b>segunda</b>, ni al revés</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1938,7 +1937,11 @@ const curado = patio.filter(x => String(x.tmcode) === code
 const averias = patio.filter(x => String(x.tmcode) === code)
 .reduce((s,x) => s + (parseFloat(x.cant_mermas_averias)||0), 0);
 const comprometido = dets
-.filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id)))
+.filter(d => String(d.tmcode) === code && apsPendIds.has(String(d.ap_id))
+    // Solo lo comprometido en la MISMA calidad de la fila (DETALLE_AP trae la
+    // calidad de cada línea). Antes lo pedido en primera también se restaba de
+    // segunda y viceversa — mismo error que ya se había corregido en curado.
+    && ((String(d.calidad||'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA') === calidadFila))
 .reduce((s,d) => s + Math.max(0, (parseFloat(d.cantidad_solicitada)||0) - (parseFloat(d.cantidad_despachada)||0)), 0);
 const disponible = bruto - curado - averias - comprometido;
 
@@ -3324,24 +3327,37 @@ function seleccionarModoEntrega(modo){
   const cont=document.getElementById('tandasContainer'); if(cont) cont.style.display = modo==='tandas'?'block':'none';
   if(modo==='tandas' && !_TANDAS.length) agregarTanda(); else calcularPlanEntregas();
 }
-function agregarTanda(){ _TANDAS.push({fecha:'',descripcion:''}); renderTandas(); }
+// "Despachos por porcentajes" (antes "tandas"; los identificadores internos se
+// conservan para no romper APs ya guardadas). Cada despacho lleva fecha, % del
+// pedido y detalle.
+function agregarTanda(){ _TANDAS.push({fecha:'',porcentaje:'',descripcion:''}); renderTandas(); }
 function quitarTanda(i){ _TANDAS.splice(i,1); renderTandas(); }
-function actualizarTanda(i,campo,valor){ if(_TANDAS[i]) _TANDAS[i][campo]=valor; calcularPlanEntregas(); }
+function actualizarTanda(i,campo,valor){ if(_TANDAS[i]) _TANDAS[i][campo]=valor; calcularPlanEntregas(); mostrarTotalPorcentajes(); }
+function mostrarTotalPorcentajes(){
+  const el=document.getElementById('tandasTotal'); if(!el) return;
+  const tot=_TANDAS.reduce(function(s,t){ return s+(parseFloat(t.porcentaje)||0); },0);
+  if(!_TANDAS.length||!tot){ el.textContent=''; return; }
+  const r=Math.round(tot*100)/100;
+  el.style.color = r===100 ? '#15803d' : '#b45309';
+  el.textContent = r===100 ? '✅ Total: 100% del pedido' : (r<100 ? '⚠️ Total: '+r+'% — faltan '+(Math.round((100-r)*100)/100)+'%' : '⚠️ Total: '+r+'% — se pasa del 100%');
+}
 function renderTandas(){
   const cont=document.getElementById('tandasLista'); if(!cont) return;
   cont.innerHTML=_TANDAS.map(function(t,i){
-    return '<div style="display:grid;grid-template-columns:130px 1fr 28px;gap:6px;margin-bottom:6px;">'+
+    return '<div style="display:grid;grid-template-columns:130px 64px 1fr 28px;gap:6px;margin-bottom:6px;">'+
     '<input class="form-control" style="font-size:.75rem;padding:6px;" type="date" value="'+(t.fecha||'')+'" onchange="actualizarTanda('+i+',&#39;fecha&#39;,this.value)">'+
-    '<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Ej: 40% del pedido, bloques grises..." value="'+String(t.descripcion||'').replace(/"/g,'&quot;')+'" oninput="actualizarTanda('+i+',&#39;descripcion&#39;,this.value)">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" type="number" min="0" max="100" step="any" placeholder="%" value="'+(t.porcentaje||'')+'" oninput="actualizarTanda('+i+',&#39;porcentaje&#39;,this.value)">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Ej: bloques grises, primer viaje..." value="'+String(t.descripcion||'').replace(/"/g,'&quot;')+'" oninput="actualizarTanda('+i+',&#39;descripcion&#39;,this.value)">'+
     '<button type="button" onclick="quitarTanda('+i+')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button>'+
     '</div>';
   }).join('');
   calcularPlanEntregas();
+  mostrarTotalPorcentajes();
 }
 function calcularPlanEntregas(){
   const modo=document.getElementById('modoEntregaInput')?.value||'unica';
   if(modo==='unica'){ STATE.pedido.plan_entregas=''; return; }
-  const validas=_TANDAS.filter(function(t){ return t.fecha||t.descripcion; });
+  const validas=_TANDAS.filter(function(t){ return t.fecha||t.descripcion||t.porcentaje; });
   STATE.pedido.plan_entregas = validas.length ? JSON.stringify(validas) : '';
 }
 
