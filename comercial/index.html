@@ -428,7 +428,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div style="color:rgba(255,255,255,0.45);font-size:0.65rem;text-align:center;margin-top:1.5rem;line-height:1.7;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.7);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTECSA DE COLOMBIA S.A.S. · v1.27 · Compilación 25 · 30 ago 2026
+    POSTECSA DE COLOMBIA S.A.S. · v1.27 · Compilación 29 · 4 oct 2026
   </div>
 </div>
 
@@ -439,7 +439,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="header-left">
       <img src="../assets/logo_postecsa.jpg" alt="POSTECSA" style="height:38px;object-fit:contain;border-radius:6px;">
       <div>
-        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 24</span></div>
+        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 29</span></div>
         <div class="header-sub" id="headerSub">Cargando...</div>
       </div>
     </div>
@@ -615,42 +615,21 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 </div>
 <div class="form-group">
 <label class="form-label">💳 Condiciones de pago</label>
-<input id="condicionesPago" class="form-control" placeholder="Ej: Contado, Crédito 30 días...">
+<select id="formaPago" class="form-control" onchange="calcularTotales()">
+<option value="">— Seleccione —</option><option value="CONTADO">Contado</option><option value="CREDITO">Crédito</option>
+</select>
+<div id="diasCreditoGrp" style="display:none;margin-top:6px;">
+<label class="form-label">📆 Días de crédito</label>
+<input id="diasCredito" class="form-control" type="number" min="1" step="1" placeholder="Ej: 30" oninput="calcularTotales()">
+</div>
+<input id="condicionesPago" type="hidden">
 </div>
 <div class="form-group">
 <label class="form-label">🏗️ Nombre de la obra</label>
 <input id="nombreObra" class="form-control" placeholder="Ej: Conjunto Residencial Los Pinos">
 </div>
 
-<!-- PASO 2b: Destino de entrega -->
-<div class="form-group">
-<label class="form-label">Destino de entrega</label>
-<select id="tipoEntrega" class="form-control" onchange="calcularTotales(); toggleDatosEntrega();">
-<option value="PLANTA">🏭 Venta en Planta (recoge el cliente)</option>
-<option value="CALI NORTE">🚛 Cali Norte</option>
-<option value="CALI SUR">🚛 Cali Sur</option>
-<option value="YUMBO">🚛 Yumbo</option>
-<option value="JAMUNDI">🚛 Jamundí</option>
-<option value="PALMIRA">🚛 Palmira</option>
-<option value="FUERA DEL MUNICIPIO (ZONA C)">🚛 Fuera del municipio (Zona C)</option>
-<option value="FUERA DEL PERIMETRO (>100KM)">🚛 Fuera del perímetro (&gt;100km)</option>
-</select>
-</div>
-<div id="fleteGroup" class="form-group" style="display:none;">
-<label class="form-label">💰 Flete sugerido (tarifa vigente)</label>
-<input id="fleteSugeridoDisplay" class="form-control" disabled>
-<label class="form-label" style="margin-top:0.5rem;">✏️ Flete acordado con el transportador</label>
-<input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="calcularTotales();">
-<label class="form-label" style="margin-top:0.5rem;">🚚 Transportista / condiciones negociadas</label>
-<input id="transportistaFleteInput" class="form-control" placeholder="Ej: Transportes XYZ, pago contraentrega..." oninput="calcularTotales();">
-<div class="form-group" style="margin-top:0.5rem;">
-<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteIncorporadoCheck" onchange="calcularTotales()"> Flete incorporado al precio (prorratear en el valor unitario)</label>
-<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck" onchange="calcularTotales()"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
-<div id="basculaWarning" style="display:none;margin-top:0.5rem;padding:0.5rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.8rem;color:#856404;"></div>
-</div>
-</div>
-
-        <!-- PASO 2b: Datos de entrega (campo) -->
+<!-- PASO 2b: Datos de entrega (campo) -->
         <div id="datosEntregaExtra" style="display:none;">
           <div class="form-group" style="margin-top:0.75rem;">
             <label class="form-label">📍 Dirección de entrega / obra</label>
@@ -691,6 +670,56 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <div class="card-title" style="margin-top:0.5rem;">Productos del Pedido</div>
         <div id="lineasAP" style="margin-bottom:0.75rem;"></div>
         <button class="btn btn-outline btn-sm" onclick="abrirModalProducto()">➕ Agregar producto</button>
+
+<!-- PASO 3b: Estiba, flete y destino (después de los productos, según indicación de la Gerente) -->
+<div id="bloqueFlete" class="form-group" style="margin-top:1rem;padding-top:.8rem;border-top:2px solid var(--borde);">
+<div class="card-title">Estiba, flete y entrega</div>
+<label class="form-label">🧱 ¿Lleva costo de estiba?</label>
+<select id="llevaEstiba" class="form-control" onchange="calcularTotales()">
+<option value="">— Seleccione —</option><option value="SI">Sí</option><option value="NO">No</option>
+</select>
+<label class="form-label" style="margin-top:.6rem;">🚚 ¿Con o sin flete?</label>
+<select id="conFlete" class="form-control" onchange="cambiarConFlete()">
+<option value="">— Seleccione —</option><option value="NO">Sin flete (recoge el cliente en planta)</option><option value="SI">Con flete (entrega en obra)</option>
+</select>
+<div id="grupoDestino" style="display:none;margin-top:.6rem;">
+<label class="form-label">Destino de entrega</label>
+<select id="tipoEntrega" class="form-control" onchange="calcularTotales(); toggleDatosEntrega();">
+<option value="">— Seleccione destino —</option>
+<option value="PLANTA">🏭 Venta en Planta (recoge el cliente)</option>
+<option value="CALI NORTE">🚛 Cali Norte</option>
+<option value="CALI SUR">🚛 Cali Sur</option>
+<option value="YUMBO">🚛 Yumbo</option>
+<option value="JAMUNDI">🚛 Jamundí</option>
+<option value="PALMIRA">🚛 Palmira</option>
+<option value="FUERA DEL MUNICIPIO (ZONA C)">🚛 Fuera del municipio (Zona C)</option>
+<option value="FUERA DEL PERIMETRO (>100KM)">🚛 Fuera del perímetro (&gt;100km)</option>
+</select>
+</div>
+<div id="fleteGroup" style="display:none;margin-top:.6rem;">
+<label class="form-label">¿El flete va incluido en el costo del producto?</label>
+<select id="fleteIncluidoSel" class="form-control" onchange="calcularTotales()">
+<option value="">— Seleccione —</option><option value="SI">Sí (se reparte en el precio de cada unidad)</option><option value="NO">No (se factura aparte, discriminado)</option>
+</select>
+<input type="checkbox" id="fleteIncorporadoCheck" style="display:none;">
+<div id="grupoViajes" style="display:none;margin-top:.5rem;">
+<label class="form-label">Número de viajes</label>
+<input id="numViajes" class="form-control" type="number" min="1" max="20" step="1" value="1" oninput="calcularTotales()">
+</div>
+<div id="viajesMsg" style="display:none;margin-top:.4rem;font-size:.78rem;font-weight:600;"></div>
+<label class="form-label" style="margin-top:.5rem;">💰 Flete de lista (tarifa vigente)</label>
+<input id="fleteSugeridoDisplay" class="form-control" disabled>
+<label class="form-label" style="margin-top:.5rem;">✏️ Flete a cobrar al cliente (puedes digitar otro valor)</label>
+<input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="this.dataset.autofilled='0'; calcularTotales();">
+<label class="form-label" style="margin-top:.5rem;">📝 Observaciones del flete (opcional)</label>
+<input id="transportistaFleteInput" class="form-control" placeholder="Ej: descargue por cuenta del cliente..." oninput="calcularTotales();">
+<div class="form-group" style="margin-top:0.5rem;">
+<label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:400;"><input type="checkbox" id="fleteContraEntregaCheck" onchange="calcularTotales()"> Flete contra entrega (el cliente le paga al transportador directamente)</label>
+<div id="basculaWarning" style="display:none;margin-top:0.5rem;padding:0.5rem;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.8rem;color:#856404;"></div>
+</div>
+</div>
+</div>
+
 
         <!-- FOTOS DE LA NEGOCIACION — propias de este pedido, no de la visita -->
         <div class="form-group" style="margin-top:1rem;">
@@ -739,6 +768,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <div class="card-title">Resumen Financiero</div>
           <div class="resumen-row"><span class="resumen-label">Subtotal productos</span><span id="rSubtotal">$0</span></div>
           <div class="resumen-row"><span class="resumen-label">Descuentos</span><span id="rDescuentos" style="color:var(--verde);">-$0</span></div>
+          <div class="resumen-row" id="rowEstiba" style="display:none;"><span class="resumen-label">Estiba</span><span id="rEstiba">$0</span></div>
           <div class="resumen-row"><span class="resumen-label">Flete</span><span id="rFlete">$0</span></div>
           <div class="resumen-row"><span class="resumen-label">IVA</span><span id="rIva">$0</span></div>
           <div class="resumen-row total"><span>TOTAL</span><span id="rTotal">$0</span></div>
@@ -944,7 +974,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="detalleDesc" class="form-control" type="number" min="0" max="100" step="0.5" placeholder="0" oninput="calcularLineaModal()">
       <div id="detalleDescAlert" style="font-size:0.72rem;color:var(--rojo);margin-top:4px;"></div>
     </div>
-    <div class="form-group">
+    <div class="form-group" style="display:none;">
       <label class="form-label">Valor estiba (por unidad, opcional)</label>
       <input id="detalleEstiba" class="form-control" type="number" min="0" placeholder="0" oninput="calcularLineaModal()">
     </div>
@@ -953,7 +983,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="detallePostes" class="form-control" type="number" min="0" placeholder="0" oninput="calcularLineaModal()">
     </div>
     <div class="form-group">
-      <label class="form-label">Peso unitario (kg) — opcional, mientras Gerencia entrega la tabla oficial</label>
+      <label class="form-label">Peso unitario (kg) — solo si el producto no tiene peso oficial</label>
       <input id="detallePeso" class="form-control" type="number" min="0" step="0.1" placeholder="Ej: 25.5" oninput="calcularLineaModal()">
       <div style="font-size:.68rem;color:#888;margin-top:3px;">Si lo conoces, úsalo para que el flete se reparta según el peso real de cada producto (no en partes iguales). Si el producto ya tiene peso registrado por Gerencia, este campo se ignora.</div>
     </div>
@@ -1642,7 +1672,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 28;
+const BUILD_ACTUAL = 29;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1651,11 +1681,13 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">23 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">4 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>⏳ Nuevo módulo <b>Producto en Curado</b> en Inventario: ves lo que está curando en patio, su calidad y fecha de liberación</li>
-      <li>👥 Al <b>Registrar Visita</b> ya aparecen los contactos del cliente (el principal viene precargado). Si escribes uno nuevo, queda guardado en 📇 Contactos</li>
-      <li>📊 En <b>Mis APs</b> cada pedido muestra cuánto se ha entregado y cuánto falta por despachar, y el historial de entregas indica cuántas unidades salieron en cada viaje (despachos desde hoy)</li>
+      <li>💲 <b>Precios oficiales nuevos</b> de la tabla de Gerencia (con IVA, peso, estiba y unidades por viaje) y 44 productos nuevos</li>
+      <li>💳 <b>Forma de pago</b>: Contado o Crédito (pide los días de crédito)</li>
+      <li>🚚 <b>Flete</b>: ahora pregunta <b>con o sin flete</b> y si va <b>incluido en el costo del producto</b>. Si va incluido, reparte el flete por unidad o por peso, pide el <b>número de viajes</b> y verifica la capacidad por viaje</li>
+      <li>🧱 Pregunta <b>¿lleva costo de estiba?</b> con el valor oficial por unidad</li>
+      <li>🧾 El IVA del flete sigue la regla de Gerencia (gravado, excluido o mixto)</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2339,22 +2371,24 @@ ${entregas.length ? `<div style="margin-top:8px;font-size:.7rem;color:#555;">
 <div class="card-title">Productos</div>`;
 
 let total = 0;
-let iva = 0;
 const flete = parseFloat(ap.flete_valor) || 0;
-// Flete prorrateado por unidad — misma lógica usada al calcular el pedido
-// (fletePorUnidad = flete / total de unidades de la AP) y la misma que ahora
-// también muestra Despacho, para que ambas apps digan exactamente lo mismo.
-const totalUnidadesAP = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
-const fletePorUnidadAP = totalUnidadesAP > 0 ? flete / totalUnidadesAP : 0;
+const _incl = ap.flete_incorporado === true || String(ap.flete_incorporado).toUpperCase() === 'TRUE' || String(ap.flete_incorporado).toUpperCase() === 'VERDADERO';
+const R = calcPedido(lineas.map(function (l) {
+  const pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
+  return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
+    precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
+    tipo_iva: pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
+}), { conFlete: flete > 0, flete: flete, incluido: _incl, llevaEstiba: 'SI', viajes: 1 });
+const _filaEstiba = R.estiba > 0 ? '<div class="resumen-row"><span>Estiba</span><span>' + fmt(R.estiba) + '</span></div>' : '';
 lineas.forEach((l,i) => {
+const fletePorUnidadAP = R.lineas[i].fleteUnit;
 const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
 const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
-const precio = prod ? prod.precio_base : 0;
+const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (prod ? prod.precio_base : 0);
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
 const sub = cant * precio * (1 - desc);
 total += sub;
-if (prod && prod.tipo_iva === 'G') iva += sub * 0.19;
 const precioConDescuento = precio * (1 - desc);
 const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
 // Pendiente por despachar — antes solo se mostraba "Desp: X" (el vendedor
@@ -2378,9 +2412,10 @@ html += `
 html += `
 <div style="margin-top:1rem;padding-top:0.75rem;border-top:2px solid var(--borde);">
 <div class="resumen-row"><span>Subtotal</span><span>${fmt(total)}</span></div>
-<div class="resumen-row"><span>Flete</span><span>${fmt(flete)}</span></div>
-<div class="resumen-row"><span>IVA</span><span>${fmt(iva)}</span></div>
-<div class="resumen-row total"><span>TOTAL</span><span>${fmt(total+flete+iva)}</span></div>
+${_filaEstiba}
+<div class="resumen-row"><span>Flete${R.incluido ? " (incluido en el precio)" : ""}</span><span>${fmt(flete)}</span></div>
+<div class="resumen-row"><span>IVA</span><span>${fmt(R.iva)}</span></div>
+<div class="resumen-row total"><span>TOTAL</span><span>${fmt(R.total)}</span></div>
 </div>`;
 
 if (ap.estado_ap === "Pendiente" || ap.estado_ap === "Modificado") {
@@ -2645,9 +2680,11 @@ transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteValorInput','transportistaFleteInput']
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
+const _nv = document.getElementById('numViajes'); if (_nv) _nv.value = '1';
+const _ce = document.getElementById('fleteContraEntregaCheck'); if (_ce) _ce.checked = false;
 toggleDatosEntrega();
 limpiarCliente();
 renderLineasAP();
@@ -2837,7 +2874,7 @@ const precioBase = calidad==='SEGUNDA'
 // pasa por aquí).
 alert.textContent = '';
 
-const estiba = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
+const estiba = (STATE.pedido && STATE.pedido.lleva_estiba === 'SI') ? (parseFloat(p.valor_estiba_unidad) || 0) : 0;
 const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
 const unitAntesIva = precioBase * (1 - desc) + estiba + postes;
 document.getElementById('detallePrecio').value = fmt(unitAntesIva);
@@ -2895,7 +2932,9 @@ valor_postes: postesFinal,
 flete_a: p.flete_a,
 flete_b: p.flete_b,
 peso_kg_unitario: pesoFinal,
-peso_origen: pesoOrigen
+peso_origen: pesoOrigen,
+u_viaje: parseFloat(p.unidades_por_viaje) || 0,
+estiba_tabla: parseFloat(p.valor_estiba_unidad) || 0
 });
 
 cerrarModal('modalDetalle');
@@ -2923,7 +2962,7 @@ function renderLineasAP() {
       : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 1a</span>';
     const unitResultante = (typeof l._precioUnitResultante === "number") ? l._precioUnitResultante : null;
     const fletePesoTxt = (typeof l._fletePorUnidadPeso === "number")
-      ? ' · 🚚 Flete (por peso): $' + fmt(l._fletePorUnidadPeso) + '/u'
+      ? ' · 🚚 Flete (' + (l._fleteModo === 'peso' ? 'por peso' : 'por unidades') + '): $' + fmt(l._fletePorUnidadPeso) + '/u'
       : (l.peso_kg_unitario > 0 ? '' : '');
     return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
@@ -2950,14 +2989,13 @@ function eliminarLinea(i) {
 // =============================================================================
 function toggleDatosEntrega() {
 const tipo = document.getElementById('tipoEntrega')?.value || '';
+const conFlete = document.getElementById('conFlete')?.value || '';
+const hay = conFlete === 'SI' && !!tipo && tipo !== 'PLANTA';
+const gd = document.getElementById('grupoDestino'); if (gd) gd.style.display = conFlete === 'SI' ? 'block' : 'none';
 const extra = document.getElementById('datosEntregaExtra');
 if (extra) extra.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
+const fg = document.getElementById('fleteGroup'); if (fg) fg.style.display = hay ? 'block' : 'none';
 const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
-const sugerido = tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0;
-const fleteGroup = document.getElementById('fleteGroup');
-if (fleteGroup) fleteGroup.style.display = tipo && tipo !== 'PLANTA' ? 'block' : 'none';
-const dispEl = document.getElementById('fleteSugeridoDisplay');
-if (dispEl) dispEl.value = fmt(sugerido);
 const basculaEl = document.getElementById('basculaWarning');
 if (basculaEl) {
 const restringido = tarifa && (tarifa.bascula_restriccion === true || tarifa.bascula_restriccion === 'TRUE' || tarifa.bascula_restriccion === 'VERDADERO');
@@ -2965,131 +3003,168 @@ const capMax = tarifa ? (parseFloat(tarifa.capacidad_maxima_bascula) || 0) : 0;
 if (restringido && capMax > 0) {
 basculaEl.style.display = 'block';
 basculaEl.textContent = 'Ruta con restriccion de bascula: maximo ' + capMax + ' unidades por viaje. Si el pedido supera esta cantidad, coordina con Despacho para dividir en varios viajes.';
-} else {
-basculaEl.style.display = 'none';
-}
+} else { basculaEl.style.display = 'none'; }
 }
 const inputEl = document.getElementById('fleteValorInput');
-if (inputEl && (inputEl.value === '' || inputEl.dataset.autofilled === '1')) {
-inputEl.value = sugerido || '';
-inputEl.dataset.autofilled = '1';
-}
+if (inputEl) inputEl.dataset.autofilled = '1';
+calcularTotales();
 }
 
 function calcularTotales() {
 const lineas = STATE.pedido.lineas;
-const tipo = document.getElementById('tipoEntrega')?.value || "PLANTA";
-STATE.pedido.tipo_entrega = tipo;
-STATE.pedido.destino = tipo;
-STATE.pedido.fecha_entrega = document.getElementById('fechaEntregaSolicitada')?.value || '';
-STATE.pedido.obs_entrega = document.getElementById('obsEntrega')?.value || '';
-STATE.pedido.direccion_obra = document.getElementById('direccionObra')?.value || '';
-STATE.pedido.contacto_obra = document.getElementById('contactoObra')?.value || '';
-STATE.pedido.cel_contacto = document.getElementById('celContactoObra')?.value || '';
-STATE.pedido.orden_compra_cliente = document.getElementById('ordenCompraCliente')?.value || '';
-STATE.pedido.cotizacion_ref = document.getElementById('cotizacionRef')?.value || '';
-STATE.pedido.condiciones_pago = document.getElementById('condicionesPago')?.value || '';
-STATE.pedido.nombre_obra = document.getElementById('nombreObra')?.value || '';
-STATE.pedido.transportista_flete = document.getElementById('transportistaFleteInput')?.value || '';
+const P = STATE.pedido;
+const g = function (id) { return document.getElementById(id); };
+const val = function (id) { return g(id) ? g(id).value : ''; };
+const conFlete = val('conFlete');
+const tipo = conFlete === 'SI' ? (val('tipoEntrega') || 'PLANTA') : 'PLANTA';
+P.tipo_entrega = tipo;
+P.destino = tipo;
+P.con_flete = conFlete;
+P.fecha_entrega = val('fechaEntregaSolicitada');
+P.obs_entrega = val('obsEntrega');
+P.direccion_obra = val('direccionObra');
+P.contacto_obra = val('contactoObra');
+P.cel_contacto = val('celContactoObra');
+P.orden_compra_cliente = val('ordenCompraCliente');
+P.cotizacion_ref = val('cotizacionRef');
+P.nombre_obra = val('nombreObra');
+P.transportista_flete = val('transportistaFleteInput');
+P.forma_pago = val('formaPago');
+P.dias_credito = val('diasCredito');
+if (g('diasCreditoGrp')) g('diasCreditoGrp').style.display = P.forma_pago === 'CREDITO' ? 'block' : 'none';
+P.condiciones_pago = P.forma_pago === 'CREDITO' ? ('Crédito ' + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
+if (g('condicionesPago')) g('condicionesPago').value = P.condiciones_pago;
+P.lleva_estiba = val('llevaEstiba');
+P.flete_incluido = val('fleteIncluidoSel');
+const chk = g('fleteIncorporadoCheck'); if (chk) chk.checked = P.flete_incluido === 'SI';
+P.num_viajes = Math.max(1, parseInt(val('numViajes')) || 1);
 
-if (!lineas.length) {
-document.getElementById('resumenAP').style.display = 'none';
-return;
-}
-
+const hayFlete = conFlete === 'SI' && tipo !== 'PLANTA';
+if (g('grupoViajes')) g('grupoViajes').style.display = hayFlete && P.flete_incluido === 'SI' ? 'block' : 'none';
 const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
-const fleteSugerido = tipo === 'PLANTA' ? 0 : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) : 0);
-const fleteInputRaw = document.getElementById('fleteValorInput')?.value;
-const flete = tipo === 'PLANTA' ? 0 : (fleteInputRaw === '' || fleteInputRaw === undefined ? fleteSugerido : (parseFloat(fleteInputRaw) || 0));
-STATE.pedido.flete_valor = flete;
-STATE.pedido.flete_sugerido = fleteSugerido;
-STATE.pedido.flete_negociado = tipo !== 'PLANTA' && Math.round(flete) !== Math.round(fleteSugerido);
+const factor = P.flete_incluido === 'SI' ? P.num_viajes : 1;
+const fleteSugerido = hayFlete ? (tarifa ? (parseFloat(tarifa.valor_lista) || 0) * factor : 0) : 0;
+if (g('fleteSugeridoDisplay')) g('fleteSugeridoDisplay').value = fmt(fleteSugerido);
+const inp = g('fleteValorInput');
+if (inp && hayFlete && (inp.value === '' || inp.dataset.autofilled === '1')) { inp.value = fleteSugerido || ''; inp.dataset.autofilled = '1'; }
+const fleteRaw = inp ? inp.value : '';
+const flete = hayFlete ? (fleteRaw === '' ? fleteSugerido : (parseFloat(fleteRaw) || 0)) : 0;
+P.flete_valor = flete;
+P.flete_sugerido = fleteSugerido;
+P.flete_negociado = hayFlete && Math.round(flete) !== Math.round(fleteSugerido);
 
-// El IVA se aplica ÚNICAMENTE por producto, según su columna G/E
-// (tipo_iva) en PRECIOS_GERENCIA — nunca sobre el flete, para no generar
-// doble IVA. El flete solo puede prorratearse en el valor unitario o
-// cobrarse aparte; en ningún caso lleva IVA propio.
-const fletePorratear = !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked);
-
-const totalUnidades = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
-const fletePorUnidad = fletePorratear && totalUnidades > 0 ? flete / totalUnidades : 0;
-
-// NUEVO — prorrateo de flete por PESO (solo informativo/desglose por línea;
-// NO cambia el total del pedido ni el IVA, que siguen calculándose exacto
-// igual que antes con fletePorUnidad). Se activa únicamente cuando TODAS las
-// líneas del pedido tienen peso_kg_unitario > 0 (de Gerencia o escrito a
-// mano); si falta el peso de cualquier producto, no se calcula nada aquí y
-// las pantallas que lo muestren deben caer de vuelta al reparto por unidades.
-const todasConPeso = lineas.length > 0 && lineas.every(l => (parseFloat(l.peso_kg_unitario) || 0) > 0);
-const pesoTotalPedido = todasConPeso
-  ? lineas.reduce((acc, l) => acc + l.cantidad_solicitada * l.peso_kg_unitario, 0)
-  : 0;
-let _fleteAsignadoPeso = 0;
-
-let subtotal = 0;
-let descuentos = 0;
-let iva = 0;
-
-lineas.forEach((l, idx) => {
-const base = l.cantidad_solicitada * l.precio_base;
-const desc = base * l.descuento_aplicado;
-const neto = base - desc;
-subtotal += base;
-descuentos += desc;
-const gravado = (l.tipo_iva || 'E') === 'G';
-
-// Precio unitario resultante (después de descuento, flete prorrateado e
-// IVA) — replica la fórmula real del FORMATO AP en Excel: el flete
-// unitario se suma al precio ANTES del IVA cuando se prorratea, y el 19%
-// (si el producto es gravado) aplica sobre ese valor ya con flete
-// incluido — igual que columna G (VALOR UNITARIO) y P*H (TOTAL IVA) del
-// formato físico. Si el flete se cobra aparte, no se prorratea y por lo
-// tanto no se grava (el IVA solo recae sobre el producto).
-const unitNeto = l.precio_base * (1 - l.descuento_aplicado) + (l.valor_estiba || 0) + (l.valor_postes || 0);
-const unitAntesIva = fletePorratear ? unitNeto + fletePorUnidad : unitNeto;
-l._precioUnitResultante = gravado ? unitAntesIva * 1.19 : unitAntesIva;
-
-const netoConFlete = l.cantidad_solicitada * unitAntesIva;
-if (gravado) iva += netoConFlete * 0.19;
-
-// Desglose de flete por peso — misma técnica de "residuo a la última línea"
-// que ya se usa en el informe de negociación, para que la suma de las
-// líneas cuadre exacto con el flete total cobrado.
-if (todasConPeso && flete > 0 && pesoTotalPedido > 0) {
-  const pesoLinea = l.cantidad_solicitada * l.peso_kg_unitario;
-  const esUltima = idx === lineas.length - 1;
-  if (!esUltima) {
-    l._fleteLineaPeso = flete * (pesoLinea / pesoTotalPedido); // sin redondear
-    _fleteAsignadoPeso += l._fleteLineaPeso;
-  } else {
-    l._fleteLineaPeso = flete - _fleteAsignadoPeso;
-  }
-  l._fletePorUnidadPeso = l.cantidad_solicitada > 0 ? (l._fleteLineaPeso / l.cantidad_solicitada) : 0; // sin redondear
-} else {
-  l._fleteLineaPeso = null;
-  l._fletePorUnidadPeso = null;
+const msg = g('viajesMsg');
+P._capExcede = false;
+if (!lineas.length) {
+  if (msg) msg.style.display = 'none';
+  g('resumenAP').style.display = 'none';
+  return;
 }
+
+const R = calcPedido(lineas, { conFlete: hayFlete, flete: flete, incluido: P.flete_incluido === 'SI', llevaEstiba: P.lleva_estiba, viajes: P.num_viajes });
+lineas.forEach(function (l, i) {
+  const x = R.lineas[i];
+  l.valor_estiba = x.estiba;
+  l._fleteUnit = x.fleteUnit;
+  l._precioUnitResultante = x.unitFinal;
+  l._fletePorUnidadPeso = R.incluido ? x.fleteUnit : null;
+  l._fleteModo = R.modo;
 });
 
-// El flete SIEMPRE forma parte del total (esté prorrateado o aparte) — lo
-// único que cambia es cómo se muestra en el resumen: si se prorrateó, ya
-// quedó absorbido dentro del valor de cada línea (arriba) y por eso no se
-// repite como fila aparte, pero su valor sigue sumando al total.
-const totalCalculado = subtotal - descuentos + flete + iva;
+if (msg) {
+  if (hayFlete && P.flete_incluido === 'SI') {
+    const cap = capacidadViajes(lineas, P.num_viajes);
+    P._capExcede = cap.excede;
+    const pct = Math.round(cap.fraccion * 100);
+    let t = cap.excede ? '⚠️ Excede la capacidad por viaje (' + pct + '% de un viaje lleno). Con estas cantidades se necesitan mínimo ' + cap.minViajes + ' viaje(s).' : '✅ Dentro de la capacidad por viaje (' + pct + '% de un viaje lleno).';
+    if (cap.sinDato.length) t += ' (Sin dato de capacidad: ' + cap.sinDato.join(', ') + ')';
+    if (R.modo === 'unidades_sin_peso') t += ' · Falta el peso de algún producto: el flete se reparte por unidades.';
+    msg.textContent = t; msg.style.display = 'block'; msg.style.color = cap.excede ? '#b91c1c' : '#166534';
+  } else { msg.style.display = 'none'; }
+}
 
-document.getElementById('rSubtotal').textContent = fmt(subtotal);
-document.getElementById('rDescuentos').textContent = '-' + fmt(descuentos);
-document.getElementById('rFlete').textContent = fletePorratear ? 'Incorporado al precio (' + fmt(flete) + ')' : fmt(flete);
-document.getElementById('rIva').textContent = fmt(iva);
-document.getElementById('rTotal').textContent = fmt(totalCalculado);
-document.getElementById('resumenAP').style.display = 'block';
-STATE.pedido._totales = { subtotal, descuentos, flete, flete_prorrateado: fletePorratear, iva, total: totalCalculado };
+g('rSubtotal').textContent = fmt(R.subtotal);
+g('rDescuentos').textContent = '-' + fmt(R.descuentos);
+if (g('rowEstiba')) { g('rowEstiba').style.display = R.estiba + R.postes > 0 ? '' : 'none'; g('rEstiba').textContent = fmt(R.estiba + R.postes); }
+g('rFlete').textContent = R.incluido ? 'Incorporado al precio (' + fmt(flete) + ')' : fmt(flete);
+g('rIva').textContent = fmt(R.iva);
+g('rTotal').textContent = fmt(R.total);
+g('resumenAP').style.display = 'block';
+P._totales = { subtotal: R.subtotal, descuentos: R.descuentos, estiba: R.estiba + R.postes, flete: flete, flete_prorrateado: R.incluido, flete_gravado: R.fleteGrav, modo_flete: R.modo, viajes: P.num_viajes, iva: R.iva, iva_flete: R.ivaFlete, total: R.total };
 
 // Solo re-renderizar líneas si ya hay un número de AP válido, para no
 // disparar el aviso de renderLineasAP() en cada tecla mientras se escribe.
 const apIdActual = parseInt(document.getElementById('inputApId')?.value);
 if (apIdActual && apIdActual >= 1) renderLineasAP();
 guardarBorradorPedido();
+}
+
+
+// ===== MOTOR DE CALCULO DEL PEDIDO (indicaciones de la Gerente, oct 2026) =====
+// Orden: precio - descuento + estiba + flete (si va incluido) -> sobre eso el IVA.
+// Flete incluido: misma referencia = flete / unidades; varias referencias = por peso (precio por kg).
+// IVA del flete: productos gravados -> gravado; mixto -> gravado solo si lo gravado (en dinero) supera a lo excluido.
+function calcPedido(lineas, cfg) {
+  const IVA = 0.19;
+  const L = lineas.map(function (l) {
+    const cant = parseFloat(l.cantidad_solicitada) || 0;
+    const estiba = cfg.llevaEstiba === 'SI' ? (parseFloat(l.estiba_tabla) || 0) : 0;
+    const postes = parseFloat(l.valor_postes) || 0;
+    const pb = parseFloat(l.precio_base) || 0, d = parseFloat(l.descuento_aplicado) || 0;
+    return { cant: cant, estiba: estiba, postes: postes, base: cant * pb, desc: cant * pb * d, unitNeto: pb * (1 - d) + estiba + postes,
+      grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
+  });
+  const flete = cfg.conFlete ? (parseFloat(cfg.flete) || 0) : 0;
+  const netoG = L.reduce(function (s, x) { return s + (x.grav ? x.cant * x.unitNeto : 0); }, 0);
+  const netoE = L.reduce(function (s, x) { return s + (x.grav ? 0 : x.cant * x.unitNeto); }, 0);
+  const mixto = netoG > 0 && netoE > 0;
+  const fleteGrav = flete > 0 && (mixto ? netoG > netoE : netoG > 0);
+  const incl = flete > 0 && !!cfg.incluido;
+  const totalU = L.reduce(function (s, x) { return s + x.cant; }, 0);
+  const refs = {}; L.forEach(function (x) { refs[x.ref] = 1; });
+  const nRefs = Object.keys(refs).length;
+  const todasPeso = L.length > 0 && L.every(function (x) { return x.peso > 0; });
+  let modo = '';
+  let fu = L.map(function () { return 0; });
+  if (incl && totalU > 0) {
+    if (nRefs > 1 && todasPeso) {
+      const pesoTot = L.reduce(function (s, x) { return s + x.cant * x.peso; }, 0);
+      const porKg = flete / pesoTot;
+      fu = L.map(function (x) { return porKg * x.peso; }); modo = 'peso';
+    } else {
+      fu = L.map(function () { return flete / totalU; }); modo = nRefs > 1 ? 'unidades_sin_peso' : 'unidades';
+    }
+  }
+  let subtotal = 0, descuentos = 0, estiba = 0, postes = 0, iva = 0, ivaFlete = 0;
+  const out = L.map(function (x, i) {
+    subtotal += x.base; descuentos += x.desc; estiba += x.cant * x.estiba; postes += x.cant * x.postes;
+    iva += x.grav ? x.cant * x.unitNeto * IVA : 0;
+    const gf = incl && fleteGrav;
+    if (gf) ivaFlete += x.cant * fu[i] * IVA;
+    return { estiba: x.estiba, fleteUnit: fu[i], unitFinal: x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1) };
+  });
+  if (flete > 0 && !incl && fleteGrav) ivaFlete = flete * IVA;
+  const ivaTotal = iva + ivaFlete;
+  return { lineas: out, subtotal: subtotal, descuentos: descuentos, estiba: estiba, postes: postes, flete: flete,
+    iva: ivaTotal, ivaProductos: iva, ivaFlete: ivaFlete, fleteGrav: fleteGrav, mixto: mixto, incluido: incl, modo: modo,
+    total: subtotal - descuentos + estiba + postes + flete + ivaTotal };
+}
+
+function capacidadViajes(lineas, viajes) {
+  const n = Math.max(1, parseInt(viajes) || 1);
+  let suma = 0; const sinDato = [];
+  lineas.forEach(function (l) {
+    const c = parseFloat(l.cantidad_solicitada) || 0, cap = parseFloat(l.u_viaje) || 0;
+    if (cap > 0) suma += c / cap; else if (c > 0) sinDato.push(l.tmdescrip || l.tmcode);
+  });
+  return { n: n, fraccion: suma / n, minViajes: Math.max(1, Math.ceil(suma - 1e-9)), excede: suma / n > 1 + 1e-9, sinDato: sinDato };
+}
+
+function cambiarConFlete() {
+  const v = document.getElementById('conFlete') ? document.getElementById('conFlete').value : '';
+  const sel = document.getElementById('tipoEntrega');
+  if (sel) { if (v === 'NO') sel.value = 'PLANTA'; else if (v === 'SI' && sel.value === 'PLANTA') sel.value = ''; }
+  toggleDatosEntrega();
 }
 
 // =============================================================================
@@ -3156,6 +3231,9 @@ setVal('celContactoObra', p.cel_contacto);
 setVal('ordenCompraCliente', p.orden_compra_cliente);
 setVal('cotizacionRef', p.cotizacion_ref);
 setVal('condicionesPago', p.condiciones_pago);
+setVal('formaPago', p.forma_pago); setVal('diasCredito', p.dias_credito); setVal('llevaEstiba', p.lleva_estiba);
+setVal('conFlete', p.con_flete || (((p.destino || p.tipo_entrega || 'PLANTA') === 'PLANTA') ? 'NO' : 'SI'));
+setVal('fleteIncluidoSel', p.flete_incluido); setVal('numViajes', p.num_viajes || 1);
 setVal('nombreObra', p.nombre_obra);
 
 const selTipo = document.getElementById('tipoEntrega');
@@ -3458,10 +3536,11 @@ async function cerrarCesionYGenerarInforme(){
         // NUEVO: desglose de precio unitario (con descuento / con descuento+flete),
         // mismo dato que ya se muestra en Despacho y en "Mis APs" de Comercial.
         const _precioConDescuentoU = (l.precio_base||0) * (1 - (l.descuento_aplicado||0)); // sin redondear
-        const _precioConDescuentoYFleteU = _precioConDescuentoU + _fletePorUnidadPedido;
+        const _fleteLin = (it.totales && it.totales.flete_prorrateado && typeof l._fleteUnit === 'number') ? l._fleteUnit : 0;
+        const _precioConDescuentoYFleteU = _precioConDescuentoU + _fleteLin;
         doc.setFontSize(6.8); doc.setTextColor(120);
         let _nota = 'P. unit. con desc.: $' + fmtN(_precioConDescuentoU);
-        if (_fletePorUnidadPedido > 0) _nota += '  ·  Flete/u: $' + fmtN(_fletePorUnidadPedido) + '  ·  Con desc.+flete: $' + fmtN(_precioConDescuentoYFleteU);
+        if (_fleteLin > 0) _nota += '  ·  Flete/u: $' + fmtN(_fleteLin) + '  ·  Con desc.+flete: $' + fmtN(_precioConDescuentoYFleteU);
         doc.text(_nota, colX.prod, y);
         doc.setFontSize(8); doc.setTextColor(0);
         y += 4.7;
@@ -3478,7 +3557,8 @@ async function cerrarCesionYGenerarInforme(){
         doc.text('Descuentos: -$' + fmtN(t.descuentos), pageW - 14, y, {align:'right'}); y += 5;
         // El flete siempre se muestra por separado con su valor real (igual que
         // en Despacho) — nunca mezclado dentro del precio unitario del producto.
-        doc.text('Flete: $' + fmtN(t.flete), pageW - 14, y, {align:'right'}); y += 5;
+        if (t.estiba > 0) { doc.text('Estiba: $' + fmtN(t.estiba), pageW - 14, y, {align:'right'}); y += 5; }
+        doc.text('Flete: $' + fmtN(t.flete) + (t.flete_prorrateado ? ' (incluido en el precio)' : ''), pageW - 14, y, {align:'right'}); y += 5;
         doc.text('IVA: $' + fmtN(t.iva), pageW - 14, y, {align:'right'}); y += 5;
         doc.setFont(undefined, 'bold');
         doc.text('TOTAL: $' + fmtN(t.total), pageW - 14, y, {align:'right'});
@@ -3663,6 +3743,20 @@ if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
 if (!STATE.pedido.lineas.length) { toast("Agrega al menos un producto"); return; }
 const apManual = parseInt(document.getElementById('inputApId')?.value);
 if (!apManual || apManual < 1) { toast("⚠️ Escribe el número de AP del libro físico"); return; }
+calcularTotales();
+{
+  const P = STATE.pedido;
+  if (!P.forma_pago) { toast("⚠️ Indica la forma de pago (Contado o Crédito)"); return; }
+  if (P.forma_pago === 'CREDITO' && !(parseInt(P.dias_credito) > 0)) { toast("⚠️ Escribe los días de crédito"); return; }
+  if (!P.lleva_estiba) { toast("⚠️ Indica si lleva costo de estiba (Sí o No)"); return; }
+  if (!P.con_flete) { toast("⚠️ Indica si el pedido va con o sin flete"); return; }
+  if (P.con_flete === 'SI') {
+    if (!P.tipo_entrega || P.tipo_entrega === 'PLANTA') { toast("⚠️ Selecciona el destino de entrega"); return; }
+    if (!P.flete_incluido) { toast("⚠️ Indica si el flete va incluido en el costo del producto"); return; }
+    if (!(P.flete_valor > 0)) { toast("⚠️ Escribe el valor del flete a cobrar al cliente"); return; }
+    if (P.flete_incluido === 'SI' && P._capExcede) { toast("⚠️ Las unidades exceden la capacidad por viaje. Aumenta el número de viajes."); return; }
+  }
+}
 
 // Venta de apoyo: si el checkbox está marcado, la AP debe quedar a nombre
 // del vendedor real (para que sus métricas no se pierdan), con nota de
@@ -3701,6 +3795,9 @@ transportista_flete: STATE.pedido.transportista_flete || '',
 flete_negociado: !!STATE.pedido.flete_negociado,
 flete_incorporado: !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked),
 flete_contra_entrega: !!(document.getElementById('fleteContraEntregaCheck') && document.getElementById('fleteContraEntregaCheck').checked),
+numero_viajes: STATE.pedido.flete_incluido === 'SI' ? STATE.pedido.num_viajes : '',
+lleva_estiba: STATE.pedido.lleva_estiba || '',
+flete_gravado: (STATE.pedido._totales && STATE.pedido.flete_valor > 0) ? (STATE.pedido._totales.flete_gravado ? 'SI' : 'NO') : '',
 fecha_entrega: STATE.pedido.fecha_entrega || '',
 obs_entrega: STATE.pedido.obs_entrega || '',
 direccion_obra: STATE.pedido.direccion_obra || '',
