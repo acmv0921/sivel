@@ -1244,7 +1244,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // Se muestra UNA sola vez por compilación (guardado en localStorage con la
 // clave de esta compilación). Si se sube una nueva compilación, cambiar
 // BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 7;
+const BUILD_ACTUAL = 8;
 function mostrarNovedadesBuild() {
   // Clave con prefijo propio (desde C7): Comercial usa 'sivil_update_visto_build'
   // en el mismo dominio, y un número de compilación repetido podía ocultar el aviso.
@@ -1255,11 +1255,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#7c3200;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">23 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">4 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🚚 Cada despacho ahora guarda <strong>cuántas unidades salieron en ese viaje</strong>. Los vendedores lo ven en el historial de entregas de su AP</li>
-      <li>⏳ Los vendedores ya ven en su app los lotes que registras en <strong>Curado</strong> (producto, calidad y fecha de liberación). Mantén las fechas al día con ✏️ Editar</li>
-      <li>📊 Los vendedores ya ven en cada AP cuánto se ha entregado y cuánto falta por despachar</li>
+      <li>💲 Precios, IVA, pesos, estiba y unidades por viaje actualizados con la <strong>tabla oficial de Gerencia</strong></li>
+      <li>🚚 El <strong>flete por unidad</strong> ahora solo aparece cuando el flete va <strong>incluido en el precio</strong>, y se reparte por peso si el pedido lleva varias referencias</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1946,9 +1945,10 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
   // el pedido (fletePorUnidad = flete / totalUnidades).
   const totalUnidadesAP = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
   const fleteAP = Number(ap.flete_valor) || 0;
-  const fletePorUnidadAP = totalUnidadesAP > 0 ? fleteAP / totalUnidadesAP : 0;
+  const _fuAP = fleteUnitarioAP(ap, lineas);
 
   lineas.forEach((l, i) => {
+    const fletePorUnidadAP = _fuAP[i];
     const sol  = parseFloat(l.cantidad_solicitada) || 0;
     const desp = parseFloat(l.cantidad_despachada) || 0;
     const pend = sol - desp;
@@ -2168,15 +2168,15 @@ async function confirmarDespacho() {
   // registrado en lo que se comparte).
   const _totalUnidadesInforme = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
   const _fleteInforme = Number(ap.flete_valor) || 0;
-  const _fletePorUnidadInforme = _totalUnidadesInforme > 0 ? _fleteInforme / _totalUnidadesInforme : 0;
-  const lineasInforme = lineas.map(l => ({
+  const _fuInf = fleteUnitarioAP(ap, lineas);
+  const lineasInforme = lineas.map((l, _ix) => ({
     tmcode: l.tmcode,
     nombre: nombreProducto(l.tmcode),
     unidad: undProducto(l.tmcode),
     cantidad: parseFloat(document.getElementById(`carga_${l.detalle_id}`)?.value) || (parseFloat(l.cantidad_solicitada)||0) - (parseFloat(l.cantidad_despachada)||0),
     precio_base: parseFloat(l.precio_base) || 0,
     descuento_aplicado: parseFloat(l.descuento_aplicado) || 0,
-    flete_unidad: _fletePorUnidadInforme
+    flete_unidad: _fuInf[_ix]
   }));
 
   // NOTA: se eliminó una llamada a accion:'generarInformeDespacho' que existía aquí — el
@@ -3103,6 +3103,24 @@ function renderFotosDespacho() {
 // =============================================================================
 // REPORTE WHATSAPP
 // =============================================================================
+function fleteUnitarioAP(ap, lineas) {
+  const flete = Number(ap && ap.flete_valor) || 0;
+  const v = String(ap && ap.flete_incorporado).toUpperCase();
+  const incl = (ap && ap.flete_incorporado === true) || v === 'TRUE' || v === 'VERDADERO';
+  const out = lineas.map(function () { return 0; });
+  if (!flete || !incl) return out;
+  const cant = lineas.map(function (l) { return parseFloat(l.cantidad_solicitada) || 0; });
+  const totalU = cant.reduce(function (a, b) { return a + b; }, 0);
+  if (!totalU) return out;
+  const pesos = lineas.map(function (l) { const p = (S.productos || []).find(function (x) { return String(x.tmcode) === String(l.tmcode); }); return parseFloat(p && p.peso_kg_unitario) || 0; });
+  const refs = {}; lineas.forEach(function (l) { refs[String(l.tmcode)] = 1; });
+  if (Object.keys(refs).length > 1 && pesos.every(function (p) { return p > 0; })) {
+    const pt = cant.reduce(function (s, c, i) { return s + c * pesos[i]; }, 0);
+    return pesos.map(function (p) { return flete / pt * p; });
+  }
+  return out.map(function () { return flete / totalU; });
+}
+
 function abrirReporteWA(ap_id, placa, conductor, cargueManual) {
   const ap     = S.aps.find(a => String(a.ap_id) === String(ap_id));
   const lineas = S.detalles.filter(d => String(d.ap_id) === String(ap_id));
@@ -3114,10 +3132,11 @@ function abrirReporteWA(ap_id, placa, conductor, cargueManual) {
   // (lista / con descuento / con descuento+flete) al mensaje de WhatsApp.
   const _totalUnidadesWA = lineas.reduce((acc, l) => acc + (parseFloat(l.cantidad_solicitada) || 0), 0);
   const _fleteWA = Number(ap?.flete_valor) || 0;
-  const _fletePorUnidadWA = _totalUnidadesWA > 0 ? _fleteWA / _totalUnidadesWA : 0;
+  const _fuWA = fleteUnitarioAP(ap, lineas);
 
   let detalleProd = '';
-  lineas.forEach(l => {
+  lineas.forEach((l, _i) => {
+    const _fletePorUnidadWA = _fuWA[_i];
     const sol  = parseFloat(l.cantidad_solicitada)||0;
     const desp = parseFloat(l.cantidad_despachada)||0;
     const und  = undProducto(l.tmcode);
