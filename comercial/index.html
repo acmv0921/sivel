@@ -1674,7 +1674,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 30;
+const BUILD_ACTUAL = 31;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1683,10 +1683,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">5 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">6 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>📦 "Por tandas" ahora se llama <b>Despachos por porcentajes</b>: cada despacho lleva su fecha y el <b>% del pedido</b>, y la app te avisa si la suma no da 100%</li>
-      <li>🥇🥈 El disponible por calidad ya es exacto: lo pedido en <b>primera</b> ya no se descuenta de <b>segunda</b>, ni al revés</li>
+      <li>🚛 <b>Pedidos con productos mezclados</b>: al revisar los viajes ahora ves cuánto <b>cupo</b> del camión ocupa cada producto (por ejemplo 42% + 13%) y el <b>peso total</b> del pedido. El pedido cabe si la suma no pasa de 100% por viaje</li>
+      <li>📋 Datos actualizados con la tabla de Gerencia del 6 de octubre: pesos, estibas y unidades por viaje de varios productos, y el <b>Poste 18x1050</b> ya se puede vender</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -3080,9 +3080,19 @@ if (msg) {
     P._capExcede = cap.excede;
     const pct = Math.round(cap.fraccion * 100);
     let t = cap.excede ? '⚠️ Excede la capacidad por viaje (' + pct + '% de un viaje lleno). Con estas cantidades se necesitan mínimo ' + cap.minViajes + ' viaje(s).' : '✅ Dentro de la capacidad por viaje (' + pct + '% de un viaje lleno).';
-    if (cap.sinDato.length) t += ' (Sin dato de capacidad: ' + cap.sinDato.join(', ') + ')';
-    if (R.modo === 'unidades_sin_peso') t += ' · Falta el peso de algún producto: el flete se reparte por unidades.';
-    msg.textContent = t; msg.style.display = 'block'; msg.style.color = cap.excede ? '#b91c1c' : '#166534';
+    if (cap.n > 1) t += ' Son ' + cap.n + ' viajes.';
+    // Desglose del cupo que ocupa cada producto (útil sobre todo en pedidos mezclados).
+    if (cap.detalle.length > 1 || cap.sinDato.length) {
+      t += '\nCupo que ocupa cada producto en un viaje lleno:';
+      cap.detalle.forEach(function (d) {
+        t += '\n• ' + d.nombre + ': ' + fmtNum(d.cant) + ' de ' + fmtNum(d.cap) + ' ' + d.und + ' por viaje = ' + (Math.round(d.pct * 10) / 10) + '%';
+      });
+      t += '\nSuma: ' + Math.round(cap.fraccion * cap.n * 1000) / 10 + '% de un viaje' + (cap.n > 1 ? ' (repartido en ' + cap.n + ' viajes)' : '') + '.';
+    }
+    if (cap.pesoTotal > 0) t += '\nPeso total del pedido: ' + fmtNum(Math.round(cap.pesoTotal)) + ' kg.';
+    if (cap.sinDato.length) t += '\n(Sin dato de unidades por viaje: ' + cap.sinDato.join(', ') + ')';
+    if (R.modo === 'unidades_sin_peso') t += '\nFalta el peso de algún producto: el flete se reparte por unidades.';
+    msg.textContent = t; msg.style.whiteSpace = 'pre-line'; msg.style.display = 'block'; msg.style.color = cap.excede ? '#b91c1c' : '#166534';
   } else { msg.style.display = 'none'; }
 }
 
@@ -3153,14 +3163,24 @@ function calcPedido(lineas, cfg) {
     total: subtotal - descuentos + estiba + postes + flete + ivaTotal };
 }
 
+// Tope de un viaje con productos MEZCLADOS (pregunta de la Gerente, 6 oct 2026):
+// cada producto ocupa un "cupo" del camión = cantidad ÷ unidades por viaje de
+// ese producto (dato oficial de la tabla). El pedido cabe si la suma de cupos
+// no pasa de 100 % por cada viaje. Así se respeta el límite real de cada
+// referencia, sea por peso o por espacio de estibas (por eso no se usa solo el
+// peso total del viaje: hay productos que llenan el camión antes de llegar al
+// peso máximo).
+function fmtNum(n) { return Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }); }
 function capacidadViajes(lineas, viajes) {
   const n = Math.max(1, parseInt(viajes) || 1);
-  let suma = 0; const sinDato = [];
+  let suma = 0, peso = 0; const sinDato = [], detalle = [];
   lineas.forEach(function (l) {
     const c = parseFloat(l.cantidad_solicitada) || 0, cap = parseFloat(l.u_viaje) || 0;
-    if (cap > 0) suma += c / cap; else if (c > 0) sinDato.push(l.tmdescrip || l.tmcode);
+    peso += c * (parseFloat(l.peso_kg_unitario) || 0);
+    if (cap > 0) { suma += c / cap; detalle.push({ nombre: l.tmdescrip || l.tmcode, cant: c, cap: cap, und: l.tmund || 'und', pct: c / cap * 100 }); }
+    else if (c > 0) sinDato.push(l.tmdescrip || l.tmcode);
   });
-  return { n: n, fraccion: suma / n, minViajes: Math.max(1, Math.ceil(suma - 1e-9)), excede: suma / n > 1 + 1e-9, sinDato: sinDato };
+  return { n: n, fraccion: suma / n, minViajes: Math.max(1, Math.ceil(suma - 1e-9)), excede: suma / n > 1 + 1e-9, sinDato: sinDato, detalle: detalle, pesoTotal: peso };
 }
 
 function cambiarConFlete() {
