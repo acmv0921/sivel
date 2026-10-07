@@ -1138,7 +1138,7 @@ function actualizarPrecio(body) {
   const colId = hdrs.indexOf("id_precio");
   for (let i = 1; i < datos.length; i++) {
     if (String(datos[i][colId]) === String(body.id_precio)) {
-      ["precio_base_planta","descuento_max_vendedor","costo_flete_unidad_zonaA","costo_flete_unidad_zonaB","fecha_vigencia_inicio","fecha_vigencia_fin"]
+      ["precio_base_planta","descuento_max_vendedor","costo_flete_unidad_zonaA","costo_flete_unidad_zonaB","precio_m2","fecha_vigencia_inicio","fecha_vigencia_fin"]
         .forEach(campo => { if (body[campo] !== undefined) hoja.getRange(i+1, hdrs.indexOf(campo)+1).setValue(body[campo]); });
       return { ok: true, mensaje: "Precio actualizado" };
     }
