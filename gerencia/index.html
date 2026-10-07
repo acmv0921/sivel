@@ -603,6 +603,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="editFleteB" class="form-control" type="number">
     </div>
     <div class="form-group">
+      <label class="form-label">Precio por m² ($) — opcional</label>
+      <input id="editPrecioM2" class="form-control" type="number" min="0" placeholder="Vacío si aún no tiene precio por m²">
+    </div>
+    <div class="form-group">
       <label class="form-label">Vigencia hasta</label>
       <input id="editHasta" class="form-control" type="date">
     </div>
@@ -1219,7 +1223,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 2;
+const BUILD_ACTUAL = 3;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1228,11 +1232,11 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#14532d;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">23 sep 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">7 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🤝 Pedidos de la reunión de ventas ya en la app Comercial: los vendedores ven el <strong>producto en curado</strong>, los <strong>contactos del cliente</strong> al registrar visita, y cuánto se ha <strong>entregado / falta por despachar</strong> en cada AP</li>
-      <li>🚚 Cada despacho ahora guarda las unidades que salieron en ese viaje</li>
-      <li>📍 Se corrigieron 41 clientes que tenían coordenadas GPS en lugar de su dirección. La lista quedó en la hoja <strong>LIMPIEZA_DIRECCIONES</strong> para completar las direcciones reales</li>
+      <li>📋 Se cargó la <b>tabla de productos y precios del 6 de octubre</b>: nombres oficiales, pesos, estibas, unidades por viaje y el <b>Poste 18x1050</b></li>
+      <li>✏️ En <b>Precios → Editar</b> ya puedes llenar el <b>precio por m²</b> de cada producto (queda vacío en los que la tabla no lo trae)</li>
+      <li>🚛 El flete de <b>Cali</b> ahora sale de la tabla: valor de un viaje lleno de cada producto, y en pedidos mezclados se pondera por el cupo de cada uno</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1842,7 +1846,7 @@ function renderPrecios() {
             Desc. max: <strong>${(parseFloat(p.descuento_max_vendedor)||0)*100}%</strong>
           </div>
           <div style="font-size:.7rem;color:#888;">
-            Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}
+            Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}${(parseFloat(p.precio_m2)||0) > 0 ? ' · m²: ' + fmt(p.precio_m2) : ''}
           </div>
           <div style="font-size:.68rem;color:#888;margin-top:2px;">
             Vigente hasta: ${fHasta ? fHasta.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}) : 'Sin límite'}
@@ -1903,6 +1907,7 @@ function abrirEditPrecio(p) {
   document.getElementById('editDescMax').value     = (parseFloat(precio.descuento_max_vendedor)||0)*100;
   document.getElementById('editFleteA').value      = precio.costo_flete_unidad_zonaA;
   document.getElementById('editFleteB').value      = precio.costo_flete_unidad_zonaB;
+  document.getElementById('editPrecioM2').value    = (parseFloat(precio.precio_m2)||0) > 0 ? precio.precio_m2 : '';
   document.getElementById('editHasta').value       = precio.fecha_vigencia_fin||'';
   document.getElementById('modalEditPrecio').classList.add('show');
 }
@@ -1913,10 +1918,12 @@ async function actualizarPrecio() {
   const descMax = (parseFloat(document.getElementById('editDescMax').value)||0)/100;
   const fleteA  = parseFloat(document.getElementById('editFleteA').value)||0;
   const fleteB  = parseFloat(document.getElementById('editFleteB').value)||0;
+  const m2raw   = document.getElementById('editPrecioM2').value;
   const hasta   = document.getElementById('editHasta').value;
   await escribirGAS({accion:'actualizarPrecio',id_precio:id,
     precio_base_planta:base,descuento_max_vendedor:descMax,
     costo_flete_unidad_zonaA:fleteA,costo_flete_unidad_zonaB:fleteB,
+    precio_m2: m2raw === '' ? '' : (parseFloat(m2raw)||0),   // vacío = sin precio por m²
     fecha_vigencia_fin:hasta});
   cerrarModal('modalEditPrecio');
   toast("✅ Precio actualizado");
