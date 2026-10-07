@@ -711,6 +711,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="viajesMsg" style="display:none;margin-top:.4rem;font-size:.78rem;font-weight:600;"></div>
 <label class="form-label" style="margin-top:.5rem;">💰 Flete de lista (tarifa vigente)</label>
 <input id="fleteSugeridoDisplay" class="form-control" disabled>
+<div id="fleteOrigenHint" style="font-size:.68rem;color:#888;margin-top:2px;"></div>
 <label class="form-label" style="margin-top:.5rem;">✏️ Flete a cobrar al cliente (puedes digitar otro valor)</label>
 <input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="this.dataset.autofilled='0'; calcularTotales();">
 <label class="form-label" style="margin-top:.5rem;">📝 Observaciones del flete (opcional)</label>
@@ -1674,7 +1675,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 31;
+const BUILD_ACTUAL = 32;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1683,10 +1684,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">6 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">7 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🚛 <b>Pedidos con productos mezclados</b>: al revisar los viajes ahora ves cuánto <b>cupo</b> del camión ocupa cada producto (por ejemplo 42% + 13%) y el <b>peso total</b> del pedido. El pedido cabe si la suma no pasa de 100% por viaje</li>
-      <li>📋 Datos actualizados con la tabla de Gerencia del 6 de octubre: pesos, estibas y unidades por viaje de varios productos, y el <b>Poste 18x1050</b> ya se puede vender</li>
+      <li>🚛 El <b>flete de lista para Cali</b> ahora sale de la tabla de Gerencia (valor de un viaje lleno de cada producto). En pedidos mezclados se pondera por el cupo de cada producto</li>
+      <li>📋 Nombres oficiales de productos actualizados; el <b>precio por m²</b> queda vacío donde la tabla no lo trae</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2937,6 +2938,7 @@ flete_b: p.flete_b,
 peso_kg_unitario: pesoFinal,
 peso_origen: pesoOrigen,
 u_viaje: parseFloat(p.unidades_por_viaje) || 0,
+flete_total_viaje: parseFloat(p.flete_total_viaje_cali) || 0,
 estiba_tabla: parseFloat(p.valor_estiba_unidad) || 0
 });
 
@@ -3046,7 +3048,13 @@ const hayFlete = conFlete === 'SI' && tipo !== 'PLANTA';
 if (g('grupoViajes')) g('grupoViajes').style.display = hayFlete && P.flete_incluido === 'SI' ? 'block' : 'none';
 const tarifa = (STATE.tarifasFlete||[]).find(t => t.destino === tipo);
 const factor = P.flete_incluido === 'SI' ? P.num_viajes : 1;
-const fleteSugerido = hayFlete ? (tarifa ? (parseFloat(tarifa.valor_lista) || 0) * factor : 0) : 0;
+// Cali (Norte y Sur): tarifa de la tabla de Gerencia del 6 oct 2026 — valor de un
+// viaje lleno de cada producto (flete_total_viaje_cali). En un pedido mezclado se
+// pondera por el cupo que ocupa cada producto en el camión. Si algún producto no
+// tiene el dato (p. ej. postes), se usa la tarifa por destino de TARIFAS_FLETE.
+const _tarifaCali = (hayFlete && (tipo === 'CALI NORTE' || tipo === 'CALI SUR')) ? fleteViajeCaliTabla(lineas) : 0;
+const fleteSugerido = hayFlete ? (_tarifaCali > 0 ? Math.round(_tarifaCali) * factor : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) * factor : 0)) : 0;
+if (g('fleteOrigenHint')) g('fleteOrigenHint').textContent = !hayFlete ? '' : (_tarifaCali > 0 ? 'Tarifa de Cali según la tabla de Gerencia (viaje lleno de cada producto' + (lineas.length > 1 ? ', ponderado por el cupo de cada uno' : '') + ').' : (tipo === 'CALI NORTE' || tipo === 'CALI SUR') && lineas.length ? 'Algún producto no tiene tarifa por viaje en la tabla: se usa la tarifa por destino.' : '');
 if (g('fleteSugeridoDisplay')) g('fleteSugeridoDisplay').value = fmt(fleteSugerido);
 const inp = g('fleteValorInput');
 if (inp && hayFlete && (inp.value === '' || inp.dataset.autofilled === '1')) { inp.value = fleteSugerido || ''; inp.dataset.autofilled = '1'; }
@@ -3170,6 +3178,16 @@ function calcPedido(lineas, cfg) {
 // referencia, sea por peso o por espacio de estibas (por eso no se usa solo el
 // peso total del viaje: hay productos que llenan el camión antes de llegar al
 // peso máximo).
+// Flete de UN viaje lleno en Cali según la tabla de Gerencia. 0 si falta el dato en algún producto.
+function fleteViajeCaliTabla(lineas) {
+  let cupos = 0, pond = 0, ok = true;
+  lineas.forEach(function (l) {
+    const c = parseFloat(l.cantidad_solicitada) || 0, cap = parseFloat(l.u_viaje) || 0, ft = parseFloat(l.flete_total_viaje) || 0;
+    if (c <= 0) return;
+    if (cap > 0 && ft > 0) { const cupo = c / cap; cupos += cupo; pond += cupo * ft; } else ok = false;
+  });
+  return (ok && cupos > 0) ? pond / cupos : 0;
+}
 function fmtNum(n) { return Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }); }
 function capacidadViajes(lineas, viajes) {
   const n = Math.max(1, parseInt(viajes) || 1);
