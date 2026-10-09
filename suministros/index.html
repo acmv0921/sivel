@@ -381,6 +381,60 @@ function mostrarAvisoActualizacion(reg) {
 <div id="toast" class="toast"></div>
 
 <script>
+// ===== Campos de fecha en formato dd/mm/aaaa (9 oct 2026) =====
+// Los <input type="date"> muestran el formato del celular (a veces mes/día/año).
+// Aquí se convierten en campos de texto dd/mm/aaaa con botón de calendario;
+// el resto del código sigue leyendo/escribiendo .value en formato aaaa-mm-dd.
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  function iso2dma(v) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : (v || ''); }
+  function dma2iso(v) {
+    v = String(v || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); if (!m) return '';
+    var d = +m[1], mo = +m[2], y = +m[3], t = new Date(y, mo - 1, d);
+    if (t.getFullYear() !== y || t.getMonth() !== mo - 1 || t.getDate() !== d) return '';
+    return y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+  function mejorar(el) {
+    if (el.dataset.sivilFecha) return;
+    el.dataset.sivilFecha = '1';
+    var inicial = desc.get.call(el);
+    el.type = 'text';
+    Object.defineProperty(el, 'value', { configurable: true,
+      get: function () { return dma2iso(desc.get.call(el)); },
+      set: function (v) { desc.set.call(el, iso2dma(v)); } });
+    desc.set.call(el, iso2dma(inicial));
+    el.placeholder = 'dd/mm/aaaa'; el.maxLength = 10; el.inputMode = 'numeric'; el.autocomplete = 'off';
+    el.addEventListener('input', function () {
+      var d = desc.get.call(el).replace(/\D/g, '').slice(0, 8), s = d;
+      if (d.length > 4) s = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+      else if (d.length > 2) s = d.slice(0, 2) + '/' + d.slice(2);
+      desc.set.call(el, s);
+      if (s.length === 10 && dma2iso(s)) el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    var w = document.createElement('div');
+    w.style.cssText = 'display:flex;gap:6px;align-items:center;position:relative;';
+    el.parentNode.insertBefore(w, el); w.appendChild(el); el.style.flex = '1'; el.style.minWidth = '0';
+    var sel = document.createElement('input'); sel.type = 'date'; sel.dataset.sivilFecha = '1'; sel.tabIndex = -1;
+    sel.style.cssText = 'position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = '📅'; btn.title = 'Elegir en el calendario';
+    btn.style.cssText = 'border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 9px;font-size:1rem;cursor:pointer;';
+    btn.onclick = function () { sel.value = el.value; try { sel.showPicker ? sel.showPicker() : sel.click(); } catch (e) { sel.click(); } };
+    sel.onchange = function () { if (sel.value) { el.value = sel.value; el.dispatchEvent(new Event('change', { bubbles: true })); } };
+    w.appendChild(btn); w.appendChild(sel);
+  }
+  function barrer(r) { if (r.querySelectorAll) r.querySelectorAll('input[type="date"]').forEach(mejorar); }
+  new MutationObserver(function (ms) {
+    ms.forEach(function (m) { m.addedNodes.forEach(function (n) {
+      if (n.nodeType !== 1) return;
+      if (n.matches && n.matches('input[type="date"]')) mejorar(n); else barrer(n);
+    }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { barrer(document); }); else barrer(document);
+})();
+</script>
+<script>
 // ─────────────────────────────────────────────────────────────
 // SIVIL SUMINISTROS v1.1 — Lorena / Control de Compras + Recetas
 // ─────────────────────────────────────────────────────────────
@@ -439,20 +493,30 @@ function fmt(n) {
   return num.toLocaleString('es-CO');
 }
 
-// Las fechas llegan de Sheets como "Date(2026,9,5,...)" (gviz, mes base 0)
-// o como texto ISO. new Date("Date(...)") daba "Invalid Date".
-function parseFecha(s) {
-  if (!s) return null;
-  if (s instanceof Date) return s;
-  const m = String(s).match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);
-  if (m) return new Date(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
-  const d = new Date(s);
+function _p2(n) { return (n < 10 ? '0' : '') + n; }
+// gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"; los campos de texto traen "2026-10-12"
+function parseFecha(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val) ? null : val;
+  const s = String(val);
+  let m = s.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]), parseInt(m[4] || 0), parseInt(m[5] || 0), parseInt(m[6] || 0));
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/); // solo fecha: se arma en hora local para que no se corra un día
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  const d = new Date(val);
   return isNaN(d) ? null : d;
 }
-function fmtFecha(s) {
-  const d = parseFecha(s);
-  return d ? d.toLocaleDateString('es-CO') : '—';
+function fmtFecha(val) {
+  const d = parseFecha(val);
+  return d ? _p2(d.getDate()) + '/' + _p2(d.getMonth() + 1) + '/' + d.getFullYear() : '—';
 }
+function fmtFechaHora(val) {
+  const d = parseFecha(val);
+  return d ? fmtFecha(d) + ' ' + _p2(d.getHours()) + ':' + _p2(d.getMinutes()) : '';
+}
+
 function fechaInput(s) { // yyyy-mm-dd para <input type="date">
   const d = parseFecha(s); if (!d) return '';
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -1069,7 +1133,7 @@ async function enviarReceta() {
 let _guardandoReceta = false;
 
 // ─── AVISO DE NOVEDADES POR COMPILACIÓN ─────────────────────
-const BUILD_ACTUAL = 1;
+const BUILD_ACTUAL = 2;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_suministros_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) { return; }
@@ -1079,13 +1143,9 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:1.3rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;">🎉</div>
     <div style="font-weight:800;color:#4c1d95;font-size:1.05rem;margin:.3rem 0 .2rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">5 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>📦 El <b>disponible</b> ahora descuenta lo que está en curado y lo comprometido en pedidos pendientes, igual que en Comercial y Despacho</li>
-      <li>🥇🥈 Cada producto aparece una sola vez; la segunda calidad se muestra aparte</li>
-      <li>🔍 Buscador en Inventario y filtro de todos los productos</li>
-      <li>📝 Las notas de compra y las recetas ahora confirman si de verdad se guardaron</li>
-      <li>🔐 La app recuerda tu sesión por 7 días</li>
+      <li>📅 Todas las fechas se muestran como <b>día/mes/año</b> (dd/mm/aaaa), también al escribirlas en las notas de compra</li>
     </ul>
     <button id="btnCerrarAvisoUpdate" style="width:100%;background:#4c1d95;color:#fff;border:none;border-radius:10px;padding:.8rem;font-weight:800;cursor:pointer;">Entendido</button>
   </div>`;
