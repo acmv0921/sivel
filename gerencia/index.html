@@ -488,6 +488,28 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="listaPrecios"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
+
+  <!-- COTIZACIONES (embudo + textos del cotizador) -->
+  <div id="screenCotizaciones" class="screen">
+    <div class="card">
+      <div class="card-title">🧾 Cotizaciones</div>
+      <div style="display:flex;gap:6px;margin-bottom:.6rem;">
+        <button class="btn btn-primary btn-sm" id="gzTabEmbudo" onclick="gzTab('embudo')">📈 Embudo</button>
+        <button class="btn btn-sm" id="gzTabTextos" onclick="gzTab('textos')" style="background:#e5e7eb;color:#1a3a5c;">✏️ Textos del cotizador</button>
+      </div>
+      <div id="gzEmbudo">
+        <div id="gzKpis" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:.6rem;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <select class="form-control" id="gzFVend" onchange="gzRenderEmbudo()"><option value="">Todos los vendedores</option></select>
+          <select class="form-control" id="gzFEst" onchange="gzRenderEmbudo()"><option value="">Todos los estados</option><option>Borrador</option><option>Enviada</option><option>Aceptada</option><option>Perdida</option><option>Anulada</option></select>
+        </div>
+        <input class="form-control" id="gzBuscar" placeholder="🔍 Buscar por número, cliente u obra" oninput="gzRenderEmbudo()" style="margin-bottom:.6rem;">
+        <div id="gzLista"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+      <div id="gzTextos" style="display:none;"></div>
+    </div>
+  </div>
+
   <!-- USUARIOS -->
   <div id="screenUsuarios" class="screen">
     <div class="card">
@@ -652,6 +674,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn"        onclick="irA('screenUsuarios')"     id="navUsuarios">   <span class="icon">👥</span>Usuarios</button>
     <button class="nav-btn" id="navInventDrive" onclick="irA('screenInventDrive')"><span class="icon">📥</span>Inventario</button>
   <button class="nav-btn" id="navInformes" onclick="irA('screenInformes')"><span class="icon">📋</span>Informes</button>
+  <button class="nav-btn" id="navCotiz" onclick="irA('screenCotizaciones');gzInit();"><span class="icon">🧾</span>Cotiz.</button>
   <button class="nav-btn" id="navVisitas" onclick="irA('screenVisitas');cargarVisitas();"><span class="icon">🚶</span>Visitas</button>
 </nav>
 
@@ -1277,7 +1300,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 4;
+const BUILD_ACTUAL = 5;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1289,7 +1312,7 @@ function mostrarNovedadesBuild() {
     <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
       <li>💲 Los valores del informe y de los KPI llevan <b>2 decimales</b> y se <b>truncan</b> (68,794 queda en 68,79)</li>
-      <li>📅 Todas las fechas se muestran como <b>día/mes/año</b> (dd/mm/aaaa), incluidos los filtros del informe</li>
+      <li>🧾 Nuevo módulo <b>Cotiz.</b>: embudo de cotizaciones (enviadas, aceptadas, perdidas con motivo) y edición de los textos de pago, entrega, plazo y observaciones</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2324,7 +2347,7 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
-    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas'};
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInformes') renderInformeGerencia();
   window.scrollTo(0,0);
@@ -2856,6 +2879,95 @@ function mostrarAvisoActualizacion(reg) {
   };
   b.appendChild(btn);
   document.body.appendChild(b);
+}
+</script>
+
+<script>
+// ===== COTIZACIONES (Gerencia) — 9 oct 2026 =====
+var GZ_DEF = {"pago": ["ANTICIPO DEL 50%  sobre el total de la orden de compra. El saldo total antes de inicio de despachos , o en su defecto, consignar el  50% restante de cada despacho antes del mismo. Ver Anexo numeral 5. El anticipo respalda toda la orden de compra, por lo tanto será descontado en el momento del pago de cada factura en el PORCENTAJE PACTADO. EN NINGUN MOMENTO EL ANTICIPO SE UTILIZARA PARA CUBRIR EL PAGO TOTAL DE ALGUNA FACTURA.", "ANTICIPO DEL 50% SALDO 15 DIAS FECHA DE CADA FACTURA, Ver Anexo numeral 5. El anticipo respalda toda la orden de compra, por lo tanto será descontado en el momento del pago de cada factura en el PORCENTAJE PACTADO. EN NINGUN MOMENTO EL ANTICIPO SE UTILIZARA PARA CUBRIR EL PAGO TOTAL DE ALGUNA FACTURA.", "Anticipo del 50% sobre el total de la orden de compra, una vez agotado el 80% de este anticipo, se gira un segundo anticipo por el 30% de la orden y una vez agotado el 80% de este, se gira el 20% restante.", "30 DIAS FECHA FACTURA", "20 DIAS FECHA FACTURA", "PRIMER ANTICIPO DEL 50%  sobre el total de la orden de compra para programación de producción, fabricación de moldes y alistamiento de materiales,  Un segundo anticipo del 30% sobre el total de la orden de compra para inicio de producción y el 20% restante antes de iniciar despachos.", "ANTICIPO DEL 50%, PARA PROGRAMACION DE PRODUCCION, SALDO ANTES DEL DESPACHO", "CONTADO"], "entrega": ["Producto puesto en Obra  DESCARGADO AL PIE DEL VEHICULO.  El servicio de transporte NO incluye acarreos dentro de la Obra, NI ESPERAS SUPERIORES A 90 MINUTOS para descargues", "Producto puesto en obra   SOBRE PLATAFORMA DEL VEHICULO.  Descargue por cuenta del cliente. El servcio de transporte NO incluye acarreos dentro de la Obra, NI ESPERAS SUPERIORES A 90 MINUTOS para descargues.", "Producto Puesto EN PLANTA POSTEC.", "Compra de Estibas", "Producto puesto en Obra. Descargue por cuenta del cliente."], "plazo": ["INMEDIATA, Según programacion de obra.", "Inicio de entregas 8 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 15 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 20 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 30 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 45 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Mínimo 28 dias despues de fabricados para garantizar sus propiedades y dar cumplimiento a las normas.", "Entrega total en 12 dias despues de recibida la orden de compra y anticipo"], "obs": ["Los precios aquí cotizados estarán vigentes para despachos hasta la fecha descrita, siempre y cuando no hayan incrementos significativos en las materias primas por encima de los calculados para esta cotizacion . En caso de incremento en las materias primas, estos podrán permanecer constantes solo  hasta el monto del anticipo.", "Si al 31de diciembre de 2026 quedan cantidades pendientes por  fabricar y despachar para el año siguiente , estas estarán sujetas  a los incrementos de ley en cada uno de los elementos del costo que lo conforman.", "Los precios aquí cotizados estarán vigentes para despachos hasta la fecha descrita, siempre y cuando no hayan incrementos significativos en las materias primas o FLETES", "El servicio, incluye transporte hasta la obra del operario, pinturas de alto trafico en diferentes colores e insumos", "SERVICIO DE TRANSPORTE INCLUIDO PARA PRODUCTO PUESTO EN OBRA SOBRE PLATAFORMA DEL VEHICULO, DEBIDAMENTE ESTIBADO PARA DESCARGUE EN OBRA POR CUENTA DEL CLENTE CON MEDIO MECÁNICO.", "FLETE POR CUENTA DEL CLIENTE . Pagar al conductor en Obra", "El flete incluido dentro del costo unitario del producto corresponde a 1 viaje expres más  un reparto, y a una distribucion exacta de la nercancia solicitada; por lo tanto, si se solicitan despachos parciales esto incrementaría el # de viajes y por ende el valor del producto.", "El flete incluido dentro del costo unitario corresponde a una distribucion exacta de la mercancia solicitada; Cualquier cambio en las cantidades puede variar su valor", "El producto se entrega debidamente estibado y zunchado para descargue mecánico en obra"]};
+var GZ = { cot: [], textos: null };
+var GZ_TIPOS = { pago: 'Formas de pago', entrega: 'Condiciones de entrega', plazo: 'Plazos de entrega', obs: 'Observaciones' };
+function gzH(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function gzColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada: '#166534', Perdida: '#b91c1c', Anulada: '#9ca3af' }[e] || '#6b7280'; }
+function gzTab(t) {
+  document.getElementById('gzEmbudo').style.display = t === 'embudo' ? 'block' : 'none';
+  document.getElementById('gzTextos').style.display = t === 'textos' ? 'block' : 'none';
+  document.getElementById('gzTabEmbudo').style.cssText = t === 'embudo' ? '' : 'background:#e5e7eb;color:#1a3a5c;';
+  document.getElementById('gzTabTextos').style.cssText = t === 'textos' ? '' : 'background:#e5e7eb;color:#1a3a5c;';
+  document.getElementById('gzTabEmbudo').className = 'btn btn-sm' + (t === 'embudo' ? ' btn-primary' : '');
+  document.getElementById('gzTabTextos').className = 'btn btn-sm' + (t === 'textos' ? ' btn-primary' : '');
+  if (t === 'textos') gzRenderTextos();
+}
+async function gzInit() {
+  try { GZ.cot = await leerGVIZ('COTIZACIONES'); } catch (e) { GZ.cot = []; }
+  GZ.cot.sort(function (a, b) { return String(b.actualizado || b.creado || '').localeCompare(String(a.actualizado || a.creado || '')); });
+  var nom = function (id) { var v = (G.vendedores || []).find(function (x) { return String(x.id_vendedor) === String(id) || String(x.cedula) === String(id); }); return v ? (v.nombre_vendedor || v.nombre_completo || id) : id; };
+  GZ.nom = nom;
+  var vs = {}; GZ.cot.forEach(function (c) { if (c.vendedor_id !== '') vs[c.vendedor_id] = 1; });
+  var sel = document.getElementById('gzFVend'), actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los vendedores</option>' + Object.keys(vs).map(function (id) { return '<option value="' + gzH(id) + '">' + gzH(nom(id)) + '</option>'; }).join('');
+  sel.value = actual;
+  gzRenderEmbudo();
+  try { await gzCargarTextos(); } catch (e) {}
+}
+function gzFiltradas() {
+  var v = document.getElementById('gzFVend').value, e = document.getElementById('gzFEst').value, q = document.getElementById('gzBuscar').value.toLowerCase().trim();
+  return GZ.cot.filter(function (c) {
+    if (v && String(c.vendedor_id) !== v) return false; if (e && c.estado !== e) return false;
+    return !q || [c.numero, c.cliente_nombre, c.obra].join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+}
+function gzRenderEmbudo() {
+  var L = gzFiltradas(), suma = function (a) { return a.reduce(function (s, c) { return s + (Number(c.total) || 0); }, 0); };
+  var por = function (e) { return L.filter(function (c) { return c.estado === e; }); };
+  var env = por('Enviada'), ace = por('Aceptada'), per = por('Perdida'), bor = por('Borrador');
+  var cerradas = ace.length + per.length, tasa = cerradas ? trunc2(ace.length / cerradas * 100) : null;
+  var k = function (t, n, v, col) { return '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ' + col + ';border-radius:10px;padding:8px 10px;"><div style="font-size:.68rem;color:#666;">' + t + '</div><div style="font-weight:800;font-size:1rem;color:' + col + ';">' + n + '</div><div style="font-size:.7rem;color:#444;">' + fmt(v) + '</div></div>'; };
+  document.getElementById('gzKpis').innerHTML = k('Borradores', bor.length, suma(bor), '#6b7280') + k('Enviadas (abiertas)', env.length, suma(env), '#1d4ed8') + k('Aceptadas', ace.length, suma(ace), '#166534') + k('Perdidas', per.length, suma(per), '#b91c1c') +
+    '<div style="grid-column:1/3;font-size:.74rem;color:#1a3a5c;background:#eef4fb;border-radius:10px;padding:6px 10px;">Tasa de cierre: <b>' + (tasa === null ? '—' : num2(tasa) + '%') + '</b> (aceptadas / aceptadas + perdidas)</div>';
+  var el = document.getElementById('gzLista');
+  if (!L.length) { el.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">No hay cotizaciones con estos filtros</div>'; return; }
+  el.innerHTML = L.map(function (c) {
+    return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;margin-bottom:6px;background:#fff;">' +
+      '<div style="display:flex;justify-content:space-between;gap:6px;"><b style="font-size:.84rem;">' + gzH(c.numero) + '</b><span style="font-size:.68rem;font-weight:800;color:#fff;background:' + gzColor(c.estado) + ';border-radius:8px;padding:1px 8px;">' + gzH(c.estado) + '</span></div>' +
+      '<div style="font-size:.78rem;">' + gzH(c.cliente_nombre) + (c.obra ? ' · ' + gzH(c.obra) : '') + '</div>' +
+      '<div style="font-size:.72rem;color:#666;">' + fmtFecha(c.fecha) + ' · ' + gzH(GZ.nom(c.vendedor_id)) + ' · <b>' + fmt(c.total) + '</b></div>' +
+      (c.estado === 'Perdida' && c.nota_estado ? '<div style="font-size:.72rem;color:#b91c1c;margin-top:2px;">Motivo: ' + gzH(c.nota_estado) + '</div>' : '') +
+      (c.ap_id ? '<div style="font-size:.72rem;color:#166534;margin-top:2px;">AP: ' + gzH(c.ap_id) + '</div>' : '') + '</div>';
+  }).join('');
+}
+async function gzCargarTextos() {
+  var f = []; try { f = await leerGVIZ('COTIZ_TEXTOS'); } catch (e) {}
+  var T = { pago: [], entrega: [], plazo: [], obs: [] };
+  if (f && f.length) {
+    f.sort(function (a, b) { return Number(a.orden) - Number(b.orden); }).forEach(function (r) { if (T[r.tipo]) T[r.tipo].push({ texto: String(r.texto), activo: String(r.activo) !== '0' }); });
+  }
+  Object.keys(T).forEach(function (k) { if (!T[k].length) T[k] = GZ_DEF[k].map(function (t) { return { texto: t, activo: true }; }); });
+  GZ.textos = T;
+}
+async function gzRenderTextos() {
+  if (!GZ.textos) await gzCargarTextos();
+  var h = '<div style="font-size:.74rem;color:#555;margin-bottom:.6rem;">Estos textos son los que Comercial ve en el cotizador. No se borran: así las cotizaciones ya hechas conservan su texto. Para retirar uno, desmárcalo (queda oculto para nuevas cotizaciones). Los nuevos se agregan al final.</div>';
+  Object.keys(GZ_TIPOS).forEach(function (tipo) {
+    h += '<div style="font-weight:800;color:#1a3a5c;margin:.6rem 0 4px;">' + GZ_TIPOS[tipo] + '</div>';
+    GZ.textos[tipo].forEach(function (x, i) {
+      h += '<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;"><div style="min-width:20px;font-size:.72rem;color:#888;padding-top:8px;">' + (i + 1) + '</div>' +
+        '<textarea class="form-control" rows="3" style="font-size:.76rem;flex:1;" onchange="gzEditar(\'' + tipo + '\',' + i + ',this.value)">' + gzH(x.texto) + '</textarea>' +
+        '<label style="font-size:.68rem;text-align:center;padding-top:4px;"><input type="checkbox" ' + (x.activo ? 'checked' : '') + ' onchange="gzActivo(\'' + tipo + '\',' + i + ',this.checked)"><br>activo</label></div>';
+    });
+    h += '<button class="btn btn-sm" style="background:#e5e7eb;color:#1a3a5c;" onclick="gzAgregar(\'' + tipo + '\')">➕ Agregar texto</button>';
+  });
+  h += '<button class="btn btn-primary" style="width:100%;margin-top:1rem;" onclick="gzGuardarTextos()">💾 Guardar textos</button>';
+  document.getElementById('gzTextos').innerHTML = h;
+}
+function gzEditar(t, i, v) { GZ.textos[t][i].texto = v; }
+function gzActivo(t, i, v) { GZ.textos[t][i].activo = v; }
+function gzAgregar(t) { GZ.textos[t].push({ texto: '', activo: true }); gzRenderTextos(); }
+async function gzGuardarTextos() {
+  var T = {}; Object.keys(GZ.textos).forEach(function (k) { T[k] = GZ.textos[k].filter(function (x, i, a) { return String(x.texto).trim() || i < GZ_DEF[k].length; }); });
+  var r = await escribirGAS({ accion: 'guardarTextosCotizador', textos: T });
+  if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return; }
+  GZ.textos = T; toast('✅ Textos del cotizador guardados');
 }
 </script>
 </body>
