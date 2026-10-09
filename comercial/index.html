@@ -487,6 +487,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card-title">Acceso rápido</div>
       <div class="btn-row" style="flex-direction:column;">
         <button class="btn btn-primary" onclick="irA('screenPedido')">➕ Nuevo Pedido (AP)</button>
+        <button class="btn btn-outline" onclick="irA('screenCotizador')">🧾 Cotizador</button>
         <button class="btn btn-outline" onclick="irA('screenClientes')">👤 Mis Clientes</button>
         <button class="btn btn-outline" onclick="irA('screenInventario')">📦 Inventario en Campo</button>
         <button class="btn btn-outline" onclick="irA('screenInventario')">⏳ Producto en Curado</button>
@@ -497,6 +498,65 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card-title">Últimas APs</div>
       <div id="listaAPsHome">
         <div class="loading"><div class="spinner"></div> Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COTIZADOR -->
+  <div id="screenCotizador" class="screen">
+    <datalist id="czClientesDL"></datalist><datalist id="czProdDL"></datalist>
+    <div id="czListaWrap">
+      <div class="card">
+        <div class="card-title">🧾 Cotizaciones</div>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNueva()">➕ Nueva cotización</button>
+        <input id="czBuscar" class="form-control" placeholder="Buscar por número, cliente u obra..." oninput="czRenderLista()" style="margin-bottom:8px;">
+        <div id="czLista"></div>
+      </div>
+    </div>
+    <div id="czForm" style="display:none;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-title" style="margin:0;">🧾 Cotización · <span id="czEstadoTxt"></span></div><button class="btn btn-outline btn-sm" onclick="czVolver()">← Volver</button></div>
+        <div class="form-group"><label>Número de cotización (manual)</label><input id="czNumero" class="form-control" placeholder="Ej: AF 123" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
+        <div style="font-size:.78rem;margin-bottom:6px;">Fecha: <b id="czFecha"></b></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><div class="form-group"><label>Vigencia de precios</label><input id="czVig" class="form-control" type="date"></div><div class="form-group"><label>Despachos hasta</label><input id="czDesp" class="form-control" type="date"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Cliente</div>
+        <div class="form-group"><label>Buscar cliente</label><input id="czCliente" class="form-control" list="czClientesDL" placeholder="Nombre o NIT..." onchange="czElegirCliente()"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div class="form-group"><label>Atención</label><input id="czAtn" class="form-control"></div><div class="form-group"><label>Teléfono</label><input id="czTel" class="form-control"></div>
+          <div class="form-group"><label>Celular</label><input id="czCel" class="form-control"></div><div class="form-group"><label>Correo</label><input id="czCorreo" class="form-control"></div>
+        </div>
+        <div class="form-group"><label>Obra</label><input id="czObra" class="form-control"></div>
+        <div class="form-group"><label>Dirección oficina</label><input id="czDirOf" class="form-control"></div>
+        <div class="form-group"><label>Dirección de despachos</label><input id="czDirDesp" class="form-control" placeholder="CLIENTE RECOGE"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Productos</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;"><input id="czProd" class="form-control" list="czProdDL" placeholder="Código o nombre del producto..."><button class="btn btn-primary" style="white-space:nowrap;" onclick="czAgregar()">➕ Agregar</button></div>
+        <div id="czLineas"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+          <div class="form-group"><label>Estiba</label><select id="czEstiba" class="form-control" onchange="czTotales()"><option value="NO">No incluye</option><option value="SI">Incluye estiba</option></select></div>
+          <div class="form-group"><label>Flete</label><select id="czFleteModo" class="form-control" onchange="czTotales()"><option value="NO">Sin flete</option><option value="INCLUIDO">Incluido en el precio</option><option value="APARTE">Aparte (línea de flete)</option></select></div>
+        </div>
+        <div class="form-group"><label>Valor del flete ($)</label><input id="czFlete" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()"></div>
+        <div id="czTotales" style="font-size:.82rem;background:#f4f7fb;border-radius:8px;padding:10px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Condiciones</div>
+        <div class="form-group"><label>Condiciones de pago</label><select id="czPago" class="form-control"></select></div>
+        <div class="form-group"><label>Condiciones de entrega</label><select id="czEntrega" class="form-control"></select></div>
+        <div class="form-group"><label>Observación 1</label><select id="czObs1" class="form-control"></select></div>
+        <div class="form-group"><label>Observación 2</label><select id="czObs2" class="form-control"></select></div>
+        <div class="form-group"><label>Nota adicional (opcional)</label><textarea id="czNota" class="form-control" rows="2"></textarea></div>
+      </div>
+      <div class="card">
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+          <button class="btn btn-outline" onclick="czGuardar().then(function(ok){})">💾 Guardar borrador</button>
+          <button class="btn btn-primary" onclick="czPDF()">📄 Guardar y generar PDF</button>
+          <button class="btn btn-outline" onclick="czWhatsApp()">💬 Guardar y enviar por WhatsApp</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;"><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Aceptada')">✅ Aceptada</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Perdida')">❌ Perdida</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Anulada')">🗑️ Anular</button></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1729,7 +1789,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 33;
+const BUILD_ACTUAL = 34;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1740,6 +1800,7 @@ function mostrarNovedadesBuild() {
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
     <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
+      <li>🧾 <b>Nuevo Cotizador</b>: arma la cotización con tus productos y descuentos, avisa si el número ya se usó y genera el PDF con el formato de siempre (Inicio → Cotizador)</li>
       <li>💲 Los <b>precios y valores ahora llevan 2 decimales</b> y se <b>truncan</b> (no se redondean): 68,794 queda en 68,79. Así cuadran con la lista de precios</li>
       <li>📅 Todas las <b>fechas se muestran como día/mes/año</b> (dd/mm/aaaa), también al escribirlas</li>
       <li>📦 <b>Despacho recibe toda la negociación</b>: forma de pago, IVA de cada producto, totales, flete y estiba</li>
@@ -4143,6 +4204,7 @@ function irA(screenId) {
   if (screenId === 'screenInventario') cargarInventario();
   if (screenId === 'screenPedidos')   cargarMisAPs();
   if (screenId === 'screenClientes')  cargarClientes();
+  if (screenId === 'screenCotizador') czInit();
 
   window.scrollTo(0,0);
 }
@@ -4784,6 +4846,279 @@ function mostrarAvisoActualizacion(reg) {
   };
   b.appendChild(btn);
   document.body.appendChild(b);
+}
+</script>
+<script>
+var CZ_TEXTOS={"pago": ["ANTICIPO DEL 50%  sobre el total de la orden de compra. El saldo total antes de inicio de despachos , o en su defecto, consignar el  50% restante de cada despacho antes del mismo. Ver Anexo numeral 5. El anticipo respalda toda la orden de compra, por lo tanto será descontado en el momento del pago de cada factura en el PORCENTAJE PACTADO. EN NINGUN MOMENTO EL ANTICIPO SE UTILIZARA PARA CUBRIR EL PAGO TOTAL DE ALGUNA FACTURA.", "ANTICIPO DEL 50% SALDO 15 DIAS FECHA DE CADA FACTURA, Ver Anexo numeral 5. El anticipo respalda toda la orden de compra, por lo tanto será descontado en el momento del pago de cada factura en el PORCENTAJE PACTADO. EN NINGUN MOMENTO EL ANTICIPO SE UTILIZARA PARA CUBRIR EL PAGO TOTAL DE ALGUNA FACTURA.", "Anticipo del 50% sobre el total de la orden de compra, una vez agotado el 80% de este anticipo, se gira un segundo anticipo por el 30% de la orden y una vez agotado el 80% de este, se gira el 20% restante.", "30 DIAS FECHA FACTURA", "20 DIAS FECHA FACTURA", "PRIMER ANTICIPO DEL 50%  sobre el total de la orden de compra para programación de producción, fabricación de moldes y alistamiento de materiales,  Un segundo anticipo del 30% sobre el total de la orden de compra para inicio de producción y el 20% restante antes de iniciar despachos.", "ANTICIPO DEL 50%, PARA PROGRAMACION DE PRODUCCION, SALDO ANTES DEL DESPACHO", "CONTADO"], "entrega": ["Producto puesto en Obra  DESCARGADO AL PIE DEL VEHICULO.  El servicio de transporte NO incluye acarreos dentro de la Obra, NI ESPERAS SUPERIORES A 90 MINUTOS para descargues", "Producto puesto en obra   SOBRE PLATAFORMA DEL VEHICULO.  Descargue por cuenta del cliente. El servcio de transporte NO incluye acarreos dentro de la Obra, NI ESPERAS SUPERIORES A 90 MINUTOS para descargues.", "Producto Puesto EN PLANTA POSTEC.", "Compra de Estibas", "Producto puesto en Obra. Descargue por cuenta del cliente."], "plazo": ["INMEDIATA, Según programacion de obra.", "Inicio de entregas 8 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 15 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 20 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 30 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Inicio de entregas 45 dias despues de recibida la orden de Compra y anticipo, según programacion de Obra.", "Mínimo 28 dias despues de fabricados para garantizar sus propiedades y dar cumplimiento a las normas.", "Entrega total en 12 dias despues de recibida la orden de compra y anticipo"], "obs": ["Los precios aquí cotizados estarán vigentes para despachos hasta la fecha descrita, siempre y cuando no hayan incrementos significativos en las materias primas por encima de los calculados para esta cotizacion . En caso de incremento en las materias primas, estos podrán permanecer constantes solo  hasta el monto del anticipo.", "Si al 31de diciembre de 2026 quedan cantidades pendientes por  fabricar y despachar para el año siguiente , estas estarán sujetas  a los incrementos de ley en cada uno de los elementos del costo que lo conforman.", "Los precios aquí cotizados estarán vigentes para despachos hasta la fecha descrita, siempre y cuando no hayan incrementos significativos en las materias primas o FLETES", "El servicio, incluye transporte hasta la obra del operario, pinturas de alto trafico en diferentes colores e insumos", "SERVICIO DE TRANSPORTE INCLUIDO PARA PRODUCTO PUESTO EN OBRA SOBRE PLATAFORMA DEL VEHICULO, DEBIDAMENTE ESTIBADO PARA DESCARGUE EN OBRA POR CUENTA DEL CLENTE CON MEDIO MECÁNICO.", "FLETE POR CUENTA DEL CLIENTE . Pagar al conductor en Obra", "El flete incluido dentro del costo unitario del producto corresponde a 1 viaje expres más  un reparto, y a una distribucion exacta de la nercancia solicitada; por lo tanto, si se solicitan despachos parciales esto incrementaría el # de viajes y por ende el valor del producto.", "El flete incluido dentro del costo unitario corresponde a una distribucion exacta de la mercancia solicitada; Cualquier cambio en las cantidades puede variar su valor", "El producto se entrega debidamente estibado y zunchado para descargue mecánico en obra"]};
+var CZ_UM2={"3302":50.0,"33054":50.0,"3304":50.0,"3349":50.0,"33009":50.0,"3309":50.0,"3307":50.0,"3373":50.0,"3350":50.0,"33057":50.0,"3306":50.0,"3301":50.0,"33046":50.0,"33050":50.0,"33056":51.0,"33055":51.0,"3393":51.0,"33045":52.0,"33049":50.0,"33047":53.0,"3314":50.0,"3369":50.0,"3365":50.0,"3374":50.0,"3399":50.0,"3315":50.0,"3313":50.0,"AVBLAN":50.0,"AVBMARFIL":50.0,"AVBEIGEOS":50.0,"3317":50.0,"3312":50.0,"33053":50.0,"33007":50.0,"33005":51.0,"33004":51.0,"3376":51.0,"33044":52.0,"33052":53.0,"33051":54.0,"3353":25.0,"3322":25.0,"3371":25.0,"33034":25.0,"L20CAFE":25.0,"3348":25.0,"3377":25.0,"3320":25.0,"3319":25.0,"L20BEIGEOS":25.0,"33029":25.0,"3378":25.0,"L20TERRAC":25.0,"L20CAMEL":25.0,"3323":25.0,"L20VERMANZ":25.0,"3379":25.0,"3325":12.5,"L42GRISCLA":12.5,"3381":12.5,"33033":12.5,"L42CAFE":12.5,"3326":12.5,"3380":12.5,"3382":12.5,"3383":12.5,"33028":12.5,"3324":12.5,"33040":12.5,"L42CAMEL":12.5,"3384":12.5,"L42VERMAN":12.5,"3335":6.25,"L40GRISCLA":6.25,"3364":6.25,"33032":6.25,"L40CAFE":6.25,"3337":6.25,"3362":6.25,"3386":6.25,"3363":6.25,"L40BEIGOSC":6.25,"33027":6.25,"3336":6.25,"L40TERRA":6.25,"L40CAMEL":6.25,"3338":6.25,"L40VERMAN":6.25,"3391":6.25,"L40CUADGRISC":6.25,"33022":6.25,"33035":6.25,"L40CUADCAFE":6.25,"3329":6.25,"3360":6.25,"33030":6.25,"3328":6.25,"L40CUADTERRA":6.25,"33037":6.25,"3330":6.25,"33025":6.25,"33036":6.25,"33017":6.25,"33014":6.25,"33031":6.25,"33012":6.25,"33038":6.25,"3327":6.25,"33016":6.25,"33015":6.25,"3390":6.25,"3352":25.0,"33019":25.0,"3351":25.0,"3354":25.0,"3356":25.0,"3332":6.25,"33018":6.25,"3334":6.25,"3333":6.25,"3331":6.25,"3388":25.0,"33021":25.0,"3355":25.0,"3321":25.0,"3389":25.0,"3341":6.25,"33020":6.25,"3343":6.25,"3342":6.25,"3339":6.25,"33026":6.25,"3347":6.25,"33013":6.25,"33011":6.25,"3318":7.41,"3403":12.5,"3404":12.5,"3401":25.0,"3425":12.5,"3406":12.5,"3408":12.5,"3409":12.5,"3427":25.0,"3405":25.0,"3439":25.0,"3440":25.0,"3441":25.0,"3465":25.0,"3444":25.0,"3448":25.0,"3445":25.0,"3412":12.5,"3415":12.5,"3416":12.5,"3410":25.0,"3455":25.0,"3457":25.0,"3456":25.0,"3443":12.5,"3449":12.5,"3446":12.5,"3463":12.5,"3430":12.5,"3414":25.0,"3450":12.5,"3447":12.5,"3442":12.5,"3417":25.0,"3419":25.0,"3421":25.0,"3420":25.0,"3352ML":25.0,"3351ML":25.0,"33019ML":25.0,"3354ML":25.0,"3356ML":25.0,"3332ML":6.25,"3334ML":6.25,"33018ML":6.25,"3333ML":6.25,"3331ML":6.25,"3388ML":25.0,"3355ML":25.0,"33021ML":25.0,"3321ML":25.0,"3389ML":25.0,"3341ML":6.25,"3343ML":6.25,"33020ML":6.25,"3342ML":6.25,"3339ML":6.25,"33026ML":6.25,"3347ML":6.25,"33013ML":6.25,"33011ML":6.25,"AA":50.0,"33051-1":50.0,"B19TERRAC":12.5,"B141939":12.5,"3422":12.5,"3480":12.5};
+// ===== COTIZADOR (9 oct 2026) — Comercial =====
+// Cálculo con el mismo motor de las APs (calcPedido: truncado a 2 decimales, IVA por línea).
+// Número de cotización manual: se avisa si ya existe. Los costos NO se cargan aquí (solo Gerencia).
+var CZ = null, CZ_LISTA = [], CZ_FILTRO = 'todas';
+var CZ_ANEXO = ['Los precios de la presente cotización estarán vigentes por el tiempo aquí establecido; una vez pasado este periodo, la cotización estará sujeta a revisión y ajuste de precios si así se hace necesario. Igualmente, una vez recibida la orden de compra, los precios se sostienen hasta la fecha límite de despachos aquí establecida. Si por algún motivo inherente al cliente, se llega hasta esta fecha sin culminar la entrega de todo lo solicitado en dicha orden de compra, los precios aquí estipulados no podrán sostenerse sin que medie un análisis de condiciones para determinar si es factible sostenerlos hasta finiquitar las entregas, o en su defecto deben sufrir un reajuste.',
+'Cualquier adición a la presente cotización estará sujeta a revisión de precios y plazos de entrega.',
+'Requisitos para la entrega del producto: Suministrar los siguientes documentos:\n   * Orden de compra y la cotización debidamente aceptada.\n   * No están contemplados valores de pólizas, estos serán asumidos por el CLIENTE en el caso de ser requeridos.',
+'Los plazos de entrega empezarán a correr a partir de la recepción de la presente cotización con firma de aceptación, la recepción de la orden de compra y la confirmación por parte del banco de la disponibilidad de los fondos consignados como anticipo; lo anterior teniendo en cuenta que la programación de producción se genera a partir de la orden de compra.',
+'Los pedidos pagados con cheque, serán entregados una vez se confirme la disponibilidad de los fondos en la cuenta de POSTECSA DE COLOMBIA SAS.',
+'El anticipo pagado por el cliente se descontará proporcionalmente en cada factura de acuerdo al porcentaje (%) pactado; en ningún caso, salvo negociación expresa, podrá aplicarse el anticipo al pago total de una factura.',
+'POSTECSA DE COLOMBIA SAS se reserva los derechos de entregar producto terminado a cualquier cliente que presente cartera vencida o en mora.',
+'El no pago oportuno de las facturas o saldo de las mismas, generará cobro de intereses moratorios a la tasa máxima legal vigente permitida y automáticamente se perderá el descuento otorgado.',
+'Toda mercancía producto de una orden de compra que no sea retirada o recibida por el cliente en el plazo estipulado, o en su defecto en un lapso máximo de 30 días después de producida, será gravada con un costo de bodegaje equivalente al 5% mensual sobre el valor del producto y las averías generadas durante el tiempo de bodegaje serán asumidas por el cliente.',
+'Podrá pactarse la entrega de la mercancía bajo cualquiera de las siguientes modalidades: Mercancía “Puesta en planta POSTEC, o puesta en obra SOBRE PLANCHÓN DEL VEHÍCULO, o descargada en obra AL PIE DEL VEHÍCULO”, o CIF EN PUERTO DE DESTINO. EN NINGÚN CASO POSTECSA DE COLOMBIA SAS cubre acarreos en obra.',
+'Una vez entregado el producto, éste es responsabilidad única y exclusiva de la Obra, así como su conservación y cuidado, nuestra Empresa queda libre de cualquier responsabilidad al respecto.\nToda avería de producto que se presente en el cargue, transporte y descargue de la mercancía realizado por cuenta del cliente será asumido por él mismo.\na) MANIPULACIÓN: Debido a que son unidades con acabado arquitectónico, deben cargarse, transportarse, descargarse y manipularse con el mayor cuidado posible.\nb) ALMACENAMIENTO: Si el material va a ser almacenado, se recomienda protegerlo de la intemperie y cubrirlo para evitar excesos de humedad que puedan afectar su apariencia y no “acopiar” otros productos sobre este material, para evitar deterioro, fractura y/o despique.',
+'No se aceptan devoluciones de sobrante de producto en obra.',
+'Toda devolución que sea generada por temas logísticos del cliente, implicará la facturación de costos de flete y bodegaje adicionales a lo estipulado en la presente cotización.',
+'POSTECSA DE COLOMBIA SAS no se hace responsable por los desperdicios de productos generados en obra.',
+'La presencia de fisuras menores inherentes al proceso de fabricación, o las desportilladuras menores que resulten de los métodos usuales de manipulación en el despacho o en la entrega, no son motivo de rechazo. Los elementos suministrados son productos de alta calidad; sin embargo, es importante considerar un desperdicio estimado entre 2% y 3% por aspectos como transporte y manipulación en la Obra.'];
+function czH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function czHoy() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function czNorm(n) { return String(n || '').toUpperCase().replace(/\s+/g, ''); }
+function czEstadoColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada: '#166534', Perdida: '#b91c1c', Anulada: '#9ca3af' }[e] || '#6b7280'; }
+function czProductos() {
+  var vistos = {}, out = [];
+  (STATE.inventario || []).forEach(function (p) { var k = String(p.tmcode); if (!vistos[k] && (p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA') { vistos[k] = 1; out.push(p); } });
+  return out;
+}
+async function czInit() {
+  if (!STATE.inventario || !STATE.inventario.length) { try { await cargarInventario(); } catch (e) {} }
+  if (!STATE.clientes || !STATE.clientes.length) { try { await cargarClientes(); } catch (e) {} }
+  var dl = document.getElementById('czClientesDL');
+  if (dl) dl.innerHTML = (STATE.clientes || []).map(function (c) { return '<option value="' + czH(c.razon_social) + ' · ' + czH(c.cliente_nit) + '">'; }).join('');
+  var dp = document.getElementById('czProdDL');
+  if (dp) dp.innerHTML = czProductos().map(function (p) { return '<option value="' + czH(p.tmcode) + ' — ' + czH(p.tmdescrip) + '">'; }).join('');
+  czCargarLista();
+}
+async function czCargarLista() {
+  var cont = document.getElementById('czLista');
+  if (cont) cont.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando...</div>';
+  try { CZ_LISTA = await leerGVIZ('COTIZACIONES'); } catch (e) { CZ_LISTA = []; }
+  czRenderLista();
+}
+function czRenderLista() {
+  var cont = document.getElementById('czLista'); if (!cont) return;
+  var q = czNorm(document.getElementById('czBuscar') ? document.getElementById('czBuscar').value : '').toLowerCase();
+  var yo = String(STATE.vendedor && STATE.vendedor.id_vendedor || '');
+  var rol = String((STATE.vendedor && (STATE.vendedor.rol || '')) || '').toUpperCase();
+  var ver = CZ_LISTA.filter(function (c) {
+    if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo) return false;
+    if (CZ_FILTRO !== 'todas' && c.estado !== CZ_FILTRO) return false;
+    if (q && czNorm(c.numero + c.cliente_nombre + c.obra).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function (a, b) { return String(b.creado || '').localeCompare(String(a.creado || '')); });
+  var tabs = ['todas', 'Borrador', 'Enviada', 'Aceptada', 'Perdida'].map(function (e) {
+    return '<button class="btn ' + (CZ_FILTRO === e ? 'btn-primary' : 'btn-outline') + ' btn-sm" style="font-size:.7rem;padding:4px 9px;" onclick="CZ_FILTRO=\'' + e + '\';czRenderLista()">' + (e === 'todas' ? 'Todas' : e) + '</button>';
+  }).join(' ');
+  cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
+    (ver.length ? ver.map(function (c) {
+      return '<div class="card" style="padding:.7rem;margin-bottom:8px;cursor:pointer;" onclick="czAbrir(\'' + czH(c.uid) + '\')"><div style="display:flex;justify-content:space-between;gap:8px;"><b>' + czH(c.numero) + '</b><span style="font-size:.7rem;font-weight:700;color:' + czEstadoColor(c.estado) + ';">' + czH(c.estado) + '</span></div>' +
+        '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b></div></div>';
+    }).join('') : '<div style="text-align:center;color:#888;padding:1rem;">Sin cotizaciones</div>');
+}
+function czNueva() {
+  var v = STATE.vendedor || {};
+  CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
+    lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
+  czMostrarForm();
+}
+function czAbrir(uid) {
+  var c = CZ_LISTA.filter(function (x) { return String(x.uid) === String(uid); })[0]; if (!c) return;
+  try { CZ = JSON.parse(c.payload); } catch (e) { toast('No se pudo abrir la cotización'); return; }
+  CZ.uid = c.uid; CZ.estado = c.estado; czMostrarForm();
+}
+function czMostrarForm() {
+  document.getElementById('czListaWrap').style.display = 'none';
+  document.getElementById('czForm').style.display = 'block';
+  var T = CZ_TEXTOS, sel = function (arr, v, cero) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { return '<option value="' + (i + 1) + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
+  document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago);
+  document.getElementById('czEntrega').innerHTML = sel(T.entrega, CZ.entrega, true);
+  document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true);
+  document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true);
+  var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota };
+  Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
+  document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
+  document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
+  document.getElementById('czNumAlert').textContent = '';
+  czRenderLineas(); window.scrollTo(0, 0);
+}
+function czVolver() { CZ = null; document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
+function czLeer() {
+  var g = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+  CZ.numero = g('czNumero').trim(); CZ.vigencia = g('czVig'); CZ.despachos_hasta = g('czDesp');
+  CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
+  CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota');
+  CZ.pago = parseInt(g('czPago')) || 8; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
+}
+function czElegirCliente() {
+  var v = document.getElementById('czCliente').value, nit = (v.split(' · ')[1] || '').trim();
+  var c = (STATE.clientes || []).filter(function (x) { return String(x.cliente_nit) === nit; })[0];
+  if (!c) return;
+  CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
+  var ct = (STATE.contactos || []).filter(function (x) { return String(x.cliente_nit) === nit; });
+  var p = ct.filter(function (x) { return x.es_principal === true || String(x.es_principal).toUpperCase() === 'TRUE'; })[0] || ct[0] || {};
+  var set = function (id, val) { var e = document.getElementById(id); if (e && val != null) e.value = val; };
+  set('czAtn', p.nombre_contacto || ''); set('czTel', p.telefono || c.telefono || ''); set('czCorreo', p.correo || ''); set('czDirOf', c.direccion || '');
+  czVerNumero();
+}
+function czVerNumero() {
+  var n = czNorm(document.getElementById('czNumero').value), al = document.getElementById('czNumAlert'); if (!al) return;
+  al.textContent = '';
+  if (!n) return;
+  var otra = CZ_LISTA.filter(function (c) { return czNorm(c.numero) === n && String(c.uid) !== String(CZ && CZ.uid) && c.estado !== 'Anulada'; })[0];
+  if (otra) al.innerHTML = '⚠️ <b>Este número ya se usó</b> en la cotización de <b>' + czH(otra.cliente_nombre) + '</b> (' + fmtFecha(otra.fecha) + '). Verifica antes de guardar.';
+}
+function czAgregar() {
+  var v = document.getElementById('czProd').value, cod = (v.split(' — ')[0] || '').trim();
+  var p = czProductos().filter(function (x) { return String(x.tmcode) === cod; })[0];
+  if (!p) { toast('Elige un producto de la lista'); return; }
+  czLeer();
+  CZ.lineas.push({ tmcode: p.tmcode, tmdescrip: p.tmdescrip, tmund: p.tmund, tipo_iva: p.tipo_iva || 'E', precio_base: parseFloat(p.precio_base) || 0, cantidad_solicitada: 1, descuento_aplicado: 0,
+    estiba_tabla: parseFloat(p.valor_estiba_unidad) || 0, peso_kg_unitario: parseFloat(p.peso_kg_unitario) || 0, u_viaje: parseFloat(p.unidades_por_viaje) || 0, flete_total_viaje: parseFloat(p.flete_total_viaje_cali) || 0, plazo: 1 });
+  document.getElementById('czProd').value = ''; czRenderLineas();
+}
+function czQuitar(i) { czLeer(); CZ.lineas.splice(i, 1); czRenderLineas(); }
+function czEdit(i, campo, val) {
+  var l = CZ.lineas[i]; val = parseFloat(String(val).replace(',', '.')) || 0;
+  if (campo === 'cant') l.cantidad_solicitada = val; else if (campo === 'desc') l.descuento_aplicado = Math.min(Math.max(val, 0), 100) / 100; else if (campo === 'plazo') l.plazo = parseInt(val) || 1;
+  czTotales();
+}
+function czCfg() { return { llevaEstiba: CZ.estiba, conFlete: CZ.fleteModo !== 'NO' && CZ.flete > 0, flete: CZ.flete, incluido: CZ.fleteModo === 'INCLUIDO' }; }
+function czSumas(T) {
+  var s = 0;
+  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; s = r2(s + r.neto + (T.incluido ? trunc2(l.cantidad_solicitada * r.fleteUnit) : 0)); });
+  if (!T.incluido) s = r2(s + T.flete);
+  return { subt: s, iva: T.iva, total: r2(s + T.iva) };
+}
+function czCalc() { czLeer(); return calcPedido(CZ.lineas, czCfg()); }
+function czRenderLineas() {
+  var cont = document.getElementById('czLineas');
+  cont.innerHTML = CZ.lineas.length ? CZ.lineas.map(function (l, i) {
+    return '<div class="card" style="padding:.6rem;margin-bottom:6px;"><div style="display:flex;justify-content:space-between;gap:6px;font-size:.8rem;"><b>' + czH(l.tmcode) + ' ' + (l.tipo_iva === 'G' ? '<span style="color:#b91c1c;">G</span>' : '<span style="color:#166534;">E</span>') + '</b><button type="button" onclick="czQuitar(' + i + ')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;padding:0 8px;">✕</button></div>' +
+      '<div style="font-size:.78rem;margin:2px 0 6px;">' + czH(l.tmdescrip) + ' · lista ' + fmt(l.precio_base) + '/' + czH(l.tmund) + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="form-control" type="number" inputmode="decimal" min="0" step="any" value="' + l.cantidad_solicitada + '" oninput="czEdit(' + i + ',\'cant\',this.value)" placeholder="Cantidad">' +
+      '<input class="form-control" type="number" inputmode="decimal" min="0" max="100" step="any" value="' + (Math.round(l.descuento_aplicado * 10000) / 100 || '') + '" oninput="czEdit(' + i + ',\'desc\',this.value)" placeholder="% descuento"></div>' +
+      '<select class="form-control" style="margin-top:6px;font-size:.74rem;" onchange="czEdit(' + i + ',\'plazo\',this.value)">' + CZ_TEXTOS.plazo.map(function (t, k) { return '<option value="' + (k + 1) + '"' + ((l.plazo || 1) === k + 1 ? ' selected' : '') + '>Plazo ' + (k + 1) + ': ' + czH(t.slice(0, 60)) + '</option>'; }).join('') + '</select>' +
+      '<div id="czL' + i + '" style="font-size:.76rem;margin-top:6px;color:#1a3a5c;"></div></div>';
+  }).join('') : '<div style="text-align:center;color:#888;font-size:.8rem;padding:.5rem;">Agrega productos con el buscador</div>';
+  czTotales();
+}
+function czTotales() {
+  if (!CZ) return; var T = czCalc();
+  CZ.lineas.forEach(function (l, i) { var e = document.getElementById('czL' + i), r = T.lineas[i]; if (e && r) e.innerHTML = 'Unitario ' + fmt(r.precioDesc) + (r.estiba ? ' + estiba ' + fmt(r.estiba) : '') + (r.fleteUnit ? ' + flete ' + fmt(r.fleteUnit) : '') + ' · Total línea <b>' + fmt(r.neto) + '</b>'; });
+  var f = function (a, b, neg) { return b ? '<div style="display:flex;justify-content:space-between;"><span>' + a + '</span><b>' + (neg ? '-' : '') + fmt(b) + '</b></div>' : ''; };
+  document.getElementById('czTotales').innerHTML = f('Subtotal (precio de lista)', T.subtotal) + f('Descuentos', T.descuentos, true) + f('Estiba', T.estiba) + (T.incluido ? '<div style="font-size:.72rem;color:#555;">Flete incluido en el valor unitario</div>' : f('Flete', T.flete)) +
+    f('IVA productos', T.ivaProductos) + f('IVA flete', T.ivaFlete) + '<div style="display:flex;justify-content:space-between;font-size:1rem;border-top:1px solid #ccc;margin-top:4px;padding-top:4px;"><span>TOTAL A PAGAR</span><b>' + fmt(czSumas(T).total) + '</b></div>';
+}
+function czPayload() { czLeer(); var T = calcPedido(CZ.lineas, czCfg()); return { T: T }; }
+async function czGuardar(estado, confirmarDup) {
+  czLeer();
+  if (!CZ.numero) { toast('Escribe el número de cotización'); return false; }
+  if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
+  if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
+  var T = calcPedido(CZ.lineas, czCfg());
+  var datos = JSON.parse(JSON.stringify(CZ));
+  var body = { accion: 'guardarCotizacion', uid: CZ.uid, numero: CZ.numero, fecha: CZ.fecha, vendedor_id: CZ.vendedor_id, cliente_nit: CZ.cliente.nit, cliente_nombre: CZ.cliente.nombre, obra: CZ.cliente.obra,
+    vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: T.iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup };
+  var r = await escribirGAS(body);
+  if (r && r.duplicado) {
+    if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true);
+    return false;
+  }
+  if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return false; }
+  if (r && r.uid) CZ.uid = r.uid; if (estado) CZ.estado = estado;
+  toast('✅ Cotización ' + CZ.numero + ' guardada'); return true;
+}
+async function czCambiarEstado(estado) {
+  if (!CZ.uid) { toast('Primero guarda la cotización'); return; }
+  var nota = estado === 'Perdida' ? (prompt('¿Por qué se perdió? (precio, tiempo de entrega, competencia...)') || '') : '';
+  await escribirGAS({ accion: 'cambiarEstadoCotizacion', uid: CZ.uid, estado: estado, nota: nota });
+  CZ.estado = estado; document.getElementById('czEstadoTxt').textContent = estado; toast('Estado: ' + estado);
+}
+function czTextoWA() {
+  var T = czCalc(), c = CZ.cliente;
+  var t = '*COTIZACIÓN ' + CZ.numero + '* — POSTECSA\nCliente: ' + c.nombre + (c.obra ? '\nObra: ' + c.obra : '') + '\nFecha: ' + fmtFecha(CZ.fecha) + (CZ.vigencia ? ' · Vigencia: ' + fmtFecha(CZ.vigencia) : '') + '\n\n';
+  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(r.precioDesc + r.estiba + r.fleteUnit) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
+  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(T.iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] + '\n' : '') + 'Pago: ' + CZ_TEXTOS.pago[CZ.pago - 1];
+  return t;
+}
+async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
+function czImg(url) { return fetch(url).then(function (r) { return r.blob(); }).then(function (b) { return new Promise(function (ok) { var f = new FileReader(); f.onload = function () { ok(f.result); }; f.readAsDataURL(b); }); }).catch(function () { return null; }); }
+async function czPDF() {
+  if (!(await czGuardar())) return;
+  var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = STATE.vendedor || {};
+  var logo1 = await czImg('../assets/logo_postecsa.jpg'), logo2 = await czImg('../assets/logo_postec.jpg');
+  var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 10, R = W - M, y;
+  var txt = function (s, x, yy, o) { doc.text(Array.isArray(s) ? s : String(s == null ? '' : s), x, yy, o || {}); };
+  var box = function (x, yy, w, h) { doc.rect(x, yy, w, h); };
+  var wrap = function (s, w) { return doc.splitTextToSize(String(s || ''), w); };
+  var piePag = function () { doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(60); txt('Despachos: Vía Cali – Cencar – Aeropuerto, Vereda Piles Km 2 Tel. (2) 521 70 32 Cel. 316 502 0568', W / 2, 287, { align: 'center' }); txt('www.postecsa.com - ventas@postecsa.com', W / 2, 290.5, { align: 'center' }); doc.setTextColor(0); };
+  doc.setLineWidth(0.25); doc.setDrawColor(0);
+  // Encabezado
+  if (logo1) doc.addImage(logo1, 'JPEG', M, 8, 42, 14.7);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt('Nit: 901.086.456-2', M + 3, 25);
+  doc.setFontSize(10.5); txt('COTIZACIÓN  ' + CZ.numero, 82, 17, { align: 'center' });
+  box(122, 7, R - 122, 19); doc.setFontSize(7); txt('VIGENCIA', 166, 10.5, { align: 'center' }); doc.setFontSize(6); doc.line(122, 11.5, R, 11.5); doc.line(166, 11.5, 166, 22);
+  txt('Precios Cotización (plazo', 144, 14.2, { align: 'center' }); txt('para cerrar negociación)', 144, 16.4, { align: 'center' }); txt('Para despachos Hasta', 188, 15, { align: 'center' });
+  doc.line(122, 22, R, 22); doc.setFontSize(7); txt(CZ.vigencia ? fmtFecha(CZ.vigencia) : '', 144, 20.5, { align: 'center' }); txt(CZ.despachos_hasta ? fmtFecha(CZ.despachos_hasta) : '', 188, 20.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6); txt('Ver #1 del ANEXO', 166, 24.8, { align: 'center' });
+  // Cliente
+  y = 28; box(M, y, R - M, 29);
+  var fila = function (xl, xv, yy, et, val, maxw) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(et, xl, yy); doc.setFont('helvetica', 'bold'); if (val) txt(wrap(val, maxw)[0], xv, yy); };
+  fila(M + 2, M + 28, y + 5, 'Fecha:', fmtFecha(CZ.fecha), 70); fila(M + 2, M + 28, y + 10, 'Cliente:', c.nombre, 70); fila(M + 2, M + 28, y + 15, 'NIT:', c.nit, 70); fila(M + 2, M + 28, y + 20, 'Atn:', c.atn, 70); fila(M + 2, M + 28, y + 25, 'Dirección oficina:', c.dir_oficina, 55);
+  fila(112, 138, y + 5, 'Teléfonos:', c.tel, 60); fila(112, 138, y + 10, 'Celular:', c.cel, 60); fila(112, 138, y + 15, 'Correo electrónico:', c.correo, 60); fila(112, 138, y + 20, 'Obra:', c.obra, 60); fila(112, 138, y + 25, 'Direcc. despachos:', c.dir_despacho, 60);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt('E = excluido de iva      G = Gravado con iva', 70, y + 32);
+  // Tabla
+  y = 62; var hayM2 = CZ.lineas.some(function (l) { return CZ_UM2[String(l.tmcode)]; });
+  var X = hayM2 ? { cod: M, ge: M + 14, desc: M + 18, plz: M + 70, und: M + 104, cant: M + 116, vu: M + 130, tot: M + 148, m2: M + 168, fin: R } : { cod: M, ge: M + 14, desc: M + 18, plz: M + 74, und: M + 110, cant: M + 124, vu: M + 140, tot: M + 162, m2: R, fin: R };
+  var cab = function () { doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setFillColor(235, 240, 250); doc.rect(M, y, R - M, 8, 'F'); box(M, y, R - M, 8);
+    txt('CÓD.', X.cod + 1, y + 5); txt('DESCRIPCIÓN', X.desc + 2, y + 5); txt('PLAZO DE ENTREGA', X.plz + 2, y + 3.4); doc.setFontSize(5); doc.setFont('helvetica', 'normal'); txt('Sujeto a disponib. de inventario', X.plz + 2, y + 6.4); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
+    doc.setFontSize(5.8); txt('UNIDAD', X.und + 1, y + 3.4); txt('MEDIDA', X.und + 1, y + 6.4); txt('CANTIDAD', X.cant + 0.3, y + 5); doc.setFontSize(6.5); txt('VALOR', X.vu + 2, y + 3.4); txt('UNITARIO', X.vu + 1, y + 6.4); txt('TOTAL', X.tot + 4, y + 5); if (hayM2) { txt('Equiv.', X.m2 + 1, y + 3.4); txt('en m2', X.m2 + 1, y + 6.4); }
+    [X.ge, X.desc, X.plz, X.und, X.cant, X.vu, X.tot].concat(hayM2 ? [X.m2] : []).forEach(function (xx) { doc.line(xx, y, xx, y + 8); }); y += 8; };
+  cab();
+  var sumLin = 0;
+  var filaTabla = function (cod, ge, desc, plz, und, cant, vu, tot, m2) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+    var d = wrap(desc, X.plz - X.desc - 3), p = wrap(plz, X.und - X.plz - 3), h = Math.max(d.length, p.length, 1) * 3.2 + 2.6;
+    if (y + h > 262) { piePag(); doc.addPage(); y = 12; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); }
+    box(M, y, R - M, h); [X.ge, X.desc, X.plz, X.und, X.cant, X.vu, X.tot].concat(hayM2 ? [X.m2] : []).forEach(function (xx) { doc.line(xx, y, xx, y + h); });
+    txt(cod, X.cod + 1, y + 4); txt(ge, X.ge + 3, y + 4); txt(d, X.desc + 2, y + 4); doc.setFontSize(6); txt(p, X.plz + 2, y + 4); doc.setFontSize(7);
+    txt(und, X.und + 8, y + 4, { align: 'center' }); txt(cant, X.vu - 1.5, y + 4, { align: 'right' }); txt(vu, X.tot - 1.5, y + 4, { align: 'right' }); txt(tot, X.m2 - 1.5, y + 4, { align: 'right' }); if (hayM2 && m2) txt(m2, X.fin - 1.5, y + 4, { align: 'right' }); y += h;
+  };
+  CZ.lineas.forEach(function (l, i) {
+    var r = T.lineas[i], vu = r.precioDesc + r.estiba + r.fleteUnit, tot = r2(r.neto + (T.incluido ? trunc2(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
+    var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
+  });
+  if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
+  // Totales y observaciones
+  var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
+  if (y > 205) { piePag(); doc.addPage(); y = 12; }
+  y += 3; var yObs = y;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+  var ob = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n');
+  var ol = wrap(ob, 118); txt(ol.slice(0, 12), M, y + 8); var hObs = Math.max(26, ol.slice(0, 12).length * 3 + 12);
+  var bx = 135, put = function (e, v, yy, bold) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(e, bx + 2, yy); doc.setFont('helvetica', bold ? 'bold' : 'normal'); txt(v, R - 2, yy, { align: 'right' }); };
+  box(bx, y, R - bx, 24); doc.line(bx, y + 8, R, y + 8); doc.line(bx, y + 16, R, y + 16); put('SUBTOTAL', fmt(subt), y + 5); put('IVA 19%', fmt(ivaT), y + 13); put('TOTAL A PAGAR', fmt(tot), y + 21, true);
+  y += Math.max(hObs, 26) + 2;
+  // Condiciones
+  box(M, y, (R - M) / 2, 22); box(M + (R - M) / 2, y, (R - M) / 2, 22); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8);
+  txt(wrap(CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 5), M + 2, y + 9); txt(wrap(CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 5), M + (R - M) / 2 + 2, y + 9); y += 25;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
+  doc.setFontSize(8); txt('Favor realizar sus pagos a través de Transferencia o Consignación a nombre de', W / 2, y, { align: 'center' }); txt('POSTECSA DE COLOMBIA SAS', W / 2, y + 4, { align: 'center' }); y += 7;
+  box(M, y, R - M, 11); doc.setFontSize(7); txt('Banco de COLOMBIA', M + 20, y + 4, { align: 'center' }); txt('Cuenta Ahorros  82900008335', M + 20, y + 8, { align: 'center' }); txt('Banco BOGOTA', M + 90, y + 4, { align: 'center' }); txt('Cuenta Corriente  256433533', M + 90, y + 8, { align: 'center' }); txt('Banco BBVA', M + 158, y + 4, { align: 'center' }); txt('Cuenta Corriente  0243021417', M + 158, y + 8, { align: 'center' }); y += 14;
+  doc.setFontSize(7); txt('EL ANEXO HACE PARTE CONSTITUTIVA DE LA PRESENTE COTIZACIÓN', W / 2, y, { align: 'center' }); y += 3.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
+  var g = wrap('POSTECSA DE COLOMBIA SAS garantiza el cumplimiento de la NORMA TÉCNICA COLOMBIANA aplicable a cada uno de nuestros productos. Esta garantía es válida para el producto suministrado, en ningún caso para su proceso de instalación y uso, los cuales son responsabilidad del constructor.', 185); txt(g, W / 2, y, { align: 'center' }); y += g.length * 2.8 + 1;
+  doc.setTextColor(200, 0, 0); txt('En caso de aprobación de la presente oferta, favor firmar su aceptación en la siguiente hoja y enviarla con la respectiva orden de compra', W / 2, y, { align: 'center' }); doc.setTextColor(0); y += 4;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt((v.nombre_vendedor || '').toUpperCase(), W / 2, y, { align: 'center' }); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); txt((v.cargo || 'Asesor comercial') + '   Celular: ' + (v.telefono || v.celular || '3165020568') + '   ' + (v.correo_comercial || 'ventas@postecsa.com'), W / 2, y + 3.5, { align: 'center' }); piePag();
+  // Anexo
+  doc.addPage(); if (logo1) doc.addImage(logo1, 'JPEG', M, 8, 42, 14.7); if (logo2) doc.addImage(logo2, 'JPEG', R - 38, 8, 38, 17.4);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt('POSTECSA DE COLOMBIA SAS', W / 2, 14, { align: 'center' }); txt('Nit: 901.086.456-2', W / 2, 19, { align: 'center' }); doc.setFontSize(7.5); txt('ANEXO', W / 2, 25, { align: 'center' });
+  y = 33; doc.setFont('helvetica', 'normal'); doc.setFontSize(6.9);
+  CZ_ANEXO.forEach(function (t, i) { var l = wrap((i + 1) + '. ' + t, 188); if (y + l.length * 2.9 > 262) { piePag(); doc.addPage(); y = 14; } txt(l, M, y); y += l.length * 2.9 + 2.2; });
+  y = Math.max(y + 8, 262); if (y > 270) { piePag(); doc.addPage(); y = 40; } doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+  txt('PREPARADA POR', M + 10, y - 14); txt('ACEPTADA POR', 112, y - 14); doc.line(M + 10, y - 3, M + 70, y - 3); doc.line(112, y - 3, R, y - 3);
+  txt((v.nombre_vendedor || '').toUpperCase(), M + 10, y); doc.setFont('helvetica', 'normal'); txt(v.cargo || 'Asesor comercial', M + 10, y + 3.5); doc.setFont('helvetica', 'bold'); txt(String(c.nombre).toUpperCase(), 112, y); doc.setFont('helvetica', 'normal'); txt('Nombre y Cargo del Firmante:', 112, y + 3.5); piePag();
+  doc.save('Cotizacion_' + CZ.numero.replace(/[^A-Za-z0-9_-]+/g, '_') + '_' + String(c.nombre).replace(/[^A-Za-z0-9]+/g, '_').slice(0, 28) + '.pdf');
+  if (CZ.estado === 'Borrador') await czCambiarEstado('Enviada');
 }
 </script>
 </body>
