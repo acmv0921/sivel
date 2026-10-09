@@ -1122,6 +1122,60 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="toast" class="toast"></div>
 
 <script>
+// ===== Campos de fecha en formato dd/mm/aaaa (9 oct 2026) =====
+// Los <input type="date"> muestran el formato del celular (a veces mes/día/año).
+// Aquí se convierten en campos de texto dd/mm/aaaa con botón de calendario;
+// el resto del código sigue leyendo/escribiendo .value en formato aaaa-mm-dd.
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  function iso2dma(v) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : (v || ''); }
+  function dma2iso(v) {
+    v = String(v || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); if (!m) return '';
+    var d = +m[1], mo = +m[2], y = +m[3], t = new Date(y, mo - 1, d);
+    if (t.getFullYear() !== y || t.getMonth() !== mo - 1 || t.getDate() !== d) return '';
+    return y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+  function mejorar(el) {
+    if (el.dataset.sivilFecha) return;
+    el.dataset.sivilFecha = '1';
+    var inicial = desc.get.call(el);
+    el.type = 'text';
+    Object.defineProperty(el, 'value', { configurable: true,
+      get: function () { return dma2iso(desc.get.call(el)); },
+      set: function (v) { desc.set.call(el, iso2dma(v)); } });
+    desc.set.call(el, iso2dma(inicial));
+    el.placeholder = 'dd/mm/aaaa'; el.maxLength = 10; el.inputMode = 'numeric'; el.autocomplete = 'off';
+    el.addEventListener('input', function () {
+      var d = desc.get.call(el).replace(/\D/g, '').slice(0, 8), s = d;
+      if (d.length > 4) s = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+      else if (d.length > 2) s = d.slice(0, 2) + '/' + d.slice(2);
+      desc.set.call(el, s);
+      if (s.length === 10 && dma2iso(s)) el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    var w = document.createElement('div');
+    w.style.cssText = 'display:flex;gap:6px;align-items:center;position:relative;';
+    el.parentNode.insertBefore(w, el); w.appendChild(el); el.style.flex = '1'; el.style.minWidth = '0';
+    var sel = document.createElement('input'); sel.type = 'date'; sel.dataset.sivilFecha = '1'; sel.tabIndex = -1;
+    sel.style.cssText = 'position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = '📅'; btn.title = 'Elegir en el calendario';
+    btn.style.cssText = 'border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 9px;font-size:1rem;cursor:pointer;';
+    btn.onclick = function () { sel.value = el.value; try { sel.showPicker ? sel.showPicker() : sel.click(); } catch (e) { sel.click(); } };
+    sel.onchange = function () { if (sel.value) { el.value = sel.value; el.dispatchEvent(new Event('change', { bubbles: true })); } };
+    w.appendChild(btn); w.appendChild(sel);
+  }
+  function barrer(r) { if (r.querySelectorAll) r.querySelectorAll('input[type="date"]').forEach(mejorar); }
+  new MutationObserver(function (ms) {
+    ms.forEach(function (m) { m.addedNodes.forEach(function (n) {
+      if (n.nodeType !== 1) return;
+      if (n.matches && n.matches('input[type="date"]')) mejorar(n); else barrer(n);
+    }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { barrer(document); }); else barrer(document);
+})();
+</script>
+<script>
 // =============================================================================
 // SIVIL APP COMERCIAL v1.0
 // =============================================================================
@@ -1160,7 +1214,7 @@ async function procesarFotoMDA(file,gps,quien,esGaleria){
         const fs=Math.max(11,Math.round(h*.022));
         ctx.fillStyle='#fff';ctx.textAlign='right';ctx.textBaseline='middle';
         const ahora=new Date();
-        const fecha=ahora.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});
+        const fecha=fmtFecha(ahora);
         const hora=ahora.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
         const gT=gps?gps.lat+','+gps.lon+' (±'+gps.acc+'m)':'GPS N/D';
         if(esGaleria){
@@ -1675,7 +1729,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 32;
+const BUILD_ACTUAL = 33;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1684,10 +1738,11 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">7 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🚛 El <b>flete de lista para Cali</b> ahora sale de la tabla de Gerencia (valor de un viaje lleno de cada producto). En pedidos mezclados se pondera por el cupo de cada producto</li>
-      <li>📋 Nombres oficiales de productos actualizados; el <b>precio por m²</b> queda vacío donde la tabla no lo trae</li>
+      <li>💲 Los <b>precios y valores ahora llevan 2 decimales</b> y se <b>truncan</b> (no se redondean): 68,794 queda en 68,79. Así cuadran con la lista de precios</li>
+      <li>📅 Todas las <b>fechas se muestran como día/mes/año</b> (dd/mm/aaaa), también al escribirlas</li>
+      <li>📦 <b>Despacho recibe toda la negociación</b>: forma de pago, IVA de cada producto, totales, flete y estiba</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2212,13 +2267,13 @@ function renderInventario(filtro="") {
         ${primera ? `<div onclick="abrirDetalleProducto('${p.tmcode}')" style="cursor:pointer;flex:1;min-width:120px;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:8px;padding:6px 10px;">
           <div style="font-size:.65rem;font-weight:700;color:#14532d;">🥇 PRIMERA</div>
           <div style="font-size:.88rem;font-weight:800;color:${semColor(primera.semaforo)};">${primera.disponible} ${p.tmund}</div>
-          <div style="font-size:.65rem;color:#555;">${semIcon(primera.semaforo)} ${primera.semaforo}${precio1?` · $${fmt(precio1)}`:''}${primera.comprometido>0?` · 🔒${primera.comprometido}`:''}</div>
+          <div style="font-size:.65rem;color:#555;">${semIcon(primera.semaforo)} ${primera.semaforo}${precio1?` · ${fmt(precio1)}`:''}${primera.comprometido>0?` · 🔒${primera.comprometido}`:''}</div>
           ${primera.curado>0 ? `<div style="font-size:.65rem;color:#5b21b6;font-weight:700;margin-top:2px;">⏳ +${primera.curado} en curado${_proxLiberacion(p.tmcode,'PRIMERA') ? ' · libera '+_proxLiberacion(p.tmcode,'PRIMERA') : ''}</div>` : ''}
         </div>` : ''}
         ${segunda ? `<div onclick="abrirDetalleProducto('${p.tmcode}')" style="cursor:pointer;flex:1;min-width:120px;background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px;padding:6px 10px;">
           <div style="font-size:.65rem;font-weight:700;color:#92400e;">🥈 SEGUNDA</div>
           <div style="font-size:.88rem;font-weight:800;color:${semColor(segunda.semaforo)};">${segunda.disponible} ${p.tmund}</div>
-          <div style="font-size:.65rem;color:#555;">${semIcon(segunda.semaforo)} ${segunda.semaforo}${precio2?` · $${fmt(precio2)}`:''}${segunda.comprometido>0?` · 🔒${segunda.comprometido}`:''}</div>
+          <div style="font-size:.65rem;color:#555;">${semIcon(segunda.semaforo)} ${segunda.semaforo}${precio2?` · ${fmt(precio2)}`:''}${segunda.comprometido>0?` · 🔒${segunda.comprometido}`:''}</div>
           ${segunda.curado>0 ? `<div style="font-size:.65rem;color:#5b21b6;font-weight:700;margin-top:2px;">⏳ +${segunda.curado} en curado${_proxLiberacion(p.tmcode,'SEGUNDA') ? ' · libera '+_proxLiberacion(p.tmcode,'SEGUNDA') : ''}</div>` : ''}
         </div>` : ''}
       </div>`;
@@ -2391,9 +2446,9 @@ const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
 const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (prod ? prod.precio_base : 0);
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
-const sub = cant * precio * (1 - desc);
-total += sub;
-const precioConDescuento = precio * (1 - desc);
+const precioConDescuento = trunc2(precio * (1 - desc));
+const sub = trunc2(cant * precioConDescuento);
+total = r2(total + sub);
 const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
 // Pendiente por despachar — antes solo se mostraba "Desp: X" (el vendedor
 // tenía que restar mentalmente). Ahora se calcula y resalta directamente,
@@ -2406,7 +2461,7 @@ html += `
 <div class="linea-num">${i+1}</div>
 <div class="linea-info">
 <div class="linea-prod">${nombre}</div>
-<div class="linea-cant">Pedido: <b>${cant}</b> ${prod?.tmund||''} · Desc: ${(desc*100).toFixed(0)}%</div>
+<div class="linea-cant">Pedido: <b>${cant}</b> ${prod?.tmund||''} · Desc: ${pctTxt(desc)} · ${R.lineas[i].grav ? 'IVA 19%: ' + fmt(R.lineas[i].ivaLinea) : 'Excluido de IVA'}</div>
 <div class="linea-cant"><span style="color:#15803d;font-weight:700;">✅ Entregado: ${Math.min(cant,despachadoLinea)}</span> · ${pendienteLinea>0 ? '<span style="color:#b91c1c;font-weight:700;">⏳ Por despachar: '+pendienteLinea+'</span>' : '<span style="color:#15803d;font-weight:700;">Completo</span>'}</div>
 <div class="linea-cant" style="margin-top:2px;">🏷️ Sin descuento: ${fmt(precio)}/u · 💲 Con descuento: ${fmt(precioConDescuento)}/u${fletePorUnidadAP>0 ? ' · 🚚 Flete: '+fmt(fletePorUnidadAP)+'/u · 💵 Con desc. + flete: '+fmt(precioConDescuentoYFlete)+'/u' : ''}</div>
 </div>
@@ -2846,11 +2901,11 @@ function seleccionarCalidad(calidad) {
   // Precio según calidad
   const dscto = parseFloat(p.descuento_segunda_pct||0);
   const precio1 = p.precio_base || 0;
-  const precio2 = precio1 * (1 - dscto/100); // sin redondear — solo fmt() redondea al mostrar
+  const precio2 = trunc2(precio1 * (1 - dscto/100));
   const precioActual = calidad==='SEGUNDA' ? precio2 : precio1;
   document.getElementById('detallePrecio').value = fmt(precioActual);
   if (calidad==='SEGUNDA' && dscto>0) {
-    document.getElementById('detallePrecioInfo').textContent = `Precio primera: $${fmt(precio1)} · Descuento: ${dscto}%`;
+    document.getElementById('detallePrecioInfo').textContent = `Precio primera: ${fmt(precio1)} · Descuento: ${dscto}%`;
   } else {
     document.getElementById('detallePrecioInfo').textContent = '';
   }
@@ -2867,8 +2922,8 @@ const alert = document.getElementById('detalleDescAlert');
 
 const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
 const precioBase = calidad==='SEGUNDA'
-  ? p.precio_base*(1-dsctoSeg/100) // sin redondear — solo fmt() redondea al mostrar
-  : p.precio_base;
+  ? trunc2(p.precio_base*(1-dsctoSeg/100))
+  : trunc2(p.precio_base);
 
 // FIX (2026-07-19): se elimina el tope de descuento a nivel de vendedor —
 // confirmado con el backend real (Backend.gs, validarDescuento(), regla
@@ -2880,17 +2935,17 @@ alert.textContent = '';
 
 const estiba = (STATE.pedido && STATE.pedido.lleva_estiba === 'SI') ? (parseFloat(p.valor_estiba_unidad) || 0) : 0;
 const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
-const unitAntesIva = precioBase * (1 - desc) + estiba + postes;
+const unitAntesIva = r2(trunc2(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
 document.getElementById('detallePrecio').value = fmt(unitAntesIva);
-const totalSinIva = cant * unitAntesIva;
+const totalSinIva = trunc2(cant * unitAntesIva);
 const esGravado = (p.tipo_iva || 'E') === 'G';
-const ivaLinea = esGravado ? totalSinIva * 0.19 : 0;
-const totalConIva = totalSinIva + ivaLinea;
+const ivaLinea = esGravado ? trunc2(totalSinIva * 0.19) : 0;
+const totalConIva = r2(totalSinIva + ivaLinea);
 document.getElementById('detalleTotal').value = fmt(totalConIva);
 const ivaInfo = document.getElementById('detalleIvaInfo');
 if (ivaInfo) {
   ivaInfo.innerHTML = esGravado
-    ? 'IVA (19%): <b>$' + fmt(ivaLinea) + '</b> incluido &nbsp;·&nbsp; <span style="color:#b91c1c;">Gravado</span>'
+    ? 'IVA (19%): <b>' + fmt(ivaLinea) + '</b> incluido &nbsp;·&nbsp; <span style="color:#b91c1c;">Gravado</span>'
     : '<span style="color:#166534;">Exento de IVA</span>';
 }
 }
@@ -2908,7 +2963,7 @@ if (!confirm(`⚠️ Stock en ROJO (${p.disponible} disponibles). ¿Confirmar de
 
 const calidad = document.getElementById('detalleCalidad')?.value || 'PRIMERA';
 const dsctoSeg = parseFloat(p.descuento_segunda_pct||0);
-const precioFinal = calidad==='SEGUNDA' ? p.precio_base*(1-dsctoSeg/100) : p.precio_base; // sin redondear — se guarda con precisión completa
+const precioFinal = calidad==='SEGUNDA' ? trunc2(p.precio_base*(1-dsctoSeg/100)) : trunc2(p.precio_base); // truncado a 2 decimales
 const estibaFinal = parseFloat(document.getElementById('detalleEstiba')?.value) || 0;
 const postesFinal = parseFloat(document.getElementById('detallePostes')?.value) || 0;
 
@@ -2967,16 +3022,16 @@ function renderLineasAP() {
       : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 1a</span>';
     const unitResultante = (typeof l._precioUnitResultante === "number") ? l._precioUnitResultante : null;
     const fletePesoTxt = (typeof l._fletePorUnidadPeso === "number")
-      ? ' · 🚚 Flete (' + (l._fleteModo === 'peso' ? 'por peso' : 'por unidades') + '): $' + fmt(l._fletePorUnidadPeso) + '/u'
+      ? ' · 🚚 Flete (' + (l._fleteModo === 'peso' ? 'por peso' : 'por unidades') + '): ' + fmt(l._fletePorUnidadPeso) + '/u'
       : (l.peso_kg_unitario > 0 ? '' : '');
     return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
       <div class="linea-info">
         <div class="linea-prod">${l.tmdescrip} ${calidadBadge}</div>
-        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · $${fmt(l.precio_base)}/u · Desc ${(l.descuento_aplicado*100).toFixed(0)}%${unitResultante !== null ? ' · Unit. resultante: $' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
+        <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · ${fmt(l.precio_base)}/u · Desc ${pctTxt(l.descuento_aplicado)}${unitResultante !== null ? ' · Unit. resultante: ' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
-        <div class="linea-precio">${fmt(l.cantidad_solicitada * l.precio_base * (1-l.descuento_aplicado))}</div>
+        <div class="linea-precio">${fmt(trunc2(l.cantidad_solicitada * trunc2(l.precio_base * (1-l.descuento_aplicado))))}</div>
         <button class="linea-del" onclick="eliminarLinea(${i})">✕</button>
       </div>
     </div>`;
@@ -3053,7 +3108,7 @@ const factor = P.flete_incluido === 'SI' ? P.num_viajes : 1;
 // pondera por el cupo que ocupa cada producto en el camión. Si algún producto no
 // tiene el dato (p. ej. postes), se usa la tarifa por destino de TARIFAS_FLETE.
 const _tarifaCali = (hayFlete && (tipo === 'CALI NORTE' || tipo === 'CALI SUR')) ? fleteViajeCaliTabla(lineas) : 0;
-const fleteSugerido = hayFlete ? (_tarifaCali > 0 ? Math.round(_tarifaCali) * factor : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) * factor : 0)) : 0;
+const fleteSugerido = hayFlete ? (_tarifaCali > 0 ? trunc2(_tarifaCali) * factor : (tarifa ? (parseFloat(tarifa.valor_lista) || 0) * factor : 0)) : 0;
 if (g('fleteOrigenHint')) g('fleteOrigenHint').textContent = !hayFlete ? '' : (_tarifaCali > 0 ? 'Tarifa de Cali según la tabla de Gerencia (viaje lleno de cada producto' + (lineas.length > 1 ? ', ponderado por el cupo de cada uno' : '') + ').' : (tipo === 'CALI NORTE' || tipo === 'CALI SUR') && lineas.length ? 'Algún producto no tiene tarifa por viaje en la tabla: se usa la tarifa por destino.' : '');
 if (g('fleteSugeridoDisplay')) g('fleteSugeridoDisplay').value = fmt(fleteSugerido);
 const inp = g('fleteValorInput');
@@ -3062,7 +3117,7 @@ const fleteRaw = inp ? inp.value : '';
 const flete = hayFlete ? (fleteRaw === '' ? fleteSugerido : (parseFloat(fleteRaw) || 0)) : 0;
 P.flete_valor = flete;
 P.flete_sugerido = fleteSugerido;
-P.flete_negociado = hayFlete && Math.round(flete) !== Math.round(fleteSugerido);
+P.flete_negociado = hayFlete && trunc2(flete) !== trunc2(fleteSugerido);
 
 const msg = g('viajesMsg');
 P._capExcede = false;
@@ -3080,6 +3135,7 @@ lineas.forEach(function (l, i) {
   l._precioUnitResultante = x.unitFinal;
   l._fletePorUnidadPeso = R.incluido ? x.fleteUnit : null;
   l._fleteModo = R.modo;
+  l._precioDesc = x.precioDesc; l._netoLinea = x.neto; l._ivaLinea = x.ivaLinea; l._totalLinea = x.totalLinea;
 });
 
 if (msg) {
@@ -3126,18 +3182,27 @@ guardarBorradorPedido();
 // Flete incluido: misma referencia = flete / unidades; varias referencias = por peso (precio por kg).
 // IVA del flete: productos gravados -> gravado; mixto -> gravado solo si lo gravado (en dinero) supera a lo excluido.
 function calcPedido(lineas, cfg) {
+  // Todos los valores en pesos se TRUNCAN a 2 decimales (indicación de Gerencia, 9 oct 2026):
+  // precio con descuento por unidad, valor de cada línea, IVA de cada línea y IVA del flete.
+  // Así los totales de la pantalla suman exactamente lo que se ve.
   const IVA = 0.19;
   const L = lineas.map(function (l) {
     const cant = parseFloat(l.cantidad_solicitada) || 0;
-    const estiba = cfg.llevaEstiba === 'SI' ? (parseFloat(l.estiba_tabla) || 0) : 0;
-    const postes = parseFloat(l.valor_postes) || 0;
-    const pb = parseFloat(l.precio_base) || 0, d = parseFloat(l.descuento_aplicado) || 0;
-    return { cant: cant, estiba: estiba, postes: postes, base: cant * pb, desc: cant * pb * d, unitNeto: pb * (1 - d) + estiba + postes,
+    const estiba = cfg.llevaEstiba === 'SI' ? trunc2(parseFloat(l.estiba_tabla) || 0) : 0;
+    const postes = trunc2(parseFloat(l.valor_postes) || 0);
+    const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
+    const pDesc = trunc2(pb * (1 - d));              // precio por unidad con descuento
+    const base = trunc2(cant * pb);                  // valor a precio de lista
+    const netoProd = trunc2(cant * pDesc);           // valor después del descuento
+    const vEst = trunc2(cant * estiba), vPost = trunc2(cant * postes);
+    return { cant: cant, estiba: estiba, postes: postes, pb: pb, pDesc: pDesc, base: base, netoProd: netoProd, desc: r2(base - netoProd),
+      neto: r2(netoProd + vEst + vPost), vEst: vEst, vPost: vPost,
+      unitNeto: r2(pDesc + estiba + postes),
       grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
   });
-  const flete = cfg.conFlete ? (parseFloat(cfg.flete) || 0) : 0;
-  const netoG = L.reduce(function (s, x) { return s + (x.grav ? x.cant * x.unitNeto : 0); }, 0);
-  const netoE = L.reduce(function (s, x) { return s + (x.grav ? 0 : x.cant * x.unitNeto); }, 0);
+  const flete = cfg.conFlete ? trunc2(parseFloat(cfg.flete) || 0) : 0;
+  const netoG = L.reduce(function (s, x) { return s + (x.grav ? x.neto : 0); }, 0);
+  const netoE = L.reduce(function (s, x) { return s + (x.grav ? 0 : x.neto); }, 0);
   const mixto = netoG > 0 && netoE > 0;
   const fleteGrav = flete > 0 && (mixto ? netoG > netoE : netoG > 0);
   const incl = flete > 0 && !!cfg.incluido;
@@ -3151,24 +3216,26 @@ function calcPedido(lineas, cfg) {
     if (nRefs > 1 && todasPeso) {
       const pesoTot = L.reduce(function (s, x) { return s + x.cant * x.peso; }, 0);
       const porKg = flete / pesoTot;
-      fu = L.map(function (x) { return porKg * x.peso; }); modo = 'peso';
+      fu = L.map(function (x) { return trunc2(porKg * x.peso); }); modo = 'peso';
     } else {
-      fu = L.map(function () { return flete / totalU; }); modo = nRefs > 1 ? 'unidades_sin_peso' : 'unidades';
+      fu = L.map(function () { return trunc2(flete / totalU); }); modo = nRefs > 1 ? 'unidades_sin_peso' : 'unidades';
     }
   }
-  let subtotal = 0, descuentos = 0, estiba = 0, postes = 0, iva = 0, ivaFlete = 0;
+  let subtotal = 0, descuentos = 0, estiba = 0, postes = 0, iva = 0;
+  const gf = incl && fleteGrav;
   const out = L.map(function (x, i) {
-    subtotal += x.base; descuentos += x.desc; estiba += x.cant * x.estiba; postes += x.cant * x.postes;
-    iva += x.grav ? x.cant * x.unitNeto * IVA : 0;
-    const gf = incl && fleteGrav;
-    if (gf) ivaFlete += x.cant * fu[i] * IVA;
-    return { estiba: x.estiba, fleteUnit: fu[i], unitFinal: x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1) };
+    subtotal += x.base; descuentos += x.desc; estiba += x.vEst; postes += x.vPost;
+    const ivaLinea = x.grav ? trunc2(x.neto * IVA) : 0;
+    iva += ivaLinea;
+    return { estiba: x.estiba, fleteUnit: fu[i], precioDesc: x.pDesc, base: x.base, netoProd: x.netoProd, neto: x.neto, grav: x.grav, ivaLinea: ivaLinea,
+      totalLinea: r2(x.neto + ivaLinea), unitFinal: trunc2(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
   });
-  if (flete > 0 && !incl && fleteGrav) ivaFlete = flete * IVA;
-  const ivaTotal = iva + ivaFlete;
+  const ivaFlete = (flete > 0 && fleteGrav) ? trunc2(flete * IVA) : 0;
+  const ivaTotal = r2(iva + ivaFlete);
+  subtotal = r2(subtotal); descuentos = r2(descuentos); estiba = r2(estiba); postes = r2(postes); iva = r2(iva);
   return { lineas: out, subtotal: subtotal, descuentos: descuentos, estiba: estiba, postes: postes, flete: flete,
     iva: ivaTotal, ivaProductos: iva, ivaFlete: ivaFlete, fleteGrav: fleteGrav, mixto: mixto, incluido: incl, modo: modo,
-    total: subtotal - descuentos + estiba + postes + flete + ivaTotal };
+    total: r2(subtotal - descuentos + estiba + postes + flete + ivaTotal) };
 }
 
 // Tope de un viaje con productos MEZCLADOS (pregunta de la Gerente, 6 oct 2026):
@@ -3256,7 +3323,7 @@ const p = draft.pedido;
 if (!p || (!p.cliente && (!p.lineas || !p.lineas.length))) { borrarBorradorPedido(); return; }
 const nombreCli = p.cliente ? p.cliente.razon_social : 'sin cliente';
 const nLineas = (p.lineas||[]).length;
-const fecha = draft.ts ? new Date(draft.ts).toLocaleString('es-CO') : '';
+const fecha = draft.ts ? fmtFechaHora(new Date(draft.ts)) : '';
 if (!confirm('📝 Tienes un pedido sin terminar (' + nombreCli + ', ' + nLineas + ' producto(s), guardado ' + fecha + ').\n\n¿Deseas continuarlo?')) {
 borrarBorradorPedido();
 return;
@@ -3417,7 +3484,7 @@ function registrarApEnCesion(vendedorNombre, esApoyo, apoyoPorNombre, apIdReal){
       cliente_nit:cliente?cliente.cliente_nit:'',
       lineas:STATE.pedido.lineas.length,
       total:totalTxt,
-      hora:new Date().toLocaleString('es-CO'),
+      hora:fmtFechaHora(new Date()),
       // Vendedor real dueño de la AP + info de venta de apoyo (si aplica)
       vendedor_nombre: vendedorNombre || STATE.vendedor?.nombre_vendedor || '',
       es_apoyo: !!esApoyo,
@@ -3495,13 +3562,13 @@ async function cerrarCesionYGenerarInforme(){
     const doc = new jsPDF();
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
-    const fmtN = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
+    const fmtN = n => num2(n);
 
     let y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial');
     doc.setFontSize(9);
     const _hayApoyoPDF = CESION_ACTUAL.some(it => it.es_apoyo);
     doc.text((_hayApoyoPDF ? 'Gestionado por: ' : 'Vendedor: ') + (STATE.vendedor?.nombre_vendedor||'') + (_hayApoyoPDF ? ' (apoyo a vendedor)' : ''), 14, y);
-    doc.text('Fecha: ' + new Date().toLocaleString('es-CO'), pageW - 14, y, {align:'right'});
+    doc.text('Fecha: ' + fmtFechaHora(new Date()), pageW - 14, y, {align:'right'});
     y += 4;
     doc.text('Pedido(s) en esta visita: ' + CESION_ACTUAL.length, 14, y);
     y += 8;
@@ -3533,7 +3600,7 @@ async function cerrarCesionYGenerarInforme(){
       if (it.orden_compra_cliente) { doc.text('N° Orden de compra: ' + it.orden_compra_cliente, 14, y); y += 5; }
       if (it.cotizacion_ref) { doc.text('N° Cotización: ' + it.cotizacion_ref, 14, y); y += 5; }
       if (it.condiciones_pago) { doc.text('Condiciones de pago: ' + it.condiciones_pago, 14, y); y += 5; }
-      if (it.fecha_entrega) { doc.text('Fecha de entrega solicitada: ' + it.fecha_entrega, 14, y); y += 5; }
+      if (it.fecha_entrega) { doc.text('Fecha de entrega solicitada: ' + fmtFecha(it.fecha_entrega), 14, y); y += 5; }
       y += 2;
 
       // Tabla de productos negociados
@@ -3573,23 +3640,22 @@ async function cerrarCesionYGenerarInforme(){
       // igual que ya lo hace la app de Despacho.
       (it.detalle_lineas||[]).forEach(function(l){
         ensureSpace(9);
-        const base = l.cantidad_solicitada * l.precio_base;
-        const desc = base * (l.descuento_aplicado||0);
-        const neto = base - desc;
-        const ivaLinea = (l.tipo_iva||'E')==='G' ? neto * 0.19 : 0;
-        const totalLinea = neto + ivaLinea;
+        const _pDesc = trunc2((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
+        const neto = trunc2(l.cantidad_solicitada * _pDesc);
+        const ivaLinea = (l.tipo_iva||'E')==='G' ? trunc2(neto * 0.19) : 0;
+        const totalLinea = r2(neto + ivaLinea);
         const nombre = (l.tmdescrip||'').length > 44 ? l.tmdescrip.substring(0,41)+'...' : (l.tmdescrip||'');
         doc.text(nombre, colX.prod, y);
         doc.text(l.calidad||'', colX.cal, y);
         doc.text(String(l.cantidad_solicitada||0) + ' ' + (l.tmund||''), colX.cant, y);
-        doc.text('$'+fmtN(l.precio_base), colX.precio, y);
-        doc.text(((l.descuento_aplicado||0)*100).toFixed(0)+'%', colX.desc, y);
-        doc.text('$'+fmtN(totalLinea), colX.total, y);
+        doc.text(fmt(l.precio_base), colX.precio, y);
+        doc.text(pctTxt(l.descuento_aplicado||0), colX.desc, y);
+        doc.text(fmt(totalLinea), colX.total, y);
         y += 4.3;
 
         // NUEVO: desglose de precio unitario (con descuento / con descuento+flete),
         // mismo dato que ya se muestra en Despacho y en "Mis APs" de Comercial.
-        const _precioConDescuentoU = (l.precio_base||0) * (1 - (l.descuento_aplicado||0)); // sin redondear
+        const _precioConDescuentoU = trunc2((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
         const _fleteLin = (it.totales && it.totales.flete_prorrateado && typeof l._fleteUnit === 'number') ? l._fleteUnit : 0;
         const _precioConDescuentoYFleteU = _precioConDescuentoU + _fleteLin;
         doc.setFontSize(6.8); doc.setTextColor(120);
@@ -3608,7 +3674,7 @@ async function cerrarCesionYGenerarInforme(){
       if (it.totales) {
         const t = it.totales;
         doc.text('Subtotal: $' + fmtN(t.subtotal), pageW - 14, y, {align:'right'}); y += 5;
-        doc.text('Descuentos: -$' + fmtN(t.descuentos), pageW - 14, y, {align:'right'}); y += 5;
+        doc.text('Descuentos: -' + fmt(t.descuentos), pageW - 14, y, {align:'right'}); y += 5;
         // El flete siempre se muestra por separado con su valor real (igual que
         // en Despacho) — nunca mezclado dentro del precio unitario del producto.
         if (t.estiba > 0) { doc.text('Estiba: $' + fmtN(t.estiba), pageW - 14, y, {align:'right'}); y += 5; }
@@ -3619,7 +3685,7 @@ async function cerrarCesionYGenerarInforme(){
         doc.setFont(undefined, 'normal');
         y += 8;
       } else {
-        doc.text('Total: $' + it.total, pageW - 14, y, {align:'right'});
+        doc.text('Total: ' + fmt(it.total), pageW - 14, y, {align:'right'});
         y += 8;
       }
 
@@ -3647,7 +3713,7 @@ async function cerrarCesionYGenerarInforme(){
           doc.text('Competencia mencionada:', 14, y); y += 4.5;
           compValida.forEach(function(cp){
             ensureSpace(5);
-            const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+fmtN(cp.precio)) : ''].filter(Boolean).join(' — ');
+            const partes = [cp.nombre, cp.producto, cp.precio ? (fmt(cp.precio)) : ''].filter(Boolean).join(' — ');
             doc.text('• ' + partes, 16, y); y += 4.5;
           });
         }
@@ -3862,6 +3928,17 @@ cotizacion_ref: STATE.pedido.cotizacion_ref || '',
 condiciones_pago: STATE.pedido.condiciones_pago || '',
 nombre_obra: STATE.pedido.nombre_obra || '',
 plan_entregas: STATE.pedido.plan_entregas || '',
+// Datos de la negociación para Despacho (9 oct 2026): todo lo acordado viaja con la AP
+forma_pago: STATE.pedido.forma_pago || '',
+dias_credito: STATE.pedido.forma_pago === 'CREDITO' ? (parseInt(STATE.pedido.dias_credito) || '') : '',
+flete_incluido: STATE.pedido.flete_incluido || '',
+subtotal_ap: STATE.pedido._totales ? STATE.pedido._totales.subtotal : '',
+descuento_ap: STATE.pedido._totales ? STATE.pedido._totales.descuentos : '',
+estiba_ap: STATE.pedido._totales ? STATE.pedido._totales.estiba : '',
+iva_productos_ap: STATE.pedido._totales ? r2(STATE.pedido._totales.iva - STATE.pedido._totales.iva_flete) : '',
+iva_flete_ap: STATE.pedido._totales ? STATE.pedido._totales.iva_flete : '',
+iva_ap: STATE.pedido._totales ? STATE.pedido._totales.iva : '',
+total_ap: STATE.pedido._totales ? STATE.pedido._totales.total : '',
 detalle: STATE.pedido.lineas.map(l => ({
 tmcode: l.tmcode,
 cantidad_solicitada: l.cantidad_solicitada,
@@ -3870,7 +3947,13 @@ descuento_aplicado: l.descuento_aplicado,
 precio_base: l.precio_base,
 calidad: l.calidad || 'PRIMERA',
 valor_estiba: l.valor_estiba || 0,
-valor_postes: l.valor_postes || 0
+valor_postes: l.valor_postes || 0,
+tipo_iva: l.tipo_iva || 'E',
+precio_con_descuento: l._precioDesc || 0,
+valor_linea: l._netoLinea || 0,
+iva_linea: l._ivaLinea || 0,
+total_linea: l._totalLinea || 0,
+flete_unitario: l._fleteUnit || 0
 }))
 };
 
@@ -4079,32 +4162,46 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // =============================================================================
 // UTILIDADES
 // =============================================================================
-function fmt(n) {
-  return '$' + Math.round(n || 0).toLocaleString('es-CO');
+// ===== Formato SIVIL (9 oct 2026) =====
+// Montos: se TRUNCAN (no se redondean) a 2 decimales y los decimales siempre se muestran.
+// Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
+// Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
+function trunc2(n) {
+  n = Number(n); if (!isFinite(n)) return 0;
+  const a = Math.abs(n) * 100;
+  const t = Math.floor(a + 1e-7 + a * 2e-15) / 100;
+  return n < 0 ? -t : t;
 }
-
-// gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"
+function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; } // solo para sumar valores que ya vienen con 2 decimales
+function num2(n) {
+  const t = trunc2(n), neg = t < 0;
+  const p = Math.abs(t).toFixed(2).split('.');
+  return (neg ? '-' : '') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
+}
+function fmt(n) { return '$' + num2(n); }
+function pctTxt(d) { return num2((Number(d) || 0) * 100) + '%'; }
+function _p2(n) { return (n < 10 ? '0' : '') + n; }
+// gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"; los campos de texto traen "2026-10-12"
 function parseFecha(val) {
   if (!val) return null;
-  if (val instanceof Date) return val;
-  // Formato gviz: Date(yyyy,m,d) — mes es 0-indexed
-  const m = String(val).match(/Date\((\d+),(\d+),(\d+)/);
-  if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
-  // Intentar parseo normal
+  if (val instanceof Date) return isNaN(val) ? null : val;
+  const s = String(val);
+  let m = s.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]), parseInt(m[4] || 0), parseInt(m[5] || 0), parseInt(m[6] || 0));
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/); // solo fecha: se arma en hora local para que no se corra un día
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
   const d = new Date(val);
   return isNaN(d) ? null : d;
 }
-
 function fmtFecha(val) {
   const d = parseFecha(val);
-  if (!d) return '';
-  return d.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'});
+  return d ? _p2(d.getDate()) + '/' + _p2(d.getMonth() + 1) + '/' + d.getFullYear() : (val ? String(val) : '');
 }
-
 function fmtFechaHora(val) {
   const d = parseFecha(val);
-  if (!d) return '';
-  return d.toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+  return d ? fmtFecha(d) + ' ' + _p2(d.getHours()) + ':' + _p2(d.getMinutes()) : '';
 }
 
 function toast(msg, dur=2500) {
@@ -4322,7 +4419,7 @@ async function guardarVisita(){
     fotos:_VFOTOS.map(f=>({b64:f.b64,hora:f.hora})),
     archivos_adjuntos:_VARCHIVOS.map(f=>({nombre:f.nombre,tipo:f.tipo,tamano:f.tamano,b64:f.b64})),
     notas:document.getElementById('visitaNotas')?.value.trim()||'',productos_interes:_VPRODINT.slice(),competencia:_VCOMP.filter(c=>c.nombre||c.producto||c.precio),
-    hora:new Date().toLocaleString('es-CO'),vendedor:STATE.vendedor?.nombre_vendedor||''};
+    hora:fmtFechaHora(new Date()),vendedor:STATE.vendedor?.nombre_vendedor||''};
   // Se baja el tope de 50 a 20 visitas retenidas: 50 visitas con 3+ fotos
   // cada una (fotos en base64) llenaban el almacenamiento local del celular
   // con el paso de los días, causando que guardar una nueva visita fallara
@@ -4463,7 +4560,7 @@ async function generarInformeVisitaPDF(reg) {
       seccion('Competencia mencionada por el cliente');
       compValida.forEach(function(cp){
         ensureSpace(5);
-        const partes = [cp.nombre, cp.producto, cp.precio ? ('$'+Number(cp.precio).toLocaleString('es-CO')) : ''].filter(Boolean).join('   —   ');
+        const partes = [cp.nombre, cp.producto, cp.precio ? fmt(cp.precio) : ''].filter(Boolean).join('   —   ');
         doc.text('•  ' + partes, 18, y); y += 4.8;
       });
       y += 4;
