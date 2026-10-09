@@ -902,6 +902,60 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="toast" class="toast"></div>
 
 <script>
+// ===== Campos de fecha en formato dd/mm/aaaa (9 oct 2026) =====
+// Los <input type="date"> muestran el formato del celular (a veces mes/día/año).
+// Aquí se convierten en campos de texto dd/mm/aaaa con botón de calendario;
+// el resto del código sigue leyendo/escribiendo .value en formato aaaa-mm-dd.
+(function () {
+  var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  function iso2dma(v) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : (v || ''); }
+  function dma2iso(v) {
+    v = String(v || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); if (!m) return '';
+    var d = +m[1], mo = +m[2], y = +m[3], t = new Date(y, mo - 1, d);
+    if (t.getFullYear() !== y || t.getMonth() !== mo - 1 || t.getDate() !== d) return '';
+    return y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+  function mejorar(el) {
+    if (el.dataset.sivilFecha) return;
+    el.dataset.sivilFecha = '1';
+    var inicial = desc.get.call(el);
+    el.type = 'text';
+    Object.defineProperty(el, 'value', { configurable: true,
+      get: function () { return dma2iso(desc.get.call(el)); },
+      set: function (v) { desc.set.call(el, iso2dma(v)); } });
+    desc.set.call(el, iso2dma(inicial));
+    el.placeholder = 'dd/mm/aaaa'; el.maxLength = 10; el.inputMode = 'numeric'; el.autocomplete = 'off';
+    el.addEventListener('input', function () {
+      var d = desc.get.call(el).replace(/\D/g, '').slice(0, 8), s = d;
+      if (d.length > 4) s = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+      else if (d.length > 2) s = d.slice(0, 2) + '/' + d.slice(2);
+      desc.set.call(el, s);
+      if (s.length === 10 && dma2iso(s)) el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    var w = document.createElement('div');
+    w.style.cssText = 'display:flex;gap:6px;align-items:center;position:relative;';
+    el.parentNode.insertBefore(w, el); w.appendChild(el); el.style.flex = '1'; el.style.minWidth = '0';
+    var sel = document.createElement('input'); sel.type = 'date'; sel.dataset.sivilFecha = '1'; sel.tabIndex = -1;
+    sel.style.cssText = 'position:absolute;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+    var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = '📅'; btn.title = 'Elegir en el calendario';
+    btn.style.cssText = 'border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 9px;font-size:1rem;cursor:pointer;';
+    btn.onclick = function () { sel.value = el.value; try { sel.showPicker ? sel.showPicker() : sel.click(); } catch (e) { sel.click(); } };
+    sel.onchange = function () { if (sel.value) { el.value = sel.value; el.dispatchEvent(new Event('change', { bubbles: true })); } };
+    w.appendChild(btn); w.appendChild(sel);
+  }
+  function barrer(r) { if (r.querySelectorAll) r.querySelectorAll('input[type="date"]').forEach(mejorar); }
+  new MutationObserver(function (ms) {
+    ms.forEach(function (m) { m.addedNodes.forEach(function (n) {
+      if (n.nodeType !== 1) return;
+      if (n.matches && n.matches('input[type="date"]')) mejorar(n); else barrer(n);
+    }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { barrer(document); }); else barrer(document);
+})();
+</script>
+<script>
 // =============================================================================
 // SIVIL APP GERENCIA v1.0
 
@@ -1223,7 +1277,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 3;
+const BUILD_ACTUAL = 4;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1232,11 +1286,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#14532d;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">7 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>📋 Se cargó la <b>tabla de productos y precios del 6 de octubre</b>: nombres oficiales, pesos, estibas, unidades por viaje y el <b>Poste 18x1050</b></li>
-      <li>✏️ En <b>Precios → Editar</b> ya puedes llenar el <b>precio por m²</b> de cada producto (queda vacío en los que la tabla no lo trae)</li>
-      <li>🚛 El flete de <b>Cali</b> ahora sale de la tabla: valor de un viaje lleno de cada producto, y en pedidos mezclados se pondera por el cupo de cada uno</li>
+      <li>💲 Los valores del informe y de los KPI llevan <b>2 decimales</b> y se <b>truncan</b> (68,794 queda en 68,79)</li>
+      <li>📅 Todas las fechas se muestran como <b>día/mes/año</b> (dd/mm/aaaa), incluidos los filtros del informe</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1406,10 +1459,10 @@ function calcularVentasKPIs() {
     const desc       = parseFloat(d.descuento_aplicado) || 0;
     const estiba     = parseFloat(d.valor_estiba) || 0;
     const postes     = parseFloat(d.valor_postes) || 0;
-    const unitAntesIva = precioBase * (1 - desc) + estiba + postes;
-    const totalSinIva  = cant * unitAntesIva;
+    const unitAntesIva = r2(trunc2(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
+    const totalSinIva  = trunc2(cant * unitAntesIva);
     const esGravado = prod ? (prod.tipo_iva || 'E') === 'G' : false;
-    const totalLinea = esGravado ? totalSinIva * 1.19 : totalSinIva;
+    const totalLinea = esGravado ? r2(totalSinIva + trunc2(totalSinIva * 0.19)) : totalSinIva;
 
     ventasTotal        += totalLinea;
     sumDescPonderado    += desc * (cant * precioBase);
@@ -1433,7 +1486,7 @@ function calcularVentasKPIs() {
   if (elVentasHoy)   elVentasHoy.textContent   = fmt(ventasHoy);
   if (elVentasTotal) elVentasTotal.textContent = fmt(ventasTotal);
   if (elTicketProm)  elTicketProm.textContent  = fmt(ticketProm);
-  if (elDescProm)    elDescProm.textContent    = descProm.toFixed(1) + '%';
+  if (elDescProm)    elDescProm.textContent    = num2(descProm) + '%';
 }
 
 function renderDashboard() {
@@ -1634,7 +1687,7 @@ async function guardarStockMinimo(tmcode) {
 // =============================================================================
 function alertaWA(tmcode, desc, disponible, aProducir, und) {
   const urgente = disponible <= -10;
-  const fecha   = new Date().toLocaleDateString('es-CO');
+  const fecha   = fmtFecha(new Date());
   const hora    = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
   const msg = `${urgente?'🚨':'⚠️'} *ALERTA INVENTARIO — POSTEC*
 ━━━━━━━━━━━━━━━━━━
@@ -1712,7 +1765,7 @@ function renderCuradoDashboard() {
       </div>
       <div style="flex:1;">
         <div style="font-size:.82rem;font-weight:700;">${c.tmcode} — ${prod ? prod.tmdescrip : 'Producto sin nombre'} <span style="font-size:.65rem;font-weight:700;color:${calidad==='SEGUNDA'?'#92400e':'#14532d'};">${calidad==='SEGUNDA'?'🥈 SEGUNDA':'🥇 PRIMERA'}</span></div>
-        <div style="font-size:.70rem;color:#666;">${c.cant_en_curado} UND · Libre: ${lib ? lib.toLocaleDateString('es-CO') : (c.fecha_liberacion_curado||'?')}</div>
+        <div style="font-size:.70rem;color:#666;">${c.cant_en_curado} UND · Libre: ${lib ? fmtFecha(lib) : (c.fecha_liberacion_curado||'?')}</div>
       </div>
     </div>`;
   }).join('');
@@ -1744,7 +1797,7 @@ function renderAveriasGerencia() {
     const prod = G.inventario?.find(x => String(x.tmcode) === String(p.tmcode));
     return `
     <div style="padding:8px 0;border-bottom:1px solid var(--borde);">
-      <div style="font-size:0.7rem;color:#888;">${(() => { const f = parseFecha(p.fecha_registro); return f ? f.toLocaleDateString('es-CO') : (p.fecha_registro||'?'); })()}</div>
+      <div style="font-size:0.7rem;color:#888;">${(() => { const f = parseFecha(p.fecha_registro); return f ? fmtFecha(f) : (p.fecha_registro||'?'); })()}</div>
       <div style="font-weight:700;font-size:0.85rem;">${p.tmcode} — ${prod ? prod.tmdescrip : 'Producto sin nombre'}</div>
       <div style="font-size:0.75rem;color:${p._color};">⚠️ ${p._etiqueta}: ${p._cant} ${prod ? prod.tmund : ''} — AP #${p.ap_id||'N/A'}</div>
     </div>`;
@@ -1770,7 +1823,7 @@ function renderAprobaciones() {
           Cliente: ${a.cliente}<br>
           Descuento solicitado: <strong style="color:var(--rojo);">${(parseFloat(a.descuento)*100).toFixed(1)}%</strong>
           · Máximo permitido: ${(parseFloat(a.desc_max)*100).toFixed(1)}%<br>
-          AP #${a.ap_id} · ${fecha?fecha.toLocaleString('es-CO'):''}
+          AP #${a.ap_id} · ${fecha?fmtFechaHora(fecha):''}
         </div>
         <div class="btn-row" style="margin-top:.75rem;">
           <button class="btn btn-primary btn-sm" onclick="resolverAprobacion('${a.id}','aprobada')">✅ Aprobar</button>
@@ -1849,7 +1902,7 @@ function renderPrecios() {
             Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}${(parseFloat(p.precio_m2)||0) > 0 ? ' · m²: ' + fmt(p.precio_m2) : ''}
           </div>
           <div style="font-size:.68rem;color:#888;margin-top:2px;">
-            Vigente hasta: ${fHasta ? fHasta.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}) : 'Sin límite'}
+            Vigente hasta: ${fHasta ? fmtFecha(fHasta) : 'Sin límite'}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
@@ -1936,7 +1989,7 @@ async function actualizarPrecio() {
 // =============================================================================
 // INFORME DE VENTAS — AP / vendedor / producto / cantidad / descuento / valor / flete
 // =============================================================================
-const fmtNInf = n => Number(n||0).toLocaleString('es-CO', {maximumFractionDigits:0});
+const fmtNInf = n => num2(n);
 
 function _nombreVendedorInf(vendedor_id) {
   const v = G.vendedores.find(x => String(x.id_vendedor) === String(vendedor_id) || String(x.cedula) === String(vendedor_id));
@@ -1962,7 +2015,7 @@ function _construirFilasInforme() {
       const cant = parseFloat(d.cantidad_solicitada) || 0;
       const precioBase = parseFloat(d.precio_base) || 0;
       const descuento = parseFloat(d.descuento_aplicado) || 0;
-      const valorTotal = cant * precioBase * (1 - descuento);
+      const valorTotal = trunc2(cant * trunc2(precioBase * (1 - descuento)));
       return {
         ap_id: d.ap_id,
         vendedor_id: ap.vendedor_id,
@@ -1998,10 +2051,10 @@ function _filasInformeFiltradas() {
   return filas.filter(f => {
     if (filtroVend && f.vendedor_nombre !== filtroVend) return false;
     if (desde || hasta) {
-      const fechaFila = f.fecha_creacion ? new Date(f.fecha_creacion) : null;
+      const fechaFila = f.fecha_creacion ? parseFecha(f.fecha_creacion) : null;
       if (fechaFila) {
-        if (desde && fechaFila < new Date(desde)) return false;
-        if (hasta && fechaFila > new Date(hasta + 'T23:59:59')) return false;
+        if (desde && fechaFila < parseFecha(desde)) return false;
+        if (hasta) { const h = parseFecha(hasta); h.setHours(23,59,59); if (fechaFila > h) return false; }
       }
     }
     if (texto) {
@@ -2026,7 +2079,7 @@ function renderInformeGerencia() {
       <td style="padding:5px 8px;">${f.vendedor_nombre}</td>
       <td style="padding:5px 8px;">${f.producto}</td>
       <td style="padding:5px 8px;text-align:right;">${fmtNInf(f.cantidad)}</td>
-      <td style="padding:5px 8px;text-align:right;">${f.descuento_pct?f.descuento_pct.toFixed(0)+'%':'—'}</td>
+      <td style="padding:5px 8px;text-align:right;">${f.descuento_pct?pctTxt(f.descuento_pct/100):'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-weight:600;">$${fmtNInf(f.valor_total)}</td>
       <td style="padding:5px 8px;text-align:right;color:#7c3200;">$${fmtNInf(f.flete_ap)}</td>
     </tr>
@@ -2056,7 +2109,7 @@ function exportarInformeExcel() {
     'Producto': f.producto,
     'Cantidad': f.cantidad,
     'Descuento %': f.descuento_pct,
-    'Valor Total': Math.round(f.valor_total),
+    'Valor Total': trunc2(f.valor_total),
     'Costo de Transporte (AP)': f.flete_ap
   }));
 
@@ -2191,14 +2244,47 @@ async function toggleVendedor(id, nuevoEstado) {
 // =============================================================================
 // UTILS
 // =============================================================================
+// ===== Formato SIVIL (9 oct 2026) =====
+// Montos: se TRUNCAN (no se redondean) a 2 decimales y los decimales siempre se muestran.
+// Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
+// Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
+function trunc2(n) {
+  n = Number(n); if (!isFinite(n)) return 0;
+  const a = Math.abs(n) * 100;
+  const t = Math.floor(a + 1e-7 + a * 2e-15) / 100;
+  return n < 0 ? -t : t;
+}
+function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; } // solo para sumar valores que ya vienen con 2 decimales
+function num2(n) {
+  const t = trunc2(n), neg = t < 0;
+  const p = Math.abs(t).toFixed(2).split('.');
+  return (neg ? '-' : '') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
+}
+function fmt(n) { return '$' + num2(n); }
+function pctTxt(d) { return num2((Number(d) || 0) * 100) + '%'; }
+function _p2(n) { return (n < 10 ? '0' : '') + n; }
+// gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"; los campos de texto traen "2026-10-12"
 function parseFecha(val) {
   if (!val) return null;
-  if (val instanceof Date) return isNaN(val)?null:val;
-  const m=String(val).match(/Date\((\d+),(\d+),(\d+)/);
-  if (m) return new Date(parseInt(m[1]),parseInt(m[2]),parseInt(m[3]));
-  const d=new Date(val); return isNaN(d)?null:d;
+  if (val instanceof Date) return isNaN(val) ? null : val;
+  const s = String(val);
+  let m = s.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]), parseInt(m[4] || 0), parseInt(m[5] || 0), parseInt(m[6] || 0));
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/); // solo fecha: se arma en hora local para que no se corra un día
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  const d = new Date(val);
+  return isNaN(d) ? null : d;
 }
-function fmt(n){ return '$'+Math.round(n||0).toLocaleString('es-CO'); }
+function fmtFecha(val) {
+  const d = parseFecha(val);
+  return d ? _p2(d.getDate()) + '/' + _p2(d.getMonth() + 1) + '/' + d.getFullYear() : (val ? String(val) : '');
+}
+function fmtFechaHora(val) {
+  const d = parseFecha(val);
+  return d ? fmtFecha(d) + ' ' + _p2(d.getHours()) + ':' + _p2(d.getMinutes()) : '';
+}
 
 
 function abrirLoginAdmin() {
@@ -2365,7 +2451,7 @@ function renderVisitasGerencia() {
   cont.innerHTML = lista.map(visitaCard).join('');
 }
 function visitaCard(v) {
-  const fecha = v.fecha_hora ? new Date(v.fecha_hora).toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'short'}) : '—';
+  const fecha = v.fecha_hora ? fmtFechaHora(new Date(v.fecha_hora)) : '—';
   return `
   <div style="border:1px solid var(--borde);border-radius:10px;padding:.75rem;margin-bottom:.5rem;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -2594,7 +2680,7 @@ async function cargarArchivosDrive() {
     const archivos = j.data || [];
     const primeras = archivos.filter(f => f.esPrimeras);
     const segunda  = archivos.filter(f => f.esSegunda);
-    const fmtF = iso => new Date(iso).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const fmtF = iso => fmtFechaHora(new Date(iso));
     status.textContent = archivos.length + ' archivo(s) en la carpeta de Drive';
     cont.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
@@ -2699,7 +2785,7 @@ async function cargarDescuentosSegunda() {
       <tbody>${precios.map((p,i)=>`<tr style="background:${i%2===0?'#fffbeb':'#fff'}">
         <td style="padding:4px 8px;">${p.tmcode}</td>
         <td style="padding:4px 8px;">${(p.tmdescrip||'').slice(0,25)}</td>
-        <td style="padding:4px 8px;text-align:right;">$${Number(p.precio_base_planta||0).toLocaleString('es-CO')}</td>
+        <td style="padding:4px 8px;text-align:right;">${fmt(p.precio_base_planta||0)}</td>
         <td style="padding:4px 8px;text-align:center;">
           <input type="number" min="0" max="80" step="1" value="${p.descuento_segunda_pct||10}"
             style="width:50px;text-align:center;border:1.5px solid #f59e0b;border-radius:4px;padding:2px;font-size:.75rem;"
@@ -2707,7 +2793,7 @@ async function cargarDescuentosSegunda() {
             onchange="actualizarDescuento('${p.tmcode}',this.value);this.style.background='#fef9c3'">%
         </td>
         <td style="padding:4px 8px;text-align:right;color:#92400e;font-weight:700;" id="precio2a_${p.tmcode}">
-          $${Math.round(Number(p.precio_base_planta||0)*(1-(Number(p.descuento_segunda_pct)||10)/100)).toLocaleString('es-CO')}
+          ${fmt(trunc2(Number(p.precio_base_planta||0)*(1-(Number(p.descuento_segunda_pct)||10)/100)))}
         </td>
       </tr>`).join('')}</tbody></table>
     <div style="font-size:.65rem;color:#888;margin-top:.4rem;">Mostrando ${precios.length} de ${j.data?.length||0} productos con precio. Constanza define los %.</div></div>`;
@@ -2721,7 +2807,7 @@ async function actualizarDescuento(tmcode, pct) {
       body:JSON.stringify({accion:'actualizarDescuentoSegunda',tmcode,pct:parseFloat(pct)})});
     const j = await r.json();
     if (j.ok && celPrecio && j.precio_segunda) {
-      celPrecio.textContent = '$' + Number(j.precio_segunda).toLocaleString('es-CO');
+      celPrecio.textContent = fmt(j.precio_segunda);
     }
     toast('💾 Descuento ' + pct + '% guardado para ' + tmcode);
   } catch(e) { toast('Error al guardar: ' + e.message); }
