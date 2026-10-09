@@ -23,6 +23,7 @@ const HOJAS = {
   VIAJES:      "VIAJES_COMPARTIDOS",
   FUNCIONARIOS: "FUNCIONARIOS",
   VISITAS: "REGISTRO_VISITAS", APROBACIONES: "APROBACIONES",
+  COTIZACIONES: "COTIZACIONES",
 };
 
 function doGet(e) {
@@ -86,6 +87,8 @@ function doPost(e) {
       case "actualizarContacto": resultado = actualizarContacto(body); break;
       case "eliminarContacto": resultado = eliminarContacto(body); break;
       case "crearPreventa": resultado = crearPreventa(body); break;
+      case "guardarCotizacion": resultado = guardarCotizacion(body); break;
+      case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
       case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
       case "resetSistema": resultado = resetSistema(body); break;
@@ -1833,4 +1836,66 @@ function _setCamposExtraAP(hoja, fila, body) {
   });
 }
 
-
+// =============================================================================
+// COTIZACIONES (9 oct 2026) — módulo Cotizador de Comercial.
+// Número de cotización MANUAL: si ya existe en otra cotización se avisa
+// (duplicado) y solo se guarda si el usuario confirma. Se lee desde la app por gviz.
+// =============================================================================
+const COTIZ_COLS = ["uid","numero","fecha","vendedor_id","cliente_nit","cliente_nombre","obra","vigencia","despachos_hasta","subtotal","iva","total","estado","payload","creado","actualizado","ap_id","nota_estado"];
+function _hojaCotiz() {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let h = ss.getSheetByName(HOJAS.COTIZACIONES);
+  if (!h) {
+    h = ss.insertSheet(HOJAS.COTIZACIONES);
+    h.getRange(1, 1, 1, COTIZ_COLS.length).setValues([COTIZ_COLS]).setFontWeight("bold");
+    h.setFrozenRows(1);
+  }
+  h.getRange(1, 1, h.getMaxRows(), COTIZ_COLS.length).setNumberFormat("@");
+  return h;
+}
+function _normNumCotiz(n) { return String(n || "").toUpperCase().replace(/\s+/g, ""); }
+function guardarCotizacion(body) {
+  const num = String(body.numero || "").trim();
+  if (!num) return { ok: false, error: "Falta el número de cotización" };
+  const hoja = _hojaCotiz();
+  const datos = hoja.getDataRange().getValues();
+  const iU = COTIZ_COLS.indexOf("uid"), iN = COTIZ_COLS.indexOf("numero");
+  let fila = -1;
+  if (body.uid) for (let i = 1; i < datos.length; i++) if (String(datos[i][iU]) === String(body.uid)) { fila = i + 1; break; }
+  if (!body.confirmar_duplicado) {
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][iU]) === String(body.uid || "")) continue;
+      if (_normNumCotiz(datos[i][iN]) === _normNumCotiz(num) && String(datos[i][COTIZ_COLS.indexOf("estado")]) !== "Anulada") {
+        return { ok: false, duplicado: true, existente: { numero: datos[i][iN], cliente: datos[i][COTIZ_COLS.indexOf("cliente_nombre")], fecha: datos[i][COTIZ_COLS.indexOf("fecha")], vendedor_id: datos[i][COTIZ_COLS.indexOf("vendedor_id")] } };
+      }
+    }
+  }
+  const ahora = new Date().toISOString();
+  const uid = body.uid || ("Q" + new Date().getTime());
+  const fila_ = [uid, num, body.fecha || "", body.vendedor_id || "", body.cliente_nit || "", body.cliente_nombre || "", body.obra || "", body.vigencia || "", body.despachos_hasta || "",
+    body.subtotal || 0, body.iva || 0, body.total || 0, body.estado || "Borrador", JSON.stringify(body.payload || {}), "", ahora, body.ap_id || "", body.nota_estado || ""];
+  if (fila > 0) {
+    fila_[COTIZ_COLS.indexOf("creado")] = datos[fila - 1][COTIZ_COLS.indexOf("creado")];
+    fila_[COTIZ_COLS.indexOf("ap_id")] = body.ap_id || datos[fila - 1][COTIZ_COLS.indexOf("ap_id")];
+    hoja.getRange(fila, 1, 1, COTIZ_COLS.length).setValues([fila_]);
+  } else {
+    fila_[COTIZ_COLS.indexOf("creado")] = ahora;
+    hoja.appendRow(fila_);
+  }
+  return { ok: true, uid: uid, numero: num };
+}
+function cambiarEstadoCotizacion(body) {
+  const hoja = _hojaCotiz();
+  const datos = hoja.getDataRange().getValues();
+  const iU = COTIZ_COLS.indexOf("uid");
+  for (let i = 1; i < datos.length; i++) {
+    if (String(datos[i][iU]) === String(body.uid)) {
+      hoja.getRange(i + 1, COTIZ_COLS.indexOf("estado") + 1).setValue(body.estado);
+      hoja.getRange(i + 1, COTIZ_COLS.indexOf("actualizado") + 1).setValue(new Date().toISOString());
+      if (body.nota !== undefined) hoja.getRange(i + 1, COTIZ_COLS.indexOf("nota_estado") + 1).setValue(body.nota);
+      if (body.ap_id) hoja.getRange(i + 1, COTIZ_COLS.indexOf("ap_id") + 1).setValue(body.ap_id);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: "Cotización no encontrada" };
+}
