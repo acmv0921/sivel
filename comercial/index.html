@@ -556,6 +556,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <button class="btn btn-primary" onclick="czPDF()">📄 Guardar y generar PDF</button>
           <button class="btn btn-outline" onclick="czWhatsApp()">💬 Guardar y enviar por WhatsApp</button>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;"><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Aceptada')">✅ Aceptada</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Perdida')">❌ Perdida</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Anulada')">🗑️ Anular</button></div>
+          <button class="btn btn-primary" id="czBtnAP" style="width:100%;margin-top:8px;" onclick="czAAP()">📦 Convertir en AP (pedido)</button><div id="czApInfo" style="font-size:.76rem;color:#166534;margin-top:4px;"></div>
         </div>
       </div>
     </div>
@@ -4029,6 +4030,7 @@ if (!resultado || resultado.ok === false) {
 toast("✅ AP guardada correctamente");
 
 registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre, resultado.ap_id);
+await czVincularAP(resultado.ap_id);
 
 limpiarPedido();
 await cargarMisAPs();
@@ -4924,7 +4926,7 @@ function czRenderLista() {
   cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
     (ver.length ? ver.map(function (c) {
       return '<div class="card" style="padding:.7rem;margin-bottom:8px;cursor:pointer;" onclick="czAbrir(\'' + czH(c.uid) + '\')"><div style="display:flex;justify-content:space-between;gap:8px;"><b>' + czH(c.numero) + '</b><span style="font-size:.7rem;font-weight:700;color:' + czEstadoColor(c.estado) + ';">' + czH(c.estado) + '</span></div>' +
-        '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b></div></div>';
+        '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b>' + (c.ap_id ? ' · <span style="color:#166534;">AP ' + czH(c.ap_id) + '</span>' : '') + '</div></div>';
     }).join('') : '<div style="text-align:center;color:#888;padding:1rem;">Sin cotizaciones</div>');
 }
 function czNueva() {
@@ -4936,6 +4938,7 @@ function czNueva() {
 function czAbrir(uid) {
   var c = CZ_LISTA.filter(function (x) { return String(x.uid) === String(uid); })[0]; if (!c) return;
   try { CZ = JSON.parse(c.payload); } catch (e) { toast('No se pudo abrir la cotización'); return; }
+  CZ.ap_id = c.ap_id || '';
   CZ.uid = c.uid; CZ.estado = c.estado; czMostrarForm();
 }
 function czMostrarForm() {
@@ -4952,6 +4955,7 @@ function czMostrarForm() {
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
   document.getElementById('czNumAlert').textContent = '';
+  var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
   czRenderLineas(); window.scrollTo(0, 0);
 }
 function czVolver() { CZ = null; document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
@@ -5040,6 +5044,44 @@ async function czGuardar(estado, confirmarDup) {
   if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return false; }
   if (r && r.uid) CZ.uid = r.uid; if (estado) CZ.estado = estado;
   toast('✅ Cotización ' + CZ.numero + ' guardada'); return true;
+}
+
+// ===== Cotización aceptada → AP (pedido) =====
+// Pre-llena el formulario de pedido con la cotización; el vendedor completa fecha, destino y
+// datos de entrega y guarda como siempre. Al guardar, la AP queda enlazada a la cotización.
+var CZ_VINCULO = null;
+async function czAAP() {
+  czLeer();
+  if (CZ.ap_id && !confirm('Esta cotización ya se convirtió en la AP ' + CZ.ap_id + '.\n\n¿Crear otra AP de todas formas?')) return;
+  if (!CZ.lineas.length || !CZ.cliente.nit) { toast('La cotización necesita cliente y productos'); return; }
+  if (!(await czGuardar('Aceptada'))) return;
+  var q = JSON.parse(JSON.stringify(CZ));
+  CZ_VINCULO = { uid: q.uid, numero: q.numero };
+  irA('screenPedido'); limpiarPedido();
+  setTimeout(function () {
+    seleccionarCliente(q.cliente.nit);
+    STATE.pedido.lineas = q.lineas.map(function (l) {
+      return { tmcode: l.tmcode, tmdescrip: l.tmdescrip, tmund: l.tmund, calidad: 'PRIMERA', cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado, descuento_segunda_pct: 0,
+        precio_base: l.precio_base, precio_base_primera: l.precio_base, tipo_iva: l.tipo_iva || 'E', valor_estiba: l.estiba_tabla || 0, valor_postes: 0, peso_kg_unitario: l.peso_kg_unitario || 0, peso_origen: l.peso_kg_unitario ? 'MAESTRO' : '',
+        u_viaje: l.u_viaje || 0, flete_total_viaje: l.flete_total_viaje || 0, estiba_tabla: l.estiba_tabla || 0 };
+    });
+    var set = function (id, v) { var e = document.getElementById(id); if (e && v != null) e.value = v; };
+    set('cotizacionRef', q.numero); set('nombreObra', q.cliente.obra || ''); set('direccionObra', /RECOGE/i.test(q.cliente.dir_despacho || '') ? '' : (q.cliente.dir_despacho || ''));
+    set('contactoObra', q.cliente.atn || ''); set('celContactoObra', q.cliente.cel || '');
+    set('llevaEstiba', q.estiba === 'SI' ? 'SI' : 'NO');
+    var hayFlete = q.fleteModo !== 'NO' && q.flete > 0;
+    set('conFlete', hayFlete ? 'SI' : 'NO'); if (typeof cambiarConFlete === 'function') cambiarConFlete();
+    if (hayFlete) set('fleteIncluidoSel', q.fleteModo === 'INCLUIDO' ? 'SI' : 'NO');
+    if (q.pago === 8) set('formaPago', 'CONTADO');
+    renderLineasAP(); calcularTotales();
+    toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + ': elige el destino y verifica el flete' : '') + '. Completa fecha y entrega y guarda.', 7000);
+  }, 250);
+}
+async function czVincularAP(apId) {
+  if (!CZ_VINCULO || !apId) return;
+  if (STATE.pedido && STATE.pedido.cotizacion_ref && czNorm(STATE.pedido.cotizacion_ref) !== czNorm(CZ_VINCULO.numero)) { CZ_VINCULO = null; return; }
+  try { await escribirGAS({ accion: 'cambiarEstadoCotizacion', uid: CZ_VINCULO.uid, estado: 'Aceptada', ap_id: apId }); } catch (e) {}
+  CZ_VINCULO = null;
 }
 async function czCambiarEstado(estado) {
   if (!CZ.uid) { toast('Primero guarda la cotización'); return; }
