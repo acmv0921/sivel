@@ -4886,7 +4886,20 @@ async function czInit() {
   if (dl) dl.innerHTML = (STATE.clientes || []).map(function (c) { return '<option value="' + czH(c.razon_social) + ' · ' + czH(c.cliente_nit) + '">'; }).join('');
   var dp = document.getElementById('czProdDL');
   if (dp) dp.innerHTML = czProductos().map(function (p) { return '<option value="' + czH(p.tmcode) + ' — ' + czH(p.tmdescrip) + '">'; }).join('');
+  await czCargarTextos();
   czCargarLista();
+}
+// Textos editados por Gerencia (hoja COTIZ_TEXTOS). Si no hay, se usan los del Excel embebidos.
+var CZ_INACTIVOS = {};
+async function czCargarTextos() {
+  try {
+    var f = await leerGVIZ('COTIZ_TEXTOS'); if (!f || !f.length) return;
+    var N = { pago: [], entrega: [], plazo: [], obs: [] }; CZ_INACTIVOS = { pago: {}, entrega: {}, plazo: {}, obs: {} };
+    f.sort(function (a, b) { return Number(a.orden) - Number(b.orden); }).forEach(function (r) {
+      if (!N[r.tipo]) return; N[r.tipo].push(String(r.texto)); if (String(r.activo) === '0') CZ_INACTIVOS[r.tipo][N[r.tipo].length] = 1;
+    });
+    ['pago', 'entrega', 'plazo', 'obs'].forEach(function (k) { if (N[k].length) CZ_TEXTOS[k] = N[k]; });
+  } catch (e) {}
 }
 async function czCargarLista() {
   var cont = document.getElementById('czLista');
@@ -4928,11 +4941,11 @@ function czAbrir(uid) {
 function czMostrarForm() {
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
-  var T = CZ_TEXTOS, sel = function (arr, v, cero) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { return '<option value="' + (i + 1) + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
-  document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago);
-  document.getElementById('czEntrega').innerHTML = sel(T.entrega, CZ.entrega, true);
-  document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true);
-  document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true);
+  var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
+  document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago, false, 'pago');
+  document.getElementById('czEntrega').innerHTML = sel(T.entrega, CZ.entrega, true, 'entrega');
+  document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true, 'obs');
+  document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
     czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
@@ -4997,7 +5010,7 @@ function czRenderLineas() {
       '<div style="font-size:.78rem;margin:2px 0 6px;">' + czH(l.tmdescrip) + ' · lista ' + fmt(l.precio_base) + '/' + czH(l.tmund) + '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="form-control" type="number" inputmode="decimal" min="0" step="any" value="' + l.cantidad_solicitada + '" oninput="czEdit(' + i + ',\'cant\',this.value)" placeholder="Cantidad">' +
       '<input class="form-control" type="number" inputmode="decimal" min="0" max="100" step="any" value="' + (Math.round(l.descuento_aplicado * 10000) / 100 || '') + '" oninput="czEdit(' + i + ',\'desc\',this.value)" placeholder="% descuento"></div>' +
-      '<select class="form-control" style="margin-top:6px;font-size:.74rem;" onchange="czEdit(' + i + ',\'plazo\',this.value)">' + CZ_TEXTOS.plazo.map(function (t, k) { return '<option value="' + (k + 1) + '"' + ((l.plazo || 1) === k + 1 ? ' selected' : '') + '>Plazo ' + (k + 1) + ': ' + czH(t.slice(0, 60)) + '</option>'; }).join('') + '</select>' +
+      '<select class="form-control" style="margin-top:6px;font-size:.74rem;" onchange="czEdit(' + i + ',\'plazo\',this.value)">' + CZ_TEXTOS.plazo.map(function (t, k) { if ((CZ_INACTIVOS.plazo || {})[k + 1] && (l.plazo || 1) !== k + 1) return ''; return '<option value="' + (k + 1) + '"' + ((l.plazo || 1) === k + 1 ? ' selected' : '') + '>Plazo ' + (k + 1) + ': ' + czH(t.slice(0, 60)) + '</option>'; }).join('') + '</select>' +
       '<div id="czL' + i + '" style="font-size:.76rem;margin-top:6px;color:#1a3a5c;"></div></div>';
   }).join('') : '<div style="text-align:center;color:#888;font-size:.8rem;padding:.5rem;">Agrega productos con el buscador</div>';
   czTotales();
