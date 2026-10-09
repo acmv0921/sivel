@@ -1032,12 +1032,16 @@ function agregarDetalleAP(body) {
   const colPrecioBase = asegurarCol("precio_base");
   const colEstiba = asegurarCol("valor_estiba");
   const colPostes = asegurarCol("valor_postes");
+  // Datos de cada producto tal como se negociaron (9 oct 2026): tipo de IVA y valores
+  const extraDet = ["tipo_iva","precio_con_descuento","valor_linea","iva_linea","total_linea","flete_unitario"];
+  const colsExtra = extraDet.map(asegurarCol);
   hoja.appendRow([detalle_id, body.ap_id, body.tmcode, body.cantidad_solicitada, body.cantidad_despachada||0, body.descuento_aplicado||0]);
   const filaNueva = hoja.getLastRow();
   hoja.getRange(filaNueva, colCalidad).setValue(body.calidad||"PRIMERA");
   hoja.getRange(filaNueva, colPrecioBase).setValue(body.precio_base||0);
   hoja.getRange(filaNueva, colEstiba).setValue(body.valor_estiba||0);
   hoja.getRange(filaNueva, colPostes).setValue(body.valor_postes||0);
+  extraDet.forEach(function (k, ix) { if (body[k] !== undefined && body[k] !== null && body[k] !== '') hoja.getRange(filaNueva, colsExtra[ix]).setValue(body[k]); });
   if (precioCheck.excede_referencia) {
     try {
       const apRow = hojaAObjetos(getHoja(HOJAS.PREVENTAS)).find(a => String(a.ap_id) === String(body.ap_id));
@@ -1807,13 +1811,25 @@ function limpiarDireccionesConCoordenadas() {
 
 // ===== Tabla oficial de productos y precios (carga unica, clave requerida) =====
 function _setCamposExtraAP(hoja, fila, body) {
-  const extra = { numero_viajes: body.numero_viajes || '', lleva_estiba: body.lleva_estiba || '', flete_gravado: body.flete_gravado || '' };
+  // Datos de la negociacion que Despacho necesita ver (9 oct 2026). Antes solo se guardaban
+  // numero_viajes, lleva_estiba y flete_gravado; la fecha de entrega, observaciones, direccion
+  // y contacto de la obra viajaban en la peticion pero no se escribian en la hoja.
+  const extra = { numero_viajes: body.numero_viajes || '', lleva_estiba: body.lleva_estiba || '', flete_gravado: body.flete_gravado || '',
+    fecha_entrega: body.fecha_entrega || '', obs_entrega: body.obs_entrega || '', direccion_obra: body.direccion_obra || '',
+    contacto_obra: body.contacto_obra || '', cel_contacto: body.cel_contacto || '',
+    forma_pago: body.forma_pago || '', dias_credito: body.dias_credito || '', flete_incluido: body.flete_incluido || '',
+    subtotal_ap: body.subtotal_ap, descuento_ap: body.descuento_ap, estiba_ap: body.estiba_ap,
+    iva_productos_ap: body.iva_productos_ap, iva_flete_ap: body.iva_flete_ap, iva_ap: body.iva_ap, total_ap: body.total_ap };
+  const textos = { fecha_entrega: 1, cel_contacto: 1, direccion_obra: 1, contacto_obra: 1, obs_entrega: 1 };
   let lc = hoja.getLastColumn();
   const hdr = hoja.getRange(1, 1, 1, lc).getValues()[0].map(String);
   Object.keys(extra).forEach(function (k) {
     let ix = hdr.indexOf(k);
     if (ix < 0) { lc++; hoja.getRange(1, lc).setValue(k); hdr.push(k); ix = hdr.length - 1; }
-    hoja.getRange(fila, ix + 1).setValue(extra[k]);
+    const celda = hoja.getRange(fila, ix + 1);
+    if (extra[k] === undefined || extra[k] === null) return;
+    if (textos[k]) celda.setNumberFormat('@'); // texto tal cual: la fecha queda aaaa-mm-dd y el celular no pierde ceros
+    celda.setValue(extra[k]);
   });
 }
 
