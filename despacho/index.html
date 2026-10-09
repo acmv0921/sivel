@@ -483,8 +483,22 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
       <div class="search-box form-group">
         <span class="search-icon">🔍</span>
-        <input id="buscarAP" class="form-control" placeholder="Buscar AP o cliente..." oninput="renderAPs()">
+        <input id="buscarAP" class="form-control" placeholder="Buscar por AP, cliente, vendedor, obra, OC, producto..." oninput="renderAPs()">
       </div>
+      <div id="filtrosAP" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <select id="fVendedorAP" class="form-control" onchange="renderAPs()"><option value="">👤 Todos los vendedores</option></select>
+        <select id="fDestinoAP" class="form-control" onchange="renderAPs()"><option value="">🚚 Todos los destinos</option></select>
+        <select id="fOrdenAP" class="form-control" onchange="renderAPs()">
+          <option value="reciente">⬇️ Más reciente primero</option>
+          <option value="antigua">⬆️ Más antigua primero</option>
+          <option value="entrega">🗓️ Entrega más próxima</option>
+          <option value="cliente">🔤 Cliente A-Z</option>
+        </select>
+        <button type="button" class="btn btn-outline btn-sm" onclick="limpiarFiltrosAP()">✖ Limpiar filtros</button>
+        <input id="fDesdeAP" class="form-control" type="date" title="Creada desde" placeholder="Desde" oninput="renderAPs()" onchange="renderAPs()">
+        <input id="fHastaAP" class="form-control" type="date" title="Creada hasta" placeholder="Hasta" oninput="renderAPs()" onchange="renderAPs()">
+      </div>
+      <div id="contAP" style="font-size:0.74rem;color:#666;margin:0 0 6px 2px;"></div>
       <div style="margin-top:0.5rem;">
         <button class="btn btn-outline btn-sm" id="btnModoReparto" onclick="toggleModoReparto()">🔗 Modo Reparto (combinar pedidos en un viaje)</button>
       </div>
@@ -1298,7 +1312,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // Se muestra UNA sola vez por compilación (guardado en localStorage con la
 // clave de esta compilación). Si se sube una nueva compilación, cambiar
 // BUILD_ACTUAL para que el aviso vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 10;
+const BUILD_ACTUAL = 11;
 function mostrarNovedadesBuild() {
   // Clave con prefijo propio (desde C7): Comercial usa 'sivil_update_visto_build'
   // en el mismo dominio, y un número de compilación repetido podía ocultar el aviso.
@@ -1311,6 +1325,7 @@ function mostrarNovedadesBuild() {
     <div style="font-weight:800;font-size:1.05rem;color:#7c3200;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
     <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
+      <li>🔎 <b>Búsqueda más rápida:</b> las APs salen con la <b>más reciente primero</b> y puedes filtrar por <b>vendedor, destino, fechas</b> o escribir AP, cliente, obra, OC o producto</li>
       <li>📦 Ahora ves <b>toda la negociación</b> de cada AP: forma de pago, entrega, obra y contacto, <b>IVA de cada producto</b>, estiba, flete y el <b>total</b></li>
       <li>💲 Los precios llevan <b>2 decimales</b> y se <b>truncan</b> (68,794 queda en 68,79), igual que en Comercial</li>
       <li>📅 Todas las fechas se muestran como <b>día/mes/año</b> (dd/mm/aaaa), en pantalla, WhatsApp y PDF</li>
@@ -1438,7 +1453,7 @@ async function cargarTodo() {
     cargarMetaActualizacion();
     poblarSelectProductos();
     actualizarKPIs();
-    renderAPs();
+    poblarFiltrosAP(); renderAPs();
     renderCurado();
     renderAverias();
     renderFuncionarios();
@@ -1881,16 +1896,77 @@ function filtrarAPs(estado, btn) {
   renderAPs();
 }
 
+// Texto de búsqueda de una AP: junta todos los campos útiles (sin tildes, minúsculas)
+function _norm(t) { return String(t == null ? '' : t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function textoBusquedaAP(ap) {
+  const prods = (S.detalles || []).filter(d => String(d.ap_id) === String(ap.ap_id))
+    .map(d => { const p = (S.productos || []).find(x => String(x.tmcode) === String(d.tmcode)); return (d.tmcode || '') + ' ' + (p ? p.tmdescrip : ''); }).join(' ');
+  return _norm([ap.ap_id, 'ap ' + ap.ap_id, nombreCliente(ap.cliente_nit), ap.cliente_nit, nombreVendedor(ap.vendedor_id),
+    ap.nombre_obra, ap.direccion_obra, ap.contacto_obra, ap.destino, ap.tipo_entrega, ap.orden_compra_cliente,
+    ap.cotizacion_ref, ap.transportista_flete, ap.viaje_compartido_id, ap.obs_entrega, fmtFecha(ap.fecha_creacion),
+    fmtFecha(ap.fecha_entrega), prods].join(' | '));
+}
+function _fechaClave(v) { const d = parseFecha(v); return d ? d.getTime() : 0; }
+function _inputFecha(id) { // acepta dd/mm/aaaa (campo de texto) o aaaa-mm-dd
+  const v = (document.getElementById(id)?.value || '').trim();
+  const d = v ? parseFecha(v) : null;
+  return d ? d.getTime() : null;
+}
+function limpiarFiltrosAP() {
+  ['buscarAP', 'fVendedorAP', 'fDestinoAP', 'fDesdeAP', 'fHastaAP'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  const o = document.getElementById('fOrdenAP'); if (o) o.value = 'reciente';
+  renderAPs();
+}
+// Llena los selectores de vendedor y destino con lo que realmente existe en las APs
+function poblarFiltrosAP() {
+  const base = (S.aps || []).filter(a => ["Pendiente", "Despachado Parcial"].includes(a.estado_ap));
+  const llenar = (id, valores, vacio) => {
+    const el = document.getElementById(id); if (!el) return;
+    const act = el.value;
+    el.innerHTML = '<option value="">' + vacio + '</option>' + valores.map(v => '<option value="' + String(v[0]).replace(/"/g, '&quot;') + '">' + v[1] + '</option>').join('');
+    if (valores.some(v => String(v[0]) === act)) el.value = act;
+  };
+  const vend = new Map();
+  base.forEach(a => { if (a.vendedor_id) vend.set(String(a.vendedor_id), nombreVendedor(a.vendedor_id)); });
+  llenar('fVendedorAP', [...vend.entries()].sort((x, y) => String(x[1]).localeCompare(String(y[1]))), '👤 Todos los vendedores');
+  const dest = new Set();
+  base.forEach(a => dest.add(a.destino || 'PLANTA'));
+  llenar('fDestinoAP', [...dest].sort().map(d => [d, d]), '🚚 Todos los destinos');
+}
+
 function renderAPs() {
   const cont  = document.getElementById('listaAPs');
-  if (_filtroActual === 'HISTORIAL') { renderHistorialDespachos(); return; }
-  const q     = (document.getElementById('buscarAP')?.value || '').toLowerCase();
+  const barra = document.getElementById('filtrosAP');
+  if (barra) barra.style.display = _filtroActual === 'HISTORIAL' ? 'none' : 'grid';
+  if (_filtroActual === 'HISTORIAL') { const c = document.getElementById('contAP'); if (c) c.textContent = ''; renderHistorialDespachos(); return; }
+  const palabras = _norm(document.getElementById('buscarAP')?.value || '').split(/\s+/).filter(Boolean);
+  const fVend  = document.getElementById('fVendedorAP')?.value || '';
+  const fDest  = document.getElementById('fDestinoAP')?.value || '';
+  const orden  = document.getElementById('fOrdenAP')?.value || 'reciente';
+  const desde  = _inputFecha('fDesdeAP');
+  const hasta  = _inputFecha('fHastaAP');
+  const total  = S.aps.filter(a => (_filtroActual === 'todos' || a.estado_ap === _filtroActual) && ["Pendiente","Despachado Parcial"].includes(a.estado_ap)).length;
   let lista   = S.aps.filter(a => {
     if (_filtroActual !== 'todos' && a.estado_ap !== _filtroActual) return false;
     if (!["Pendiente","Despachado Parcial"].includes(a.estado_ap)) return false;
-    if (q) return String(a.ap_id).includes(q) || nombreCliente(a.cliente_nit).toLowerCase().includes(q);
+    if (fVend && String(a.vendedor_id) !== fVend) return false;
+    if (fDest && (a.destino || 'PLANTA') !== fDest) return false;
+    const fc = _fechaClave(a.fecha_creacion);
+    if (desde != null && fc < desde) return false;
+    if (hasta != null && fc > hasta + 86399999) return false;
+    if (palabras.length) { const t = textoBusquedaAP(a); if (!palabras.every(w => t.includes(w))) return false; }
     return true;
   });
+  // Orden: por defecto la más reciente primero (fecha de creación y, a igual fecha, AP más alto)
+  const numAP = a => parseFloat(String(a.ap_id).replace(/\D/g, '')) || 0;
+  lista.sort((a, b) => {
+    if (orden === 'cliente') return nombreCliente(a.cliente_nit).localeCompare(nombreCliente(b.cliente_nit));
+    if (orden === 'entrega') { const x = _fechaClave(a.fecha_entrega) || 9e15, y = _fechaClave(b.fecha_entrega) || 9e15; return x - y || numAP(b) - numAP(a); }
+    const d = _fechaClave(b.fecha_creacion) - _fechaClave(a.fecha_creacion) || numAP(b) - numAP(a);
+    return orden === 'antigua' ? -d : d;
+  });
+  const cnt = document.getElementById('contAP');
+  if (cnt) cnt.textContent = lista.length === total ? total + ' AP' + (total === 1 ? '' : 's') : 'Mostrando ' + lista.length + ' de ' + total + ' APs';
 
   if (!lista.length) {
     cont.innerHTML = '<div class="card" style="text-align:center;color:#888;">Sin APs en este estado</div>';
