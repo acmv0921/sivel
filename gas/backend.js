@@ -24,6 +24,7 @@ const HOJAS = {
   FUNCIONARIOS: "FUNCIONARIOS",
   VISITAS: "REGISTRO_VISITAS", APROBACIONES: "APROBACIONES",
   COTIZACIONES: "COTIZACIONES",
+  COTIZ_TEXTOS: "COTIZ_TEXTOS",
 };
 
 function doGet(e) {
@@ -89,6 +90,7 @@ function doPost(e) {
       case "crearPreventa": resultado = crearPreventa(body); break;
       case "guardarCotizacion": resultado = guardarCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
+      case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
       case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
       case "resetSistema": resultado = resetSistema(body); break;
@@ -1898,4 +1900,26 @@ function cambiarEstadoCotizacion(body) {
     }
   }
   return { ok: false, error: "Cotización no encontrada" };
+}
+
+// Textos del Cotizador (pago / entrega / plazo / obs). Solo Gerencia los edita.
+// Se reemplaza la hoja completa; el orden define el número que se guarda en cada cotización,
+// por eso Gerencia no borra: solo edita, agrega al final o desactiva (activo = 0).
+function guardarTextosCotizador(body) {
+  const t = body.textos || {};
+  const filas = [];
+  ["pago", "entrega", "plazo", "obs"].forEach(function (tipo) {
+    (t[tipo] || []).forEach(function (x, i) {
+      filas.push([tipo, i + 1, String(x.texto || ""), x.activo === false || x.activo === 0 || x.activo === "0" ? 0 : 1]);
+    });
+  });
+  if (!filas.length) return { ok: false, error: "Sin textos para guardar" };
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let h = ss.getSheetByName(HOJAS.COTIZ_TEXTOS);
+  if (!h) h = ss.insertSheet(HOJAS.COTIZ_TEXTOS);
+  h.clear();
+  h.getRange(1, 1, 1, 4).setValues([["tipo", "orden", "texto", "activo"]]).setFontWeight("bold");
+  h.getRange(2, 1, filas.length, 4).setValues(filas);
+  h.setFrozenRows(1);
+  return { ok: true, filas: filas.length };
 }
