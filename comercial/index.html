@@ -2509,7 +2509,7 @@ const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
 const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (prod ? prod.precio_base : 0);
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
-const precioConDescuento = trunc2(precio * (1 - desc));
+const precioConDescuento = pUnit(precio * (1 - desc));
 const sub = trunc2(cant * precioConDescuento);
 total = r2(total + sub);
 const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
@@ -3001,7 +3001,7 @@ alert.textContent = '';
 
 const estiba = (STATE.pedido && STATE.pedido.lleva_estiba === 'SI') ? (parseFloat(p.valor_estiba_unidad) || 0) : 0;
 const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
-const unitAntesIva = r2(trunc2(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
+const unitAntesIva = r2(pUnit(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
 document.getElementById('detallePrecio').value = fmt(unitAntesIva);
 const totalSinIva = trunc2(cant * unitAntesIva);
 const esGravado = (p.tipo_iva || 'E') === 'G';
@@ -3257,7 +3257,7 @@ function calcPedido(lineas, cfg) {
     const estiba = cfg.llevaEstiba === 'SI' ? trunc2(parseFloat(l.estiba_tabla) || 0) : 0;
     const postes = trunc2(parseFloat(l.valor_postes) || 0);
     const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
-    const pDesc = trunc2(pb * (1 - d));              // precio por unidad con descuento
+    const pDesc = pUnit(pb * (1 - d));              // precio por unidad con descuento
     const base = trunc2(cant * pb);                  // valor a precio de lista
     const netoProd = trunc2(cant * pDesc);           // valor después del descuento
     const vEst = trunc2(cant * estiba), vPost = trunc2(cant * postes);
@@ -3706,7 +3706,7 @@ async function cerrarCesionYGenerarInforme(){
       // igual que ya lo hace la app de Despacho.
       (it.detalle_lineas||[]).forEach(function(l){
         ensureSpace(9);
-        const _pDesc = trunc2((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
+        const _pDesc = pUnit((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
         const neto = trunc2(l.cantidad_solicitada * _pDesc);
         const ivaLinea = (l.tipo_iva||'E')==='G' ? trunc2(neto * 0.19) : 0;
         const totalLinea = r2(neto + ivaLinea);
@@ -3721,7 +3721,7 @@ async function cerrarCesionYGenerarInforme(){
 
         // NUEVO: desglose de precio unitario (con descuento / con descuento+flete),
         // mismo dato que ya se muestra en Despacho y en "Mis APs" de Comercial.
-        const _precioConDescuentoU = trunc2((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
+        const _precioConDescuentoU = pUnit((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
         const _fleteLin = (it.totales && it.totales.flete_prorrateado && typeof l._fleteUnit === 'number') ? l._fleteUnit : 0;
         const _precioConDescuentoYFleteU = _precioConDescuentoU + _fleteLin;
         doc.setFontSize(6.8); doc.setTextColor(120);
@@ -4239,6 +4239,8 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // Montos: se TRUNCAN (no se redondean) a 2 decimales y los decimales siempre se muestran.
 // Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
 // Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
+// Regla ERP (9 oct 2026): el precio unitario con descuento va en PESOS ENTEROS (se trunca) y el valor de la linea = cantidad x ese unitario.
+function pUnit(n) { return Math.floor(trunc2(n)); }
 function trunc2(n) {
   n = Number(n); if (!isFinite(n)) return 0;
   const a = Math.abs(n) * 100;
