@@ -1,6 +1,6 @@
 // SIVIL PWA Service Worker v2.0
 // POSTEC DE OCCIDENTE S.A.S.
-const CACHE_NAME = 'sivil-cache-v49';
+const CACHE_NAME = 'sivil-cache-v50';
 const PRECACHE = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 // INSTALL — cachear recursos base
