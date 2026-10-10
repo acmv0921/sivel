@@ -1668,8 +1668,8 @@ function renderInventario(filtro="") {
 // Montos: se TRUNCAN (no se redondean) a 2 decimales y los decimales siempre se muestran.
 // Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
 // Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
-// Regla ERP (9 oct 2026): el precio unitario con descuento va en PESOS ENTEROS (se trunca) y el valor de la linea = cantidad x ese unitario.
-function pUnit(n) { return Math.floor(trunc2(n)); }
+// Regla SIVIL (9 oct 2026): el precio unitario con descuento se TRUNCA a 2 decimales (valores reales); valor de la linea = cantidad x unitario.
+function pUnit(n) { return trunc2(n); }
 function trunc2(n) {
   n = Number(n); if (!isFinite(n)) return 0;
   const a = Math.abs(n) * 100;
