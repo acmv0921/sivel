@@ -1668,6 +1668,8 @@ function renderInventario(filtro="") {
 // Montos: se TRUNCAN (no se redondean) a 2 decimales y los decimales siempre se muestran.
 // Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
 // Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
+// Regla ERP (9 oct 2026): el precio unitario con descuento va en PESOS ENTEROS (se trunca) y el valor de la linea = cantidad x ese unitario.
+function pUnit(n) { return Math.floor(trunc2(n)); }
 function trunc2(n) {
   n = Number(n); if (!isFinite(n)) return 0;
   const a = Math.abs(n) * 100;
@@ -1716,7 +1718,7 @@ function calcPedido(lineas, cfg) {
     const estiba = cfg.llevaEstiba === 'SI' ? trunc2(parseFloat(l.estiba_tabla) || 0) : 0;
     const postes = trunc2(parseFloat(l.valor_postes) || 0);
     const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
-    const pDesc = trunc2(pb * (1 - d));              // precio por unidad con descuento
+    const pDesc = pUnit(pb * (1 - d));              // precio por unidad con descuento
     const base = trunc2(cant * pb);                  // valor a precio de lista
     const netoProd = trunc2(cant * pDesc);           // valor después del descuento
     const vEst = trunc2(cant * estiba), vPost = trunc2(cant * postes);
@@ -2606,7 +2608,7 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
       // pantalla de "Cantidades a despachar" y en el detalle de AP de Comercial.
       const listaU = trunc2(Number(l.precio_base||0));
       const descPct = Number(l.descuento_aplicado||0);
-      const pactadoU = (typeof l.precio_desc === 'number') ? l.precio_desc : trunc2(listaU * (1 - descPct));
+      const pactadoU = (typeof l.precio_desc === 'number') ? l.precio_desc : pUnit(listaU * (1 - descPct));
       const fleteU = Number(l.flete_unidad||0);
       const pactadoConFleteU = r2(pactadoU + fleteU);
       const valorL = trunc2(pactadoU * Number(l.cantidad||0));
