@@ -839,6 +839,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         </div>
 
         <div class="btn-row" style="margin-top:1rem;flex-direction:column;">
+          <button class="btn btn-outline" onclick="czDesdePedido()">🧾 Generar cotización de este pedido</button>
           <button class="btn btn-success" onclick="guardarAP()">✅ Confirmar y Guardar AP</button>
           <button class="btn btn-outline" onclick="limpiarPedido()">🗑️ Cancelar</button>
         </div>
@@ -2539,6 +2540,9 @@ ${_filaEstiba}
 <div class="resumen-row total"><span>TOTAL</span><span>${fmt(R.total)}</span></div>
 </div>`;
 
+if (!ap.cotizacion_ref && ap.estado_ap !== "Cancelada" && !(STATE.cotizDeAP || {})[String(ap_id)]) {
+html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-outline btn-sm" onclick="czDesdeAP('${ap_id}')">🧾 Cotización de respaldo de esta AP</button></div>`;
+}
 if (ap.estado_ap === "Pendiente" || ap.estado_ap === "Modificado") {
 html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-danger btn-sm" onclick="cancelarAP('${ap_id}')">🗑️ Cancelar AP</button></div>`;
 }
@@ -3940,6 +3944,11 @@ calcularTotales();
   }
 }
 
+if (!STATE.pedido.cotizacion_ref && !STATE.pedido._avisoCotiz) {
+  if (!confirm('⚠️ Esta AP no tiene cotización enlazada.\n\nAceptar = guardar sin cotización.\nCancelar = volver para generarla con el botón "🧾 Generar cotización de este pedido".')) return;
+  STATE.pedido._avisoCotiz = true;
+}
+
 // Venta de apoyo: si el checkbox está marcado, la AP debe quedar a nombre
 // del vendedor real (para que sus métricas no se pierdan), con nota de
 // quién la gestionó como apoyo.
@@ -4958,7 +4967,7 @@ function czMostrarForm() {
   var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
   czRenderLineas(); window.scrollTo(0, 0);
 }
-function czVolver() { CZ = null; document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
+function czVolver() { var _vp = CZ && CZ._desdePedido; CZ = null; if (_vp) { irA('screenPedido'); return; } document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
 function czLeer() {
   var g = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
   CZ.numero = g('czNumero').trim(); CZ.vigencia = g('czVig'); CZ.despachos_hasta = g('czDesp');
@@ -5033,9 +5042,10 @@ async function czGuardar(estado, confirmarDup) {
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
   if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
   var T = calcPedido(CZ.lineas, czCfg());
-  var datos = JSON.parse(JSON.stringify(CZ));
+  var datos = JSON.parse(JSON.stringify(CZ)); delete datos._desdePedido; delete datos._respaldoAP;
+  if (CZ._respaldoAP) estado = 'Aceptada';
   var body = { accion: 'guardarCotizacion', uid: CZ.uid, numero: CZ.numero, fecha: CZ.fecha, vendedor_id: CZ.vendedor_id, cliente_nit: CZ.cliente.nit, cliente_nombre: CZ.cliente.nombre, obra: CZ.cliente.obra,
-    vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: T.iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup };
+    vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: T.iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup, ap_id: CZ.ap_id || CZ._respaldoAP || '' };
   var r = await escribirGAS(body);
   if (r && r.duplicado) {
     if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true);
@@ -5043,7 +5053,12 @@ async function czGuardar(estado, confirmarDup) {
   }
   if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return false; }
   if (r && r.uid) CZ.uid = r.uid; if (estado) CZ.estado = estado;
-  toast('✅ Cotización ' + CZ.numero + ' guardada'); return true;
+  if (CZ._desdePedido && STATE.pedido) {
+    STATE.pedido.cotizacion_ref = CZ.numero; var _r = document.getElementById('cotizacionRef'); if (_r) _r.value = CZ.numero;
+    CZ_VINCULO = { uid: CZ.uid, numero: CZ.numero };
+  }
+  if (CZ._respaldoAP) { STATE.cotizDeAP = STATE.cotizDeAP || {}; STATE.cotizDeAP[String(CZ._respaldoAP)] = CZ.numero; CZ.ap_id = CZ._respaldoAP; }
+  toast('✅ Cotización ' + CZ.numero + ' guardada' + (CZ._desdePedido ? ' · queda como referencia del pedido' : '')); return true;
 }
 
 // ===== Cotización aceptada → AP (pedido) =====
@@ -5082,6 +5097,51 @@ async function czVincularAP(apId) {
   if (STATE.pedido && STATE.pedido.cotizacion_ref && czNorm(STATE.pedido.cotizacion_ref) !== czNorm(CZ_VINCULO.numero)) { CZ_VINCULO = null; return; }
   try { await escribirGAS({ accion: 'cambiarEstadoCotizacion', uid: CZ_VINCULO.uid, estado: 'Aceptada', ap_id: apId }); } catch (e) {}
   CZ_VINCULO = null;
+}
+
+// ===== Sentido inverso: pedido / AP -> cotización =====
+function czLineaDe(l, prod) {
+  var p = prod || {};
+  return { tmcode: l.tmcode, tmdescrip: l.tmdescrip || p.tmdescrip || String(l.tmcode), tmund: l.tmund || p.tmund || 'UND', tipo_iva: l.tipo_iva || p.tipo_iva || 'E', precio_base: parseFloat(l.precio_base) || 0,
+    cantidad_solicitada: parseFloat(l.cantidad_solicitada) || 0, descuento_aplicado: parseFloat(l.descuento_aplicado) || 0, estiba_tabla: parseFloat(l.estiba_tabla != null ? l.estiba_tabla : p.valor_estiba_unidad) || 0,
+    peso_kg_unitario: parseFloat(l.peso_kg_unitario != null ? l.peso_kg_unitario : p.peso_kg_unitario) || 0, u_viaje: parseFloat(l.u_viaje != null ? l.u_viaje : p.unidades_por_viaje) || 0,
+    flete_total_viaje: parseFloat(l.flete_total_viaje != null ? l.flete_total_viaje : p.flete_total_viaje_cali) || 0, plazo: 1 };
+}
+async function czAbrirDesde(origen) {
+  irA('screenCotizador'); await czInit(); czNueva();
+  var c = origen.cliente; CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
+  CZ.lineas = origen.lineas; CZ.estiba = origen.estiba; CZ.fleteModo = origen.fleteModo; CZ.flete = origen.flete; CZ.cliente.obra = origen.obra || ''; CZ.cliente.dir_despacho = origen.dir || 'CLIENTE RECOGE';
+  CZ.cliente.atn = origen.atn || ''; CZ.cliente.cel = origen.cel || ''; CZ.numero = origen.numero || ''; CZ.pago = origen.pago || 8;
+  if (origen.vendedor_id) CZ.vendedor_id = origen.vendedor_id;
+  if (origen.desdePedido) CZ._desdePedido = true; if (origen.respaldoAP) CZ._respaldoAP = origen.respaldoAP;
+  czMostrarForm();
+  var set = function (id, v) { var e = document.getElementById(id); if (e && v != null) e.value = v; };
+  set('czCliente', c.razon_social + ' · ' + c.cliente_nit); var _o = CZ.cliente.obra, _d = CZ.cliente.dir_despacho, _a = CZ.cliente.atn, _ce = CZ.cliente.cel;
+  czElegirCliente(); set('czObra', _o); set('czDirDesp', _d); if (_a) set('czAtn', _a); if (_ce) set('czCel', _ce);
+  czVerNumero(); czRenderLineas();
+}
+async function czDesdePedido() {
+  var P = STATE.pedido; if (!P.cliente) { toast('Selecciona primero el cliente'); return; } if (!P.lineas.length) { toast('Agrega al menos un producto'); return; }
+  calcularTotales();
+  var hayFlete = P.con_flete === 'SI' && P.flete_valor > 0;
+  await czAbrirDesde({ desdePedido: true, cliente: P.cliente, lineas: P.lineas.map(function (l) { return czLineaDe(l); }), estiba: P.lleva_estiba === 'SI' ? 'SI' : 'NO',
+    fleteModo: hayFlete ? (P.flete_incluido === 'SI' ? 'INCLUIDO' : 'APARTE') : 'NO', flete: hayFlete ? P.flete_valor : 0, obra: P.nombre_obra, dir: P.direccion_obra, atn: P.contacto_obra, cel: P.cel_contacto,
+    numero: P.cotizacion_ref || '', pago: P.forma_pago === 'CONTADO' ? 8 : 0 });
+  if (CZ && !CZ.pago) CZ.pago = 8;
+  toast('🧾 Cotización pre-llenada desde el pedido: pon el número, elige pago, entrega y plazo, y sácala en PDF.', 6000);
+}
+async function czDesdeAP(ap_id) {
+  var ap = STATE.aps.find(function (a) { return String(a.ap_id) === String(ap_id); }); if (!ap) return;
+  var cli = STATE.clientes.find(function (c) { return String(c.cliente_nit) === String(ap.cliente_nit); }); if (!cli) { toast('No se encontró el cliente de la AP'); return; }
+  var det = (STATE.detallesAP || []).filter(function (d) { return String(d.ap_id) === String(ap_id); });
+  if (!det.length) { toast('La AP no tiene detalle de productos'); return; }
+  var prods = czProductos(); cerrarModal('modalVerAP');
+  var hayFlete = (parseFloat(ap.flete_valor) || 0) > 0;
+  await czAbrirDesde({ respaldoAP: String(ap_id), cliente: cli, vendedor_id: ap.vendedor_id,
+    lineas: det.map(function (d) { var p = prods.filter(function (x) { return String(x.tmcode) === String(d.tmcode); })[0]; return czLineaDe(d, p); }),
+    estiba: String(ap.lleva_estiba).toUpperCase() === 'SI' ? 'SI' : 'NO', fleteModo: hayFlete ? (String(ap.flete_incluido).toUpperCase() === 'SI' ? 'INCLUIDO' : 'APARTE') : 'NO', flete: hayFlete ? parseFloat(ap.flete_valor) : 0,
+    obra: ap.nombre_obra, dir: ap.direccion_obra, atn: ap.contacto_obra, cel: ap.cel_contacto, numero: '', pago: String(ap.forma_pago).toUpperCase() === 'CONTADO' ? 8 : 0 });
+  toast('🧾 Cotización de respaldo de la AP ' + ap_id + ': al guardar queda Aceptada y enlazada a esa AP. Los valores de la AP no cambian.', 7000);
 }
 async function czCambiarEstado(estado) {
   if (!CZ.uid) { toast('Primero guarda la cotización'); return; }
