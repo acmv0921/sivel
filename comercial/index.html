@@ -5170,34 +5170,35 @@ async function czPDF() {
   doc.setLineWidth(0.25); doc.setDrawColor(0);
   // Encabezado
   if (logo1) doc.addImage(logo1, 'JPEG', M, 8, 42, 14.7);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt('Nit: 901.086.456-2', M + 3, 25);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); txt('Nit: 901.086.456-2', M + 21, 25.5, { align: 'center' });
   doc.setFontSize(10.5); txt('COTIZACIÓN  ' + CZ.numero, 82, 17, { align: 'center' });
   box(122, 7, R - 122, 19); doc.setFontSize(7); txt('VIGENCIA', 166, 10.5, { align: 'center' }); doc.setFontSize(6); doc.line(122, 11.5, R, 11.5); doc.line(166, 11.5, 166, 22);
-  txt('Precios Cotización (plazo', 144, 14.2, { align: 'center' }); txt('para cerrar negociación)', 144, 16.4, { align: 'center' }); txt('Para despachos Hasta', 188, 15, { align: 'center' });
-  doc.line(122, 22, R, 22); doc.setFontSize(7); txt(CZ.vigencia ? fmtFecha(CZ.vigencia) : '', 144, 20.5, { align: 'center' }); txt(CZ.despachos_hasta ? fmtFecha(CZ.despachos_hasta) : '', 188, 20.5, { align: 'center' });
+  txt('Precios Cotización (plazo', 144, 14.2, { align: 'center' }); txt('para cerrar negociación)', 144, 16.4, { align: 'center' }); txt('Para despachos Hasta', 183, 15.3, { align: 'center' });
+  doc.line(122, 22, R, 22); doc.setFontSize(7.5); txt(CZ.vigencia ? fmtFecha(CZ.vigencia) : '', 144, 20.6, { align: 'center' }); txt(CZ.despachos_hasta ? fmtFecha(CZ.despachos_hasta) : '', 183, 20.5, { align: 'center' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6); txt('Ver #1 del ANEXO', 166, 24.8, { align: 'center' });
   // Cliente
-  y = 28; box(M, y, R - M, 29);
-  var fila = function (xl, xv, yy, et, val, maxw) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(et, xl, yy); doc.setFont('helvetica', 'bold'); if (val) txt(wrap(val, maxw)[0], xv, yy); };
-  fila(M + 2, M + 28, y + 5, 'Fecha:', fmtFecha(CZ.fecha), 70); fila(M + 2, M + 28, y + 10, 'Cliente:', c.nombre, 70); fila(M + 2, M + 28, y + 15, 'NIT:', c.nit, 70); fila(M + 2, M + 28, y + 20, 'Atn:', c.atn, 70); fila(M + 2, M + 28, y + 25, 'Dirección oficina:', c.dir_oficina, 55);
-  fila(112, 138, y + 5, 'Teléfonos:', c.tel, 60); fila(112, 138, y + 10, 'Celular:', c.cel, 60); fila(112, 138, y + 15, 'Correo electrónico:', c.correo, 60); fila(112, 138, y + 20, 'Obra:', c.obra, 60); fila(112, 138, y + 25, 'Direcc. despachos:', c.dir_despacho, 60);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt('E = excluido de iva      G = Gravado con iva', 70, y + 32);
+  y = 28; box(M, y, R - M, 34);
+  var fila = function (xl, xv, yy, et, val, maxw) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(et, xl, yy); doc.setFont('helvetica', 'bold'); if (!val) return; var fs = 7.5; doc.setFontSize(fs); while (fs > 5.6 && doc.getTextWidth(String(val)) > maxw) { fs -= 0.3; doc.setFontSize(fs); } txt(wrap(val, maxw)[0], xv, yy); };
+  fila(M + 2, M + 30, y + 6.5, 'Fecha:', fmtFecha(CZ.fecha), 68); fila(M + 2, M + 30, y + 13, 'Cliente:', c.nombre, 68); fila(M + 2, M + 30, y + 19.5, 'NIT:', c.nit, 68); fila(M + 2, M + 30, y + 26, 'Atn:', c.atn, 68); fila(M + 2, M + 30, y + 32, 'Dirección oficina:', c.dir_oficina, 68);
+  fila(112, 142, y + 6.5, 'Teléfonos:', c.tel, 56); fila(112, 142, y + 13, 'Celular:', c.cel, 56); fila(112, 142, y + 19.5, 'Correo electrónico:', c.correo, 56); fila(112, 142, y + 26, 'Obra:', c.obra, 56); fila(112, 142, y + 32, 'Direcc. despachos:', c.dir_despacho, 56);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); txt('E = excluido de iva      G = Gravado con iva', W / 2, y + 38.5, { align: 'center' });
   // Tabla
-  y = 62; var hayM2 = CZ.lineas.some(function (l) { return CZ_UM2[String(l.tmcode)]; });
-  var X = hayM2 ? { cod: M, ge: M + 14, desc: M + 18, plz: M + 70, und: M + 104, cant: M + 116, vu: M + 130, tot: M + 148, m2: M + 168, fin: R } : { cod: M, ge: M + 14, desc: M + 18, plz: M + 74, und: M + 110, cant: M + 124, vu: M + 140, tot: M + 162, m2: R, fin: R };
+  y = 70; var hayM2 = CZ.lineas.some(function (l) { return CZ_UM2[String(l.tmcode)]; });
+  var _wd = hayM2 ? [14, 6, 45, 33, 12, 16, 20, 26, 18] : [14, 6, 52, 36, 12, 16, 24, 30], _nm = ['cod', 'ge', 'desc', 'plz', 'und', 'cant', 'vu', 'tot', 'm2'], X = {}, _ac = M;
+  _nm.forEach(function (n, i) { if (i < _wd.length) { X[n] = _ac; _ac += _wd[i]; } }); X.fin = R; if (!hayM2) X.m2 = R;
   var cab = function () { doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setFillColor(235, 240, 250); doc.rect(M, y, R - M, 8, 'F'); box(M, y, R - M, 8);
-    txt('CÓD.', X.cod + 1, y + 5); txt('DESCRIPCIÓN', X.desc + 2, y + 5); txt('PLAZO DE ENTREGA', X.plz + 2, y + 3.4); doc.setFontSize(5); doc.setFont('helvetica', 'normal'); txt('Sujeto a disponib. de inventario', X.plz + 2, y + 6.4); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
-    doc.setFontSize(5.8); txt('UNIDAD', X.und + 1, y + 3.4); txt('MEDIDA', X.und + 1, y + 6.4); txt('CANTIDAD', X.cant + 0.3, y + 5); doc.setFontSize(6.5); txt('VALOR', X.vu + 2, y + 3.4); txt('UNITARIO', X.vu + 1, y + 6.4); txt('TOTAL', X.tot + 4, y + 5); if (hayM2) { txt('Equiv.', X.m2 + 1, y + 3.4); txt('en m2', X.m2 + 1, y + 6.4); }
+    txt('CÓD.', X.cod + 1.5, y + 5); txt('G/E', X.ge + 3, y + 5, { align: 'center' }); txt('DESCRIPCIÓN', X.desc + 2, y + 5); txt('PLAZO DE ENTREGA', X.plz + 2, y + 3.4); doc.setFontSize(5); doc.setFont('helvetica', 'normal'); txt('Sujeto a disponib. de inventario', X.plz + 2, y + 6.4); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
+    doc.setFontSize(5.8); txt('UNIDAD', X.und + 6, y + 3.4, { align: 'center' }); txt('MEDIDA', X.und + 6, y + 6.4, { align: 'center' }); txt('CANTIDAD', X.vu - 1.5, y + 5, { align: 'right' }); doc.setFontSize(6.5); txt('VALOR', X.tot - 1.5, y + 3.4, { align: 'right' }); txt('UNITARIO', X.tot - 1.5, y + 6.4, { align: 'right' }); txt('TOTAL', X.m2 - 1.5, y + 5, { align: 'right' }); if (hayM2) { txt('Equiv.', X.fin - 1.5, y + 3.4, { align: 'right' }); txt('en m2', X.fin - 1.5, y + 6.4, { align: 'right' }); }
     [X.ge, X.desc, X.plz, X.und, X.cant, X.vu, X.tot].concat(hayM2 ? [X.m2] : []).forEach(function (xx) { doc.line(xx, y, xx, y + 8); }); y += 8; };
   cab();
   var sumLin = 0;
   var filaTabla = function (cod, ge, desc, plz, und, cant, vu, tot, m2) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    var d = wrap(desc, X.plz - X.desc - 3), p = wrap(plz, X.und - X.plz - 3), h = Math.max(d.length, p.length, 1) * 3.2 + 2.6;
-    if (y + h > 262) { piePag(); doc.addPage(); y = 12; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+    var d = wrap(desc, X.plz - X.desc - 3), p = wrap(plz, X.und - X.plz - 3), h = Math.max(d.length, p.length, 1) * 3.6 + 5.4;
+    if (y + h > 262) { piePag(); doc.addPage(); y = 12; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); }
     box(M, y, R - M, h); [X.ge, X.desc, X.plz, X.und, X.cant, X.vu, X.tot].concat(hayM2 ? [X.m2] : []).forEach(function (xx) { doc.line(xx, y, xx, y + h); });
-    txt(cod, X.cod + 1, y + 4); txt(ge, X.ge + 3, y + 4); txt(d, X.desc + 2, y + 4); doc.setFontSize(6); txt(p, X.plz + 2, y + 4); doc.setFontSize(7);
-    txt(und, X.und + 8, y + 4, { align: 'center' }); txt(cant, X.vu - 1.5, y + 4, { align: 'right' }); txt(vu, X.tot - 1.5, y + 4, { align: 'right' }); txt(tot, X.m2 - 1.5, y + 4, { align: 'right' }); if (hayM2 && m2) txt(m2, X.fin - 1.5, y + 4, { align: 'right' }); y += h;
+    txt(cod, X.cod + 1.5, y + 5.6); txt(ge, X.ge + 3, y + 5.6, { align: 'center' }); txt(d, X.desc + 2, y + 5.6); doc.setFontSize(6); txt(p, X.plz + 2, y + 5.6); doc.setFontSize(7.5);
+    txt(und, X.und + 6, y + 5.6, { align: 'center' }); txt(cant, X.vu - 1.5, y + 5.6, { align: 'right' }); txt(vu, X.tot - 1.5, y + 5.6, { align: 'right' }); txt(tot, X.m2 - 1.5, y + 5.6, { align: 'right' }); if (hayM2 && m2) txt(m2, X.fin - 1.5, y + 5.6, { align: 'right' }); y += h;
   };
   CZ.lineas.forEach(function (l, i) {
     var r = T.lineas[i], vu = r.precioDesc + r.estiba + r.fleteUnit, tot = r2(r.neto + (T.incluido ? trunc2(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
@@ -5206,8 +5207,8 @@ async function czPDF() {
   if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
-  if (y > 205) { piePag(); doc.addPage(); y = 12; }
-  y += 3; var yObs = y;
+  if (y > 158) { piePag(); doc.addPage(); y = 14; }
+  y += 7; var yObs = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
   var ob = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n');
   var ol = wrap(ob, 118); txt(ol.slice(0, 12), M, y + 8); var hObs = Math.max(26, ol.slice(0, 12).length * 3 + 12);
@@ -5215,8 +5216,8 @@ async function czPDF() {
   box(bx, y, R - bx, 24); doc.line(bx, y + 8, R, y + 8); doc.line(bx, y + 16, R, y + 16); put('SUBTOTAL', fmt(subt), y + 5); put('IVA 19%', fmt(ivaT), y + 13); put('TOTAL A PAGAR', fmt(tot), y + 21, true);
   y += Math.max(hObs, 26) + 2;
   // Condiciones
-  box(M, y, (R - M) / 2, 22); box(M + (R - M) / 2, y, (R - M) / 2, 22); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8);
-  txt(wrap(CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 5), M + 2, y + 9); txt(wrap(CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 5), M + (R - M) / 2 + 2, y + 9); y += 25;
+  box(M, y, (R - M) / 2, 28); box(M + (R - M) / 2, y, (R - M) / 2, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+  txt(wrap(CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 6), M + 2, y + 10); txt(wrap(CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 6), M + (R - M) / 2 + 2, y + 10); y += 34;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
   doc.setFontSize(8); txt('Favor realizar sus pagos a través de Transferencia o Consignación a nombre de', W / 2, y, { align: 'center' }); txt('POSTECSA DE COLOMBIA SAS', W / 2, y + 4, { align: 'center' }); y += 7;
   box(M, y, R - M, 11); doc.setFontSize(7); txt('Banco de COLOMBIA', M + 20, y + 4, { align: 'center' }); txt('Cuenta Ahorros  82900008335', M + 20, y + 8, { align: 'center' }); txt('Banco BOGOTA', M + 90, y + 4, { align: 'center' }); txt('Cuenta Corriente  256433533', M + 90, y + 8, { align: 'center' }); txt('Banco BBVA', M + 158, y + 4, { align: 'center' }); txt('Cuenta Corriente  0243021417', M + 158, y + 8, { align: 'center' }); y += 14;
