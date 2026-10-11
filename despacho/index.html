@@ -1669,6 +1669,8 @@ function renderInventario(filtro="") {
 // Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
 // Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
 // Regla (9 oct 2026): los pasos intermedios van con decimales; el precio unitario FINAL con descuento se REDONDEA HACIA ARRIBA al entero (5,21 -> 6) y el valor de la linea = cantidad x ese unitario.
+// IVA (norma legal): fraccion < 0,50 baja al entero; >= 0,50 sube al entero siguiente.
+function ivaEntero(n) { return Math.floor(Math.round(Number(n) * 1e6) / 1e6 + 0.5) || 0; }
 function pUnit(n) { return Math.ceil(Math.round(Number(n) * 1e6) / 1e6) || 0; }
 function trunc2(n) {
   n = Number(n); if (!isFinite(n)) return 0;
@@ -1682,7 +1684,8 @@ function num2(n) {
   const p = Math.abs(t).toFixed(2).split('.');
   return (neg ? '-' : '') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
 }
-function fmt(n) { return '$' + num2(n); }
+// Valores enteros (regla oct 2026) se muestran sin decimales; si trae fraccion (p. ej. estiba), con 2 decimales.
+function fmt(n) { n = Number(n) || 0; return '$' + (Number.isInteger(n) ? num2(n).replace(/,00$/, '') : num2(n)); }
 function pctTxt(d) { return num2((Number(d) || 0) * 100) + '%'; }
 function _p2(n) { return (n < 10 ? '0' : '') + n; }
 // gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"; los campos de texto traen "2026-10-12"
@@ -1719,19 +1722,20 @@ function calcPedido(lineas, cfg) {
     const postes = trunc2(parseFloat(l.valor_postes) || 0);
     const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
     const pDesc = pUnit(pb * (1 - d));              // precio por unidad con descuento
-    const base = trunc2(cant * pb);                  // valor a precio de lista
-    const netoProd = trunc2(cant * pDesc);           // valor después del descuento
-    const vEst = trunc2(cant * estiba), vPost = trunc2(cant * postes);
+    const base = pUnit(cant * pb);                  // valor a precio de lista
+    const netoProd = pUnit(cant * pDesc);           // valor después del descuento
+    const vEst = pUnit(cant * estiba), vPost = pUnit(cant * postes);
     return { cant: cant, estiba: estiba, postes: postes, pb: pb, pDesc: pDesc, base: base, netoProd: netoProd, desc: r2(base - netoProd),
       neto: r2(netoProd + vEst + vPost), vEst: vEst, vPost: vPost,
-      unitNeto: r2(pDesc + estiba + postes),
+      unitNeto: pDesc + estiba + postes,
       grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
   });
-  const flete = cfg.conFlete ? trunc2(parseFloat(cfg.flete) || 0) : 0;
+  const flete = cfg.conFlete ? pUnit(parseFloat(cfg.flete) || 0) : 0;
   const netoG = L.reduce(function (s, x) { return s + (x.grav ? x.neto : 0); }, 0);
   const netoE = L.reduce(function (s, x) { return s + (x.grav ? 0 : x.neto); }, 0);
   const mixto = netoG > 0 && netoE > 0;
-  const fleteGrav = flete > 0 && (mixto ? netoG > netoE : netoG > 0);
+  // Regla 50%: si lo excluido supera la mitad del valor, el flete va SIN IVA.
+  const fleteGrav = flete > 0 && netoG > 0 && !(netoE * 2 > netoG + netoE);
   const incl = flete > 0 && !!cfg.incluido;
   const totalU = L.reduce(function (s, x) { return s + x.cant; }, 0);
   const refs = {}; L.forEach(function (x) { refs[x.ref] = 1; });
@@ -1752,12 +1756,12 @@ function calcPedido(lineas, cfg) {
   const gf = incl && fleteGrav;
   const out = L.map(function (x, i) {
     subtotal += x.base; descuentos += x.desc; estiba += x.vEst; postes += x.vPost;
-    const ivaLinea = x.grav ? trunc2(x.neto * IVA) : 0;
+    const ivaLinea = x.grav ? ivaEntero(x.neto * IVA) : 0;
     iva += ivaLinea;
     return { estiba: x.estiba, fleteUnit: fu[i], precioDesc: x.pDesc, base: x.base, netoProd: x.netoProd, neto: x.neto, grav: x.grav, ivaLinea: ivaLinea,
-      totalLinea: r2(x.neto + ivaLinea), unitFinal: trunc2(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
+      totalLinea: r2(x.neto + ivaLinea), unitFinal: pUnit(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
   });
-  const ivaFlete = (flete > 0 && fleteGrav) ? trunc2(flete * IVA) : 0;
+  const ivaFlete = (flete > 0 && fleteGrav) ? ivaEntero(flete * IVA) : 0;
   const ivaTotal = r2(iva + ivaFlete);
   subtotal = r2(subtotal); descuentos = r2(descuentos); estiba = r2(estiba); postes = r2(postes); iva = r2(iva);
   return { lineas: out, subtotal: subtotal, descuentos: descuentos, estiba: estiba, postes: postes, flete: flete,
@@ -1825,7 +1829,7 @@ function resumenEconomicoWA(ap, lineas) {
 }
 function planEntregasTexto(ap) {
   if (!ap || !ap.plan_entregas) return '';
-  try { const t = JSON.parse(ap.plan_entregas); return t.map(function (x) { return (x.fecha ? fmtFecha(x.fecha) : '?') + (x.porcentaje ? ' — ' + x.porcentaje + '%' : '') + (x.descripcion ? ' — ' + x.descripcion : ''); }).join(' · '); } catch (e) { return ''; }
+  try { const t = JSON.parse(ap.plan_entregas); return t.map(function (x) { return (x.fecha ? fmtFecha(x.fecha) : '?') + (x.cantidad ? ' — ' + x.cantidad + ' und' + (x.producto ? ' del ' + x.producto : '') : (x.porcentaje ? ' — ' + x.porcentaje + '%' : '')) + (x.descripcion ? ' — ' + x.descripcion : ''); }).join(' · '); } catch (e) { return ''; }
 }
 function nombreCliente(nit) {
   const c = S.clientes.find(x => String(x.cliente_nit) === String(nit));
@@ -1850,7 +1854,7 @@ function notaNegociacionAP(ap) {
   if (ap.obs_entrega) partes.push('Observaciones de entrega: ' + ap.obs_entrega);
   if (ap.direccion_obra) partes.push('Dirección de la obra: ' + ap.direccion_obra);
   if (ap.contacto_obra) partes.push('Contacto en obra: ' + ap.contacto_obra + (ap.cel_contacto ? ' · ' + ap.cel_contacto : ''));
-  { const pe = planEntregasTexto(ap); if (pe) partes.push('Despachos por porcentajes: ' + pe); }
+  { const pe = planEntregasTexto(ap); if (pe) partes.push('Despachos parciales: ' + pe); }
   return partes;
 }
 function nombreProducto(code) {
@@ -1998,7 +2002,7 @@ function renderAPs() {
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: '+fmt(ap.flete_valor) : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
 ${ap.viaje_compartido_id ? `<div style="font-size:0.70rem;color:#7c3aed;margin-top:2px;font-weight:600;">🔗 Viaje compartido ${ap.viaje_compartido_id}</div>` : ''}
 ${ap.transportista_flete ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">🚛 ${ap.transportista_flete}</div>` : ''}
-${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Despachos por porcentajes:</b> '+t.map(function(x){return (x.fecha ? fmtFecha(x.fecha) : '?')+(x.porcentaje?' — <b>'+x.porcentaje+'%</b>':'')+(x.descripcion?' — '+x.descripcion:'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
+${ap.plan_entregas ? (function(){try{var t=JSON.parse(ap.plan_entregas);return '<div style="font-size:0.70rem;color:#7c3aed;margin-top:4px;padding-top:4px;border-top:1px dashed #ddd;">📅 <b>Despachos parciales:</b> '+t.map(function(x){return (x.fecha ? fmtFecha(x.fecha) : '?')+(x.cantidad?' — <b>'+x.cantidad+' und</b>'+(x.producto?' del '+x.producto:''):(x.porcentaje?' — <b>'+x.porcentaje+'%</b>':''))+(x.descripcion?' — '+x.descripcion:'');}).join(' · ')+'</div>';}catch(e){return '';}})() : ''}
         </div>
         ${badge}
       </div>
