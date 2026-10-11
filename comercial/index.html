@@ -335,6 +335,16 @@ table       { min-width: 480px; }
   .apps-grid      { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* ── TABLET HORIZONTAL (oct 2026): tablas y líneas aprovechan el ancho sin solaparse ── */
+@media (min-width: 768px) and (orientation: landscape) {
+  .screen { max-width: 1200px; }
+  #czLineas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #czLineas > .card { margin-bottom: 0 !important; }
+  #lineasAP { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  table { display: block; overflow-x: auto; max-width: 100%; }
+  .modal-box { max-width: 720px; }
+}
+
 /* ── HORIZONTAL (landscape en móvil) ─────────────────────── */
 @media (max-width: 767px) and (orientation: landscape) {
   .login-screen   { flex-direction: row; padding: 1rem 2rem; gap: 2rem; }
@@ -486,8 +496,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="card">
       <div class="card-title">Acceso rápido</div>
       <div class="btn-row" style="flex-direction:column;">
-        <button class="btn btn-primary" onclick="irA('screenPedido')">➕ Nuevo Pedido (AP)</button>
+        <button class="btn btn-primary" onclick="irA('screenPedido')">📝 Pasos previos (borrador de AP)</button>
         <button class="btn btn-outline" onclick="irA('screenCotizador')">🧾 Cotizador</button>
+        <button class="btn btn-outline" onclick="irA('screenCotizador')">🗂️ Mis Cotizaciones</button>
+        <button class="btn btn-outline" onclick="irA('screenPedidos')">📋 Mis APs</button>
         <button class="btn btn-outline" onclick="irA('screenClientes')">👤 Mis Clientes</button>
         <button class="btn btn-outline" onclick="irA('screenInventario')">📦 Inventario en Campo</button>
         <button class="btn btn-outline" onclick="irA('screenInventario')">⏳ Producto en Curado</button>
@@ -509,7 +521,13 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card">
         <div class="card-title">🧾 Cotizaciones</div>
         <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNueva()">➕ Nueva cotización</button>
-        <input id="czBuscar" class="form-control" placeholder="Buscar por número, cliente u obra..." oninput="czRenderLista()" style="margin-bottom:8px;">
+        <input id="czBuscar" class="form-control" placeholder="Buscar por número, cliente u obra..." oninput="czRenderLista()" style="margin-bottom:6px;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;font-size:.72rem;color:#555;">
+          <span>Desde</span><input id="czDesde" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
+          <span>Hasta</span><input id="czHasta" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
+        </div>
+        <select id="czAsesor" class="form-control" onchange="czRenderLista()" style="margin-bottom:6px;display:none;"><option value="">Todos los asesores</option></select>
+        <label style="display:flex;gap:6px;align-items:center;font-size:.72rem;color:#555;margin-bottom:8px;"><input type="checkbox" id="czUnAnio" checked onchange="czRenderLista()"> Solo el último año (365 días) — desmarca para ver todo el histórico</label>
         <div id="czLista"></div>
       </div>
     </div>
@@ -544,8 +562,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
       <div class="card">
         <div class="card-title">Condiciones</div>
-        <div class="form-group"><label>Condiciones de pago</label><select id="czPago" class="form-control"></select></div>
-        <div class="form-group"><label>Condiciones de entrega</label><select id="czEntrega" class="form-control"></select></div>
+        <div class="form-group"><label>Condiciones de pago</label><select id="czPago" class="form-control"></select>
+          <textarea id="czPagoLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Texto libre (opcional): si lo escribes, REEMPLAZA la opción de arriba — úsalo para convenios especiales"></textarea></div>
+        <div class="form-group"><label>Condiciones de entrega</label><select id="czEntrega" class="form-control"></select>
+          <textarea id="czEntregaLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Texto libre (opcional): si lo escribes, REEMPLAZA la opción de arriba"></textarea></div>
         <div class="form-group"><label>Observación 1</label><select id="czObs1" class="form-control"></select></div>
         <div class="form-group"><label>Observación 2</label><select id="czObs2" class="form-control"></select></div>
         <div class="form-group"><label>Nota adicional (opcional)</label><textarea id="czNota" class="form-control" rows="2"></textarea></div>
@@ -586,6 +606,12 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <button class="btn btn-primary btn-sm" id="btnVistaPorAP" onclick="cambiarVistaPedidos('ap')">📋 Por AP</button>
         <button class="btn btn-outline btn-sm" id="btnVistaPorProducto" onclick="cambiarVistaPedidos('producto')">📦 Pendientes por producto</button>
       </div>
+      <input id="apBuscar" class="form-control" placeholder="Buscar por número de AP o cliente..." oninput="cargarMisAPs()" style="margin-bottom:6px;">
+      <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;font-size:.72rem;color:#555;">
+        <span>Desde</span><input id="apDesde" type="date" class="form-control" onchange="cargarMisAPs()" style="flex:1;">
+        <span>Hasta</span><input id="apHasta" type="date" class="form-control" onchange="cargarMisAPs()" style="flex:1;">
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:.72rem;color:#555;margin-bottom:6px;"><input type="checkbox" id="apUnAnio" checked onchange="cargarMisAPs()"> Solo el último año (365 días) — desmarca para ver todo el histórico</label>
       <select id="filtroEstado" class="form-control" onchange="cargarMisAPs()">
         <option value="">Todos los estados</option>
         <option value="Pendiente">Pendiente</option>
@@ -603,7 +629,8 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <!-- NUEVO PEDIDO -->
   <div id="screenPedido" class="screen">
     <div class="card">
-      <div class="card-title">Nuevo Pedido — AP</div>
+      <div class="card-title">📝 Pasos previos (borrador)</div>
+      <div style="font-size:.74rem;color:#7a5c00;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.45rem .6rem;margin-bottom:.6rem;">Esto es un <b>borrador</b>: todavía NO es una AP. La AP solo se crea cuando pulses <b>✅ Confirmar y Guardar AP</b> al final.</div>
 
       <!-- NÚMERO DE AP MANUAL -->
       <div id="apReservadaBadge" style="display:none;background:#f0fdf4;border:1.5px solid #16a34a;border-radius:10px;padding:.75rem 1rem;margin-bottom:.75rem;">
@@ -719,11 +746,11 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <label class="form-label">📦 Compromiso de entrega</label>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
     <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="unica" onclick="seleccionarModoEntrega('unica')" style="font-size:0.78rem;border-color:#16a34a;background:#f0fdf4;color:#14532d;">📅 Entrega única</button>
-    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="tandas" onclick="seleccionarModoEntrega('tandas')" style="font-size:0.78rem;">📦 Despachos por porcentajes</button>
+    <button type="button" class="btn btn-outline btn-sm entrega-modo-btn" data-modo="tandas" onclick="seleccionarModoEntrega('tandas')" style="font-size:0.78rem;">📦 Despachos parciales (por cantidades)</button>
   </div>
   <input type="hidden" id="modoEntregaInput" value="unica">
   <div id="tandasContainer" style="display:none;margin-top:8px;">
-    <div style="display:grid;grid-template-columns:130px 64px 1fr 28px;gap:6px;font-size:.65rem;color:#888;font-weight:700;margin-bottom:3px;"><span>Fecha</span><span>% pedido</span><span>Detalle</span><span></span></div>
+    <div style="font-size:.68rem;color:#666;margin-bottom:4px;">Para cada despacho indica la fecha, el producto y las <b>unidades exactas</b> que saldrán.</div>
     <div id="tandasLista"></div>
     <div id="tandasTotal" style="font-size:.72rem;font-weight:700;margin:2px 0 6px;"></div>
     <button type="button" class="btn btn-outline btn-sm" onclick="agregarTanda()">+ Agregar despacho</button>
@@ -1167,7 +1194,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <span class="icon">📦</span>Inventario
   </button>
   <button class="nav-btn" onclick="irA('screenPedido')" id="navNuevoAP">
-    <span class="icon">➕</span>Nueva AP
+    <span class="icon">📝</span>Pasos previos
+  </button>
+  <button class="nav-btn" onclick="irA('screenCotizador')" id="navCotiz">
+    <span class="icon">🧾</span>Cotizaciones
   </button>
   <button class="nav-btn" onclick="irA('screenPedidos')" id="navPedidos">
     <span class="icon">📋</span>Mis APs
@@ -1791,7 +1821,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 34;
+const BUILD_ACTUAL = 35;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1800,12 +1830,14 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">11 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🧾 <b>Nuevo Cotizador</b>: arma la cotización con tus productos y descuentos, avisa si el número ya se usó y genera el PDF con el formato de siempre (Inicio → Cotizador)</li>
-      <li>💲 Los <b>precios y valores ahora llevan 2 decimales</b> y se <b>truncan</b> (no se redondean): 68,794 queda en 68,79. Así cuadran con la lista de precios</li>
-      <li>📅 Todas las <b>fechas se muestran como día/mes/año</b> (dd/mm/aaaa), también al escribirlas</li>
-      <li>📦 <b>Despacho recibe toda la negociación</b>: forma de pago, IVA de cada producto, totales, flete y estiba</li>
+      <li>💲 <b>Precios y subtotales en pesos enteros</b>: el unitario resultante se aproxima al peso siguiente ($3.889,20 → $3.890)</li>
+      <li>🧮 <b>IVA sin decimales</b> con la norma legal: menos de 0,50 baja, 0,50 o más sube. Flete sin IVA si lo excluido supera el 50%</li>
+      <li>📝 <b>Pasos previos (borrador)</b>: la AP solo se crea al pulsar “Confirmar y Guardar AP”</li>
+      <li>🗂️ <b>Mis Cotizaciones</b> y <b>Mis APs</b> con búsqueda, fechas y último año</li>
+      <li>📦 <b>Despachos parciales por unidades</b> (ya no por %) y textos libres en pago y entrega</li>
+      <li>📱 Vista horizontal mejorada en tablets</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -2209,7 +2241,21 @@ async function cargarMisAPs() {
     STATE.detallesAP = dets;
     const id    = String(STATE.vendedor?.id_vendedor || "");
     const fil   = document.getElementById('filtroEstado')?.value || "";
-    STATE.aps   = todas.filter(a => String(a.vendedor_id) === id && (!fil || a.estado_ap === fil));
+    const q   = (document.getElementById('apBuscar')?.value || '').trim().toLowerCase();
+    const d1  = document.getElementById('apDesde')?.value || '', d2 = document.getElementById('apHasta')?.value || '';
+    const unAnio = document.getElementById('apUnAnio') ? document.getElementById('apUnAnio').checked : true;
+    const hoy = new Date(); const limite = new Date(hoy.getTime() - 365 * 86400000);
+    const dI = d1 ? new Date(d1 + 'T00:00:00') : null, dF = d2 ? new Date(d2 + 'T23:59:59') : null;
+    STATE.aps   = todas.filter(a => {
+      if (String(a.vendedor_id) !== id || (fil && a.estado_ap !== fil)) return false;
+      const f = parseFecha(a.fecha_creacion);
+      if (f) { if (unAnio && f < limite) return false; if (dI && f < dI) return false; if (dF && f > dF) return false; }
+      if (q) {
+        const cli = (STATE.clientes || []).find(c => String(c.cliente_nit) === String(a.cliente_nit));
+        if (!(String(a.ap_id) + ' ' + (cli ? cli.razon_social : '') + ' ' + a.cliente_nit + ' ' + (a.cotizacion_ref || '')).toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
     renderMisAPs();
     renderAPsHome();
   } catch(e) { console.error("Error APs:", e); }
@@ -2510,7 +2556,7 @@ const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (pr
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
 const precioConDescuento = pUnit(precio * (1 - desc));
-const sub = trunc2(cant * precioConDescuento);
+const sub = pUnit(cant * precioConDescuento);
 total = r2(total + sub);
 const precioConDescuentoYFlete = precioConDescuento + fletePorUnidadAP; // sin redondear — solo fmt() redondea al mostrar
 // Pendiente por despachar — antes solo se mostraba "Desp: X" (el vendedor
@@ -3001,11 +3047,11 @@ alert.textContent = '';
 
 const estiba = (STATE.pedido && STATE.pedido.lleva_estiba === 'SI') ? (parseFloat(p.valor_estiba_unidad) || 0) : 0;
 const postes = parseFloat(document.getElementById('detallePostes')?.value) || 0;
-const unitAntesIva = r2(pUnit(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
+const unitAntesIva = pUnit(pUnit(precioBase * (1 - desc)) + trunc2(estiba) + trunc2(postes));
 document.getElementById('detallePrecio').value = fmt(unitAntesIva);
-const totalSinIva = trunc2(cant * unitAntesIva);
+const totalSinIva = pUnit(cant * pUnit(precioBase * (1 - desc))) + pUnit(cant * trunc2(estiba)) + pUnit(cant * trunc2(postes));
 const esGravado = (p.tipo_iva || 'E') === 'G';
-const ivaLinea = esGravado ? trunc2(totalSinIva * 0.19) : 0;
+const ivaLinea = esGravado ? ivaEntero(totalSinIva * 0.19) : 0;
 const totalConIva = r2(totalSinIva + ivaLinea);
 document.getElementById('detalleTotal').value = fmt(totalConIva);
 const ivaInfo = document.getElementById('detalleIvaInfo');
@@ -3097,7 +3143,7 @@ function renderLineasAP() {
         <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · ${fmt(l.precio_base)}/u · Desc ${pctTxt(l.descuento_aplicado)}${unitResultante !== null ? ' · Unit. resultante: ' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
-        <div class="linea-precio">${fmt(trunc2(l.cantidad_solicitada * trunc2(l.precio_base * (1-l.descuento_aplicado))))}</div>
+        <div class="linea-precio">${fmt(pUnit(l.cantidad_solicitada * pUnit(l.precio_base * (1-l.descuento_aplicado))))}</div>
         <button class="linea-del" onclick="eliminarLinea(${i})">✕</button>
       </div>
     </div>`;
@@ -3240,6 +3286,7 @@ P._totales = { subtotal: R.subtotal, descuentos: R.descuentos, estiba: R.estiba 
 const apIdActual = parseInt(document.getElementById('inputApId')?.value);
 if (apIdActual && apIdActual >= 1) renderLineasAP();
 guardarBorradorPedido();
+if ((document.getElementById('modoEntregaInput')||{}).value==='tandas' && typeof renderTandas==='function') renderTandas();
 }
 
 
@@ -3258,19 +3305,20 @@ function calcPedido(lineas, cfg) {
     const postes = trunc2(parseFloat(l.valor_postes) || 0);
     const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
     const pDesc = pUnit(pb * (1 - d));              // precio por unidad con descuento
-    const base = trunc2(cant * pb);                  // valor a precio de lista
-    const netoProd = trunc2(cant * pDesc);           // valor después del descuento
-    const vEst = trunc2(cant * estiba), vPost = trunc2(cant * postes);
+    const base = pUnit(cant * pb);                  // valor a precio de lista
+    const netoProd = pUnit(cant * pDesc);           // valor después del descuento
+    const vEst = pUnit(cant * estiba), vPost = pUnit(cant * postes);
     return { cant: cant, estiba: estiba, postes: postes, pb: pb, pDesc: pDesc, base: base, netoProd: netoProd, desc: r2(base - netoProd),
       neto: r2(netoProd + vEst + vPost), vEst: vEst, vPost: vPost,
-      unitNeto: r2(pDesc + estiba + postes),
+      unitNeto: pDesc + estiba + postes,
       grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
   });
-  const flete = cfg.conFlete ? trunc2(parseFloat(cfg.flete) || 0) : 0;
+  const flete = cfg.conFlete ? pUnit(parseFloat(cfg.flete) || 0) : 0;
   const netoG = L.reduce(function (s, x) { return s + (x.grav ? x.neto : 0); }, 0);
   const netoE = L.reduce(function (s, x) { return s + (x.grav ? 0 : x.neto); }, 0);
   const mixto = netoG > 0 && netoE > 0;
-  const fleteGrav = flete > 0 && (mixto ? netoG > netoE : netoG > 0);
+  // Regla 50%: si lo excluido supera la mitad del valor, el flete va SIN IVA.
+  const fleteGrav = flete > 0 && netoG > 0 && !(netoE * 2 > netoG + netoE);
   const incl = flete > 0 && !!cfg.incluido;
   const totalU = L.reduce(function (s, x) { return s + x.cant; }, 0);
   const refs = {}; L.forEach(function (x) { refs[x.ref] = 1; });
@@ -3291,12 +3339,12 @@ function calcPedido(lineas, cfg) {
   const gf = incl && fleteGrav;
   const out = L.map(function (x, i) {
     subtotal += x.base; descuentos += x.desc; estiba += x.vEst; postes += x.vPost;
-    const ivaLinea = x.grav ? trunc2(x.neto * IVA) : 0;
+    const ivaLinea = x.grav ? ivaEntero(x.neto * IVA) : 0;
     iva += ivaLinea;
     return { estiba: x.estiba, fleteUnit: fu[i], precioDesc: x.pDesc, base: x.base, netoProd: x.netoProd, neto: x.neto, grav: x.grav, ivaLinea: ivaLinea,
-      totalLinea: r2(x.neto + ivaLinea), unitFinal: trunc2(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
+      totalLinea: r2(x.neto + ivaLinea), unitFinal: pUnit(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
   });
-  const ivaFlete = (flete > 0 && fleteGrav) ? trunc2(flete * IVA) : 0;
+  const ivaFlete = (flete > 0 && fleteGrav) ? ivaEntero(flete * IVA) : 0;
   const ivaTotal = r2(iva + ivaFlete);
   subtotal = r2(subtotal); descuentos = r2(descuentos); estiba = r2(estiba); postes = r2(postes); iva = r2(iva);
   return { lineas: out, subtotal: subtotal, descuentos: descuentos, estiba: estiba, postes: postes, flete: flete,
@@ -3501,25 +3549,35 @@ function seleccionarModoEntrega(modo){
 // "Despachos por porcentajes" (antes "tandas"; los identificadores internos se
 // conservan para no romper APs ya guardadas). Cada despacho lleva fecha, % del
 // pedido y detalle.
-function agregarTanda(){ _TANDAS.push({fecha:'',porcentaje:'',descripcion:''}); renderTandas(); }
+function agregarTanda(){ _TANDAS.push({fecha:'',producto:'',cantidad:'',descripcion:''}); renderTandas(); }
 function quitarTanda(i){ _TANDAS.splice(i,1); renderTandas(); }
 function actualizarTanda(i,campo,valor){ if(_TANDAS[i]) _TANDAS[i][campo]=valor; calcularPlanEntregas(); mostrarTotalPorcentajes(); }
+// Control por producto: unidades programadas en los despachos vs. unidades del pedido.
 function mostrarTotalPorcentajes(){
   const el=document.getElementById('tandasTotal'); if(!el) return;
-  const tot=_TANDAS.reduce(function(s,t){ return s+(parseFloat(t.porcentaje)||0); },0);
-  if(!_TANDAS.length||!tot){ el.textContent=''; return; }
-  const r=Math.round(tot*100)/100;
-  el.style.color = r===100 ? '#15803d' : '#b45309';
-  el.textContent = r===100 ? '✅ Total: 100% del pedido' : (r<100 ? '⚠️ Total: '+r+'% — faltan '+(Math.round((100-r)*100)/100)+'%' : '⚠️ Total: '+r+'% — se pasa del 100%');
+  const lineas=(STATE.pedido&&STATE.pedido.lineas)||[];
+  const prog={}; _TANDAS.forEach(function(t){ if(t.producto) prog[t.producto]=(prog[t.producto]||0)+(parseFloat(t.cantidad)||0); });
+  if(!_TANDAS.length||!Object.keys(prog).length){ el.textContent=''; return; }
+  el.innerHTML=lineas.map(function(l){
+    const k=String(l.tmcode), ped=parseFloat(l.cantidad_solicitada)||0, pr=prog[k]||0, dif=Math.round((ped-pr)*100)/100;
+    if(!pr) return '';
+    const ok=dif===0, c=ok?'#15803d':'#b45309';
+    return '<div style="color:'+c+';">'+(ok?'✅ ':'⚠️ ')+k+': '+pr+' de '+ped+' und programadas'+(dif>0?' — faltan '+dif:(dif<0?' — se pasa por '+(-dif):''))+'</div>';
+  }).join('');
 }
 function renderTandas(){
   const cont=document.getElementById('tandasLista'); if(!cont) return;
+  const lineas=(STATE.pedido&&STATE.pedido.lineas)||[];
+  const opts=function(sel){ return '<option value="">— Producto —</option>'+lineas.map(function(l){ const k=String(l.tmcode); const d=(l.tmdescrip||l.nombre||((STATE.inventario||[]).find(function(p){return String(p.tmcode)===k;})||{}).tmdescrip||''); return '<option value="'+k+'"'+(String(sel)===k?' selected':'')+'>'+k+' '+String(d).replace(/</g,'&lt;').slice(0,34)+'</option>'; }).join(''); };
   cont.innerHTML=_TANDAS.map(function(t,i){
-    return '<div style="display:grid;grid-template-columns:130px 64px 1fr 28px;gap:6px;margin-bottom:6px;">'+
+    return '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:6px;margin-bottom:6px;">'+
+    '<div style="display:grid;grid-template-columns:120px 1fr 28px;gap:6px;margin-bottom:6px;">'+
     '<input class="form-control" style="font-size:.75rem;padding:6px;" type="date" value="'+(t.fecha||'')+'" onchange="actualizarTanda('+i+',&#39;fecha&#39;,this.value)">'+
-    '<input class="form-control" style="font-size:.75rem;padding:6px;" type="number" min="0" max="100" step="any" placeholder="%" value="'+(t.porcentaje||'')+'" oninput="actualizarTanda('+i+',&#39;porcentaje&#39;,this.value)">'+
-    '<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Ej: bloques grises, primer viaje..." value="'+String(t.descripcion||'').replace(/"/g,'&quot;')+'" oninput="actualizarTanda('+i+',&#39;descripcion&#39;,this.value)">'+
-    '<button type="button" onclick="quitarTanda('+i+')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button>'+
+    '<select class="form-control" style="font-size:.75rem;padding:6px;" onchange="actualizarTanda('+i+',&#39;producto&#39;,this.value)">'+opts(t.producto)+'</select>'+
+    '<button type="button" onclick="quitarTanda('+i+')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;cursor:pointer;">✕</button></div>'+
+    '<div style="display:grid;grid-template-columns:90px 1fr;gap:6px;">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" type="number" min="0" step="any" inputmode="decimal" placeholder="Unidades" value="'+(t.cantidad||'')+'" oninput="actualizarTanda('+i+',&#39;cantidad&#39;,this.value)">'+
+    '<input class="form-control" style="font-size:.75rem;padding:6px;" placeholder="Detalle (opcional): primer viaje..." value="'+String(t.descripcion||'').replace(/"/g,'&quot;')+'" oninput="actualizarTanda('+i+',&#39;descripcion&#39;,this.value)"></div>'+
     '</div>';
   }).join('');
   calcularPlanEntregas();
@@ -3528,7 +3586,7 @@ function renderTandas(){
 function calcularPlanEntregas(){
   const modo=document.getElementById('modoEntregaInput')?.value||'unica';
   if(modo==='unica'){ STATE.pedido.plan_entregas=''; return; }
-  const validas=_TANDAS.filter(function(t){ return t.fecha||t.descripcion||t.porcentaje; });
+  const validas=_TANDAS.filter(function(t){ return t.fecha||t.descripcion||t.cantidad||t.porcentaje; });
   STATE.pedido.plan_entregas = validas.length ? JSON.stringify(validas) : '';
 }
 
@@ -3707,8 +3765,8 @@ async function cerrarCesionYGenerarInforme(){
       (it.detalle_lineas||[]).forEach(function(l){
         ensureSpace(9);
         const _pDesc = pUnit((l.precio_base||0) * (1 - (l.descuento_aplicado||0)));
-        const neto = trunc2(l.cantidad_solicitada * _pDesc);
-        const ivaLinea = (l.tipo_iva||'E')==='G' ? trunc2(neto * 0.19) : 0;
+        const neto = pUnit(l.cantidad_solicitada * _pDesc);
+        const ivaLinea = (l.tipo_iva||'E')==='G' ? ivaEntero(neto * 0.19) : 0;
         const totalLinea = r2(neto + ivaLinea);
         const nombre = (l.tmdescrip||'').length > 44 ? l.tmdescrip.substring(0,41)+'...' : (l.tmdescrip||'');
         doc.text(nombre, colX.prod, y);
@@ -4205,7 +4263,7 @@ function irA(screenId) {
 
   const map = {
     screenHome: 'navHome', screenInventario: 'navInventario',
-    screenPedido: 'navNuevoAP', screenPedidos: 'navPedidos',
+    screenPedido: 'navNuevoAP', screenPedidos: 'navPedidos', screenCotizador: 'navCotiz',
     screenClientes: 'navClientes', screenVisitas: 'navVisitas'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
@@ -4240,6 +4298,8 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 // Ej.: 68,794 -> 68,79. Formato colombiano: punto para miles, coma para decimales.
 // Fechas: siempre dd/mm/aaaa (nunca mes/día/año), sin depender del idioma del celular.
 // Regla (9 oct 2026): los pasos intermedios van con decimales; el precio unitario FINAL con descuento se REDONDEA HACIA ARRIBA al entero (5,21 -> 6) y el valor de la linea = cantidad x ese unitario.
+// IVA (norma legal): fraccion < 0,50 baja al entero; >= 0,50 sube al entero siguiente.
+function ivaEntero(n) { return Math.floor(Math.round(Number(n) * 1e6) / 1e6 + 0.5) || 0; }
 function pUnit(n) { return Math.ceil(Math.round(Number(n) * 1e6) / 1e6) || 0; }
 function trunc2(n) {
   n = Number(n); if (!isFinite(n)) return 0;
@@ -4253,7 +4313,8 @@ function num2(n) {
   const p = Math.abs(t).toFixed(2).split('.');
   return (neg ? '-' : '') + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
 }
-function fmt(n) { return '$' + num2(n); }
+// Valores enteros (regla oct 2026) se muestran sin decimales; si trae fraccion (p. ej. estiba), con 2 decimales.
+function fmt(n) { n = Number(n) || 0; return '$' + (Number.isInteger(n) ? num2(n).replace(/,00$/, '') : num2(n)); }
 function pctTxt(d) { return num2((Number(d) || 0) * 100) + '%'; }
 function _p2(n) { return (n < 10 ? '0' : '') + n; }
 // gviz devuelve fechas como objeto Date JS o string "Date(2026,5,20)"; los campos de texto traen "2026-10-12"
@@ -4900,6 +4961,7 @@ async function czInit() {
   var dp = document.getElementById('czProdDL');
   if (dp) dp.innerHTML = czProductos().map(function (p) { return '<option value="' + czH(p.tmcode) + ' — ' + czH(p.tmdescrip) + '">'; }).join('');
   await czCargarTextos();
+  czAsegurarPlantillas();
   czCargarLista();
 }
 // Textos editados por Gerencia (hoja COTIZ_TEXTOS). Si no hay, se usan los del Excel embebidos.
@@ -4913,6 +4975,19 @@ async function czCargarTextos() {
     });
     ['pago', 'entrega', 'plazo', 'obs'].forEach(function (k) { if (N[k].length) CZ_TEXTOS[k] = N[k]; });
   } catch (e) {}
+}
+// Plantillas del documento de requerimientos (oct 2026): se agregan al final si aun no existen
+// (asi no se mueven los numeros de las opciones ya usadas en cotizaciones guardadas).
+function czAsegurarPlantillas() {
+  var P = {
+    pago: ['Anticipo del 50% sobre el total de la orden de compra para programación de producción y alistamiento de materiales; saldo restante del 50% antes del inicio de despachos (o proporcional contra cada despacho parcial realizado). El anticipo respalda la totalidad de la orden de compra y se descontará proporcionalmente en la factura de cada despacho parcial.',
+           'Pago 100% anticipado previo al despacho del material.'],
+    entrega: ['Producto puesto en obra con descarga e hincada de postes, siempre y cuando los huecos estén debidamente listos al momento de la llegada del vehículo y existan las condiciones de espacio para la maniobrabilidad de la grúa/equipo.'],
+    obs: ['Los precios cotizados tendrán vigencia hasta la fecha estipulada. Cantidades pendientes por despachar al 31 de diciembre estarán sujetas a los reajustes de precios y fletes del año siguiente.']
+  };
+  Object.keys(P).forEach(function (k) {
+    P[k].forEach(function (t) { var clave = t.slice(0, 40).toLowerCase(); if (!CZ_TEXTOS[k].some(function (x) { return String(x).toLowerCase().indexOf(clave) === 0; })) CZ_TEXTOS[k].push(t); });
+  });
 }
 async function czCargarLista() {
   var cont = document.getElementById('czLista');
@@ -4928,10 +5003,20 @@ function czRenderLista() {
   var ver = CZ_LISTA.filter(function (c) {
     if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo) return false;
     if (CZ_FILTRO !== 'todas' && c.estado !== CZ_FILTRO) return false;
+    var fc = parseFecha(c.fecha), d1 = (document.getElementById('czDesde') || {}).value || '', d2 = (document.getElementById('czHasta') || {}).value || '';
+    var unAnio = document.getElementById('czUnAnio') ? document.getElementById('czUnAnio').checked : true;
+    if (fc) {
+      if (unAnio && fc < new Date(Date.now() - 365 * 86400000)) return false;
+      if (d1 && fc < new Date(d1 + 'T00:00:00')) return false;
+      if (d2 && fc > new Date(d2 + 'T23:59:59')) return false;
+    }
+    var as = (document.getElementById('czAsesor') || {}).value || ''; if (as && String(c.vendedor_id) !== as) return false;
     if (q && czNorm(c.numero + c.cliente_nombre + c.obra).toLowerCase().indexOf(q) < 0) return false;
     return true;
   }).sort(function (a, b) { return String(b.creado || '').localeCompare(String(a.creado || '')); });
-  var tabs = ['todas', 'Borrador', 'Enviada', 'Aceptada', 'Perdida'].map(function (e) {
+  var selA = document.getElementById('czAsesor');
+  if (selA && /GERENTE|GERENCIA|ADMIN|JEFE/.test(rol)) { selA.style.display = ''; if (selA.options.length <= 1) { var vs = {}; CZ_LISTA.forEach(function (c) { if (c.vendedor_id) vs[c.vendedor_id] = 1; }); Object.keys(vs).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v; selA.appendChild(o); }); } }
+  var tabs = ['todas', 'Borrador', 'Enviada', 'Aceptada', 'Perdida', 'Anulada'].map(function (e) {
     return '<button class="btn ' + (CZ_FILTRO === e ? 'btn-primary' : 'btn-outline') + ' btn-sm" style="font-size:.7rem;padding:4px 9px;" onclick="CZ_FILTRO=\'' + e + '\';czRenderLista()">' + (e === 'todas' ? 'Todas' : e) + '</button>';
   }).join(' ');
   cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
@@ -4961,7 +5046,7 @@ function czMostrarForm() {
   document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true, 'obs');
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
-    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota };
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
@@ -4974,7 +5059,7 @@ function czLeer() {
   var g = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
   CZ.numero = g('czNumero').trim(); CZ.vigencia = g('czVig'); CZ.despachos_hasta = g('czDesp');
   CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
-  CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota');
+  CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota'); CZ.pago_libre = g('czPagoLibre').trim(); CZ.entrega_libre = g('czEntregaLibre').trim();
   CZ.pago = parseInt(g('czPago')) || 8; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
 }
 function czElegirCliente() {
@@ -5013,7 +5098,7 @@ function czEdit(i, campo, val) {
 function czCfg() { return { llevaEstiba: CZ.estiba, conFlete: CZ.fleteModo !== 'NO' && CZ.flete > 0, flete: CZ.flete, incluido: CZ.fleteModo === 'INCLUIDO' }; }
 function czSumas(T) {
   var s = 0;
-  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; s = r2(s + r.neto + (T.incluido ? trunc2(l.cantidad_solicitada * r.fleteUnit) : 0)); });
+  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; s = r2(s + r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); });
   if (!T.incluido) s = r2(s + T.flete);
   return { subt: s, iva: T.iva, total: r2(s + T.iva) };
 }
@@ -5154,8 +5239,8 @@ async function czCambiarEstado(estado) {
 function czTextoWA() {
   var T = czCalc(), c = CZ.cliente;
   var t = '*COTIZACIÓN ' + CZ.numero + '* — POSTECSA\nCliente: ' + c.nombre + (c.obra ? '\nObra: ' + c.obra : '') + '\nFecha: ' + fmtFecha(CZ.fecha) + (CZ.vigencia ? ' · Vigencia: ' + fmtFecha(CZ.vigencia) : '') + '\n\n';
-  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(r.precioDesc + r.estiba + r.fleteUnit) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
-  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(T.iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] + '\n' : '') + 'Pago: ' + CZ_TEXTOS.pago[CZ.pago - 1];
+  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
+  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(T.iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + 'Pago: ' + (CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1]);
   return t;
 }
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
@@ -5203,7 +5288,7 @@ async function czPDF() {
     txt(und, X.und + 6, y + 5.6, { align: 'center' }); txt(cant, X.vu - 1.5, y + 5.6, { align: 'right' }); txt(vu, X.tot - 1.5, y + 5.6, { align: 'right' }); txt(tot, X.m2 - 1.5, y + 5.6, { align: 'right' }); if (hayM2 && m2) txt(m2, X.fin - 1.5, y + 5.6, { align: 'right' }); y += h;
   };
   CZ.lineas.forEach(function (l, i) {
-    var r = T.lineas[i], vu = r.precioDesc + r.estiba + r.fleteUnit, tot = r2(r.neto + (T.incluido ? trunc2(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
+    var r = T.lineas[i], vu = pUnit(r.precioDesc + r.estiba + r.fleteUnit), tot = r2(r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
     var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
   });
   if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
@@ -5219,7 +5304,7 @@ async function czPDF() {
   y += Math.max(hObs, 26) + 2;
   // Condiciones
   box(M, y, (R - M) / 2, 28); box(M + (R - M) / 2, y, (R - M) / 2, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
-  txt(wrap(CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 6), M + 2, y + 10); txt(wrap(CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 6), M + (R - M) / 2 + 2, y + 10); y += 34;
+  txt(wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 6), M + 2, y + 10); txt(wrap(CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 6), M + (R - M) / 2 + 2, y + 10); y += 34;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
   doc.setFontSize(8); txt('Favor realizar sus pagos a través de Transferencia o Consignación a nombre de', W / 2, y, { align: 'center' }); txt('POSTECSA DE COLOMBIA SAS', W / 2, y + 4, { align: 'center' }); y += 7;
   box(M, y, R - M, 11); doc.setFontSize(7); txt('Banco de COLOMBIA', M + 20, y + 4, { align: 'center' }); txt('Cuenta Ahorros  82900008335', M + 20, y + 8, { align: 'center' }); txt('Banco BOGOTA', M + 90, y + 4, { align: 'center' }); txt('Cuenta Corriente  256433533', M + 90, y + 8, { align: 'center' }); txt('Banco BBVA', M + 158, y + 4, { align: 'center' }); txt('Cuenta Corriente  0243021417', M + 158, y + 8, { align: 'center' }); y += 14;
