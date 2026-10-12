@@ -867,7 +867,11 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 
         <div class="btn-row" style="margin-top:1rem;flex-direction:column;">
           <button class="btn btn-outline" onclick="czDesdePedido()">🧾 Generar cotización de este pedido</button>
-          <button class="btn btn-success" onclick="guardarAP()">✅ Confirmar y Guardar AP</button>
+          <div id="avisoPasosPrevios" style="font-size:.76rem;color:#7a5c00;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.55rem .7rem;">
+            <b>Orden del proceso:</b> Pasos previos → <b>Cotización</b> → cuando el cliente la aprueba, en la cotización pulsas <b>“Convertir en AP”</b> y ahí se te asigna el número de AP.
+            <div style="margin-top:6px;"><a href="#" onclick="apModo(true);return false;" style="color:#1d4ed8;font-weight:700;">Crear AP directa (el cliente ya aprobó, sin cotización)</a></div>
+          </div>
+          <button class="btn btn-success" id="btnGuardarAP" style="display:none;" onclick="guardarAP()">✅ Confirmar y Guardar AP</button>
           <button class="btn btn-outline" onclick="limpiarPedido()">🗑️ Cancelar</button>
         </div>
       </div>
@@ -1821,7 +1825,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 35;
+const BUILD_ACTUAL = 36;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1830,11 +1834,11 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">11 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">12 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
       <li>💲 <b>Precios y subtotales en pesos enteros</b>: el unitario resultante se aproxima al peso siguiente ($3.889,20 → $3.890)</li>
       <li>🧮 <b>IVA sin decimales</b> con la norma legal: menos de 0,50 baja, 0,50 o más sube. Flete sin IVA si lo excluido supera el 50%</li>
-      <li>📝 <b>Pasos previos (borrador)</b>: la AP solo se crea al pulsar “Confirmar y Guardar AP”</li>
+      <li>📝 <b>Pasos previos → Cotización → AP</b>: el número de AP se otorga al pulsar “Convertir en AP” en la cotización aprobada</li>
       <li>🗂️ <b>Mis Cotizaciones</b> y <b>Mis APs</b> con búsqueda, fechas y último año</li>
       <li>📦 <b>Despachos parciales por unidades</b> (ya no por %) y textos libres en pago y entrega</li>
       <li>📱 Vista horizontal mejorada en tablets</li>
@@ -2034,26 +2038,34 @@ async function cargarProximaAP() {
   if (el) el.textContent = siguiente ? `AP #${siguiente}` : 'Sin conexión';
 }
 
+// Pasos previos NO lleva numero de AP. El numero se otorga al convertir la cotizacion en AP
+// (o al crear una AP directa). apModo(true) muestra el numero y el boton de guardar.
+async function sugerirNumeroAP() {
+  const badge = document.getElementById('apReservadaBadge'), input = document.getElementById('inputApId'), texto = document.getElementById('apBadgeTexto');
+  if (badge) badge.style.display = 'block';
+  if (texto) texto.textContent = 'Buscando el número disponible...';
+  const siguiente = await obtenerProximaAPDisponible();
+  STATE.proximaAPSugerida = siguiente;
+  if (siguiente) {
+    if (input && !input.value) input.value = siguiente;
+    if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
+    if (input) validarNumeroAP(input);
+  } else if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
+}
+function apModo(on) {
+  if (STATE.pedido) STATE.pedido._modoAP = !!on;
+  const badge = document.getElementById('apReservadaBadge'), btn = document.getElementById('btnGuardarAP'), av = document.getElementById('avisoPasosPrevios');
+  if (badge) badge.style.display = on ? 'block' : 'none';
+  if (btn) btn.style.display = on ? '' : 'none';
+  if (av) av.style.display = on ? 'none' : 'block';
+  const t = document.querySelector('#screenPedido .card-title');
+  if (t) t.textContent = on ? '✅ Convertir en AP' : '📝 Pasos previos (borrador)';
+  if (on) sugerirNumeroAP();
+}
 function usarProximaAP() {
   irA('screenPedido');
   actualizarVisibilidadVentaApoyo();
-  setTimeout(async () => {
-    const badge = document.getElementById('apReservadaBadge');
-    const input = document.getElementById('inputApId');
-    const texto = document.getElementById('apBadgeTexto');
-    if (badge) badge.style.display = 'block';
-    // Re-verificar por si alguien tomó el número entre que se cargó
-    // el dashboard y el momento en que el vendedor toca este botón.
-    const siguiente = await obtenerProximaAPDisponible();
-    STATE.proximaAPSugerida = siguiente;
-    if (siguiente) {
-      if (input && !input.value) input.value = siguiente;
-      if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
-      validarNumeroAP(input);
-    } else {
-      if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
-    }
-  }, 200);
+  setTimeout(() => apModo(true), 200);
 }
 
 async function cargarInventario() {
@@ -3477,27 +3489,10 @@ toast('✅ Pedido restaurado');
 }
 
 async function iniciarNuevaAP() {
-  // 1. Ir al formulario
+  // Pasos previos: sin numero de AP (se otorga al convertir la cotizacion)
   irA('screenPedido');
   actualizarVisibilidadVentaApoyo();
-
-  // 2. Obtener el siguiente número de AP REALMENTE disponible
-  //    (salta automáticamente cualquier número ya ocupado por otro vendedor)
-  setTimeout(async () => {
-    const badge  = document.getElementById('apReservadaBadge');
-    const input  = document.getElementById('inputApId');
-    const texto  = document.getElementById('apBadgeTexto');
-    if (badge) badge.style.display = 'block';
-
-    const siguiente = await obtenerProximaAPDisponible();
-    STATE.proximaAPSugerida = siguiente;
-    if (siguiente) {
-      if (input && !input.value) input.value = siguiente;
-      if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
-    } else {
-      if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
-    }
-  }, 400);
+  setTimeout(() => apModo(false), 200);
 }
 
 async function validarNumeroAP(input) {
@@ -4256,6 +4251,7 @@ function irA(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(screenId)?.classList.add('active');
+  if (screenId === 'screenPedido' && typeof apModo === 'function') apModo(!!(STATE.pedido && STATE.pedido._modoAP));
 
   const map = {
     screenHome: 'navHome', screenInventario: 'navInventario',
@@ -5204,6 +5200,7 @@ async function czAAP() {
     if (hayFlete) set('fleteIncluidoSel', q.fleteModo === 'INCLUIDO' ? 'SI' : 'NO');
     if (q.pago === 8) set('formaPago', 'CONTADO');
     renderLineasAP(); calcularTotales();
+    apModo(true);
     toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + ': elige el destino y verifica el flete' : '') + '. Completa fecha y entrega y guarda.', 7000);
   }, 250);
 }
