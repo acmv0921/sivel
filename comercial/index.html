@@ -558,6 +558,22 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <div class="form-group"><label>Flete</label><select id="czFleteModo" class="form-control" onchange="czTotales()"><option value="NO">Sin flete</option><option value="INCLUIDO">Incluido en el precio</option><option value="APARTE">Aparte (línea de flete)</option></select></div>
         </div>
         <div class="form-group"><label>Valor del flete ($)</label><input id="czFlete" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()"></div>
+        <div style="border:1px dashed #94a3b8;border-radius:8px;padding:8px;margin-bottom:8px;">
+          <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">🚚 Topes de carga y flete sugerido</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="form-group"><label>Tope por vehículo (kg)</label><input id="czTope" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()" placeholder="Ej: 2000"></div>
+            <div class="form-group"><label>Tarifa por viaje ($)</label><input id="czTarifa" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()" placeholder="Opcional"></div>
+          </div>
+          <div id="czTransInfo" style="font-size:.76rem;color:#1a3a5c;margin-bottom:4px;"></div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="czAplicarFlete()">Aplicar flete sugerido</button>
+          <div class="form-group" id="czMotivoWrap" style="display:none;margin-top:6px;"><label>Motivo del ajuste manual del flete (obligatorio)</label><input id="czFleteMotivo" class="form-control" oninput="czTotales()" placeholder="Ej: descuento por volumen, retorno de vehículo..."></div>
+          <div class="form-group" style="margin-top:6px;"><label>Nota de transporte para la cotización (opcional)</label><input id="czNotaTransp" class="form-control" placeholder="Ej: descargue con grúa a cargo del cliente"></div>
+        </div>
+        <div style="border:1px dashed #94a3b8;border-radius:8px;padding:8px;margin-bottom:8px;">
+          <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">➕ Fletes adicionales (gravado / no gravado)</div>
+          <div id="czExtras"></div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="czExtraAdd()">Agregar flete adicional</button>
+        </div>
         <div id="czTotales" style="font-size:.82rem;background:#f4f7fb;border-radius:8px;padding:10px;"></div>
       </div>
       <div class="card">
@@ -576,6 +592,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <button class="btn btn-primary" onclick="czPDF()">📄 Guardar y generar PDF</button>
           <button class="btn btn-outline" onclick="czWhatsApp()">💬 Guardar y enviar por WhatsApp</button>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;"><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Aceptada')">✅ Aceptada</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Perdida')">❌ Perdida</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Anulada')">🗑️ Anular</button></div>
+          <button class="btn btn-outline" id="czBtnVer" style="width:100%;" onclick="czNuevaVersion()">🆕 Nueva versión (A/B) de esta cotización</button>
           <button class="btn btn-primary" id="czBtnAP" style="width:100%;margin-top:8px;" onclick="czAAP()">📦 Convertir en AP (pedido)</button><div id="czApInfo" style="font-size:.76rem;color:#166534;margin-top:4px;"></div>
         </div>
       </div>
@@ -1825,7 +1842,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 36;
+const BUILD_ACTUAL = 37;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1841,6 +1858,8 @@ function mostrarNovedadesBuild() {
       <li>📝 <b>Pasos previos → Cotización → AP</b>: el número de AP se otorga al pulsar “Convertir en AP” en la cotización aprobada</li>
       <li>🗂️ <b>Mis Cotizaciones</b> y <b>Mis APs</b> con búsqueda, fechas y último año</li>
       <li>📦 <b>Despachos parciales por unidades</b> (ya no por %) y textos libres en pago y entrega</li>
+      <li>🚚 <b>Fletes adicionales</b> (gravado / no gravado), <b>topes de carga</b> con flete sugerido y nota de transporte en el PDF</li>
+      <li>🆕 <b>Nueva versión (A/B)</b> de una cotización; si tiene más de 90 días se debe crear una nueva antes de pasar a AP</li>
       <li>📱 Vista horizontal mejorada en tablets</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
@@ -5022,7 +5041,7 @@ function czRenderLista() {
 function czNueva() {
   var v = STATE.vendedor || {};
   CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
-    lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
+    lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
   czMostrarForm();
 }
 function czAbrir(uid) {
@@ -5041,12 +5060,14 @@ function czMostrarForm() {
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   czPickers();
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
-    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '' };
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
   document.getElementById('czNumAlert').textContent = '';
   var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
+  CZ.fletes_extra = CZ.fletes_extra || []; czExtraRender();
+  if (ai && CZ.origen) ai.textContent = (ai.textContent ? ai.textContent + ' · ' : '') + '🔗 Nueva versión de ' + CZ.origen.numero;
   czRenderLineas(); window.scrollTo(0, 0);
 }
 // Selector de condiciones con el texto COMPLETO (el desplegable nativo corta los textos largos).
@@ -5082,6 +5103,7 @@ function czLeer() {
   CZ.numero = g('czNumero').trim(); CZ.vigencia = g('czVig'); CZ.despachos_hasta = g('czDesp');
   CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
   CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota'); CZ.pago_libre = g('czPagoLibre').trim(); CZ.entrega_libre = g('czEntregaLibre').trim();
+  CZ.tope_kg = parseFloat(g('czTope')) || 0; CZ.tarifa_viaje = parseFloat(g('czTarifa')) || 0; CZ.flete_motivo = g('czFleteMotivo').trim(); CZ.nota_transp = g('czNotaTransp').trim(); CZ.fletes_extra = CZ.fletes_extra || [];
   CZ.pago = parseInt(g('czPago')) || 8; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
 }
 function czElegirCliente() {
@@ -5118,11 +5140,49 @@ function czEdit(i, campo, val) {
   czTotales();
 }
 function czCfg() { return { llevaEstiba: CZ.estiba, conFlete: CZ.fleteModo !== 'NO' && CZ.flete > 0, flete: CZ.flete, incluido: CZ.fleteModo === 'INCLUIDO' }; }
+function czExtras() {
+  var sub = 0, iva = 0;
+  (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v <= 0) return; sub += v; if (f.grav === 'G') iva += ivaEntero(v * 0.19); });
+  return { sub: sub, iva: iva };
+}
+function czExtraRender() {
+  var c = document.getElementById('czExtras'); if (!c) return;
+  c.innerHTML = (CZ.fletes_extra || []).map(function (f, i) {
+    return '<div style="display:grid;grid-template-columns:2fr 1.2fr .9fr auto;gap:4px;margin-bottom:4px;"><input class="form-control" placeholder="Descripción" value="' + czH(f.desc || '') + '" oninput="czExtraEdit(' + i + ',\'desc\',this.value)">' +
+      '<input class="form-control" type="number" inputmode="decimal" placeholder="Valor" value="' + (f.valor || '') + '" oninput="czExtraEdit(' + i + ',\'valor\',this.value)">' +
+      '<select class="form-control" onchange="czExtraEdit(' + i + ',\'grav\',this.value)"><option value="E"' + (f.grav !== 'G' ? ' selected' : '') + '>No grav.</option><option value="G"' + (f.grav === 'G' ? ' selected' : '') + '>Gravado</option></select>' +
+      '<button type="button" onclick="czExtraDel(' + i + ')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;padding:0 8px;">✕</button></div>';
+  }).join('');
+}
+function czExtraAdd() { CZ.fletes_extra = CZ.fletes_extra || []; CZ.fletes_extra.push({ desc: '', valor: 0, grav: 'E' }); czExtraRender(); }
+function czExtraDel(i) { CZ.fletes_extra.splice(i, 1); czExtraRender(); czTotales(); }
+function czExtraEdit(i, k, v) { CZ.fletes_extra[i][k] = k === 'valor' ? (parseFloat(v) || 0) : v; czTotales(); }
+// Topes de carga: viajes necesarios por peso y por unidades por viaje; flete sugerido = viajes x tarifa
+function czTransporte() {
+  var peso = 0, vu = 0;
+  CZ.lineas.forEach(function (l) { var c = Number(l.cantidad_solicitada) || 0; if (l.peso_kg_unitario > 0) peso += c * l.peso_kg_unitario; if (l.u_viaje > 0) vu += c / l.u_viaje; });
+  var tope = CZ.tope_kg || 0, rd = function (n) { return Math.ceil(Math.round(n * 1e6) / 1e6); };
+  var vp = tope > 0 && peso > 0 ? rd(peso / tope) : 0, vv = vu > 0 ? rd(vu) : 0, viajes = Math.max(vp, vv);
+  return { peso: peso, tope: tope, vp: vp, vv: vv, viajes: viajes, sugerido: viajes * (CZ.tarifa_viaje || 0) };
+}
+function czAplicarFlete() {
+  czLeer(); var t = czTransporte();
+  if (!t.viajes || !(CZ.tarifa_viaje > 0)) { toast('Indica el tope por vehículo y la tarifa por viaje'); return; }
+  var m = document.getElementById('czFleteModo'); if (m.value === 'NO') m.value = 'APARTE';
+  document.getElementById('czFlete').value = t.sugerido; czTotales();
+}
+function czNotaTransp() {
+  var t = czTransporte(), a = [];
+  if (t.viajes > 1) a.push('TRANSPORTE: el despacho requiere ' + t.viajes + ' viajes por ' + (t.vp >= t.vv ? 'exceso de peso' : 'volumen (unidades por viaje)') + ' (peso estimado ' + Math.round(t.peso).toLocaleString('es-CO') + ' kg' + (t.tope ? ', capacidad por vehículo ' + t.tope.toLocaleString('es-CO') + ' kg' : '') + ').');
+  if (CZ.nota_transp) a.push('Transporte: ' + CZ.nota_transp);
+  return a.join('\n');
+}
 function czSumas(T) {
-  var s = 0;
+  var s = 0, X = czExtras();
   CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; s = r2(s + r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); });
   if (!T.incluido) s = r2(s + T.flete);
-  return { subt: s, iva: T.iva, total: r2(s + T.iva) };
+  s = r2(s + X.sub); var iva = r2(T.iva + X.iva);
+  return { subt: s, iva: iva, total: r2(s + iva) };
 }
 function czCalc() { czLeer(); return calcPedido(CZ.lineas, czCfg()); }
 function czRenderLineas() {
@@ -5139,10 +5199,14 @@ function czRenderLineas() {
 }
 function czTotales() {
   if (!CZ) return; var T = czCalc();
+  var _t = czTransporte(), _ti = document.getElementById('czTransInfo'), _mw = document.getElementById('czMotivoWrap');
+  if (_ti) _ti.innerHTML = _t.peso ? 'Peso estimado: <b>' + Math.round(_t.peso).toLocaleString('es-CO') + ' kg</b>' + (_t.tope ? ' · viajes por peso: <b>' + _t.vp + '</b>' : '') + (_t.vv ? ' · viajes por unidades: <b>' + _t.vv + '</b>' : '') + (CZ.tarifa_viaje > 0 && _t.viajes ? ' · flete sugerido: <b>' + fmt(_t.sugerido) + '</b>' : '') : 'Agrega productos con peso para calcular viajes.';
+  var _dif = CZ.tarifa_viaje > 0 && _t.viajes > 0 && CZ.fleteModo !== 'NO' && Math.round(CZ.flete) !== Math.round(_t.sugerido);
+  if (_mw) _mw.style.display = _dif ? 'block' : 'none';
   CZ.lineas.forEach(function (l, i) { var e = document.getElementById('czL' + i), r = T.lineas[i]; if (e && r) e.innerHTML = 'Unitario ' + fmt(r.precioDesc) + (r.estiba ? ' + estiba ' + fmt(r.estiba) : '') + (r.fleteUnit ? ' + flete ' + fmt(r.fleteUnit) : '') + ' · Total línea <b>' + fmt(r.neto) + '</b>'; });
   var f = function (a, b, neg) { return b ? '<div style="display:flex;justify-content:space-between;"><span>' + a + '</span><b>' + (neg ? '-' : '') + fmt(b) + '</b></div>' : ''; };
   document.getElementById('czTotales').innerHTML = f('Subtotal (precio de lista)', T.subtotal) + f('Descuentos', T.descuentos, true) + f('Estiba', T.estiba) + (T.incluido ? '<div style="font-size:.72rem;color:#555;">Flete incluido en el valor unitario</div>' : f('Flete', T.flete)) +
-    f('IVA productos', T.ivaProductos) + f('IVA flete', T.ivaFlete) + '<div style="display:flex;justify-content:space-between;font-size:1rem;border-top:1px solid #ccc;margin-top:4px;padding-top:4px;"><span>TOTAL A PAGAR</span><b>' + fmt(czSumas(T).total) + '</b></div>';
+    f('Fletes adicionales', czExtras().sub) + f('IVA productos', T.ivaProductos) + f('IVA flete', T.ivaFlete) + f('IVA fletes adicionales', czExtras().iva) + '<div style="display:flex;justify-content:space-between;font-size:1rem;border-top:1px solid #ccc;margin-top:4px;padding-top:4px;"><span>TOTAL A PAGAR</span><b>' + fmt(czSumas(T).total) + '</b></div>';
 }
 function czPayload() { czLeer(); var T = calcPedido(CZ.lineas, czCfg()); return { T: T }; }
 async function czGuardar(estado, confirmarDup, sinRespaldo) {
@@ -5150,11 +5214,13 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
   if (!CZ.numero) { toast('Escribe el número de cotización'); return false; }
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
   if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
+  var _tr = czTransporte();
+  if (CZ.tarifa_viaje > 0 && _tr.viajes > 0 && CZ.fleteModo !== 'NO' && Math.round(CZ.flete) !== Math.round(_tr.sugerido) && !CZ.flete_motivo) { toast('El flete (' + fmt(CZ.flete) + ') difiere del sugerido por topes de carga (' + fmt(_tr.sugerido) + ' por ' + _tr.viajes + ' viaje(s)). Escribe el motivo del ajuste.', 6500); return false; }
   var T = calcPedido(CZ.lineas, czCfg());
   var datos = JSON.parse(JSON.stringify(CZ)); delete datos._desdePedido; delete datos._respaldoAP;
   if (CZ._respaldoAP) estado = 'Aceptada';
   var body = { accion: 'guardarCotizacion', uid: CZ.uid, numero: CZ.numero, fecha: CZ.fecha, vendedor_id: CZ.vendedor_id, cliente_nit: CZ.cliente.nit, cliente_nombre: CZ.cliente.nombre, obra: CZ.cliente.obra,
-    vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: T.iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup, ap_id: CZ.ap_id || CZ._respaldoAP || '' };
+    vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: czSumas(T).iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup, ap_id: CZ.ap_id || CZ._respaldoAP || '' };
   var r = await escribirGAS(body);
   if (r && r.duplicado) {
     if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true, sinRespaldo);
@@ -5172,6 +5238,24 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
   return true;
 }
 
+// ===== Versiones A/B de una cotización =====
+// La original queda intacta; la nueva es otra cotización (uid propio) con sufijo -B, -C... y enlace a su origen.
+function czDiasDesde(f) { var d = new Date(String(f).slice(0, 10) + 'T00:00:00'); if (isNaN(d)) return 0; return Math.floor((Date.now() - d.getTime()) / 86400000); }
+async function czNuevaVersion() {
+  czLeer();
+  if (!CZ.uid) { toast('Primero guarda la cotización para poder crear una nueva versión'); return; }
+  if (!(await czGuardar())) return;
+  var base = CZ.numero.replace(/[\s]*-[A-Z]$/, ''), usados = {};
+  CZ_LISTA.forEach(function (c) { var n = czNorm(c.numero), b = czNorm(base); if (n.indexOf(b + '-') === 0 && /^-[A-Z]$/.test(n.slice(b.length))) usados[n.slice(-1)] = 1; });
+  var letra = 'B'; while (usados[letra] && letra < 'Z') letra = String.fromCharCode(letra.charCodeAt(0) + 1);
+  var origen = { uid: CZ.uid, numero: CZ.numero };
+  var nueva = JSON.parse(JSON.stringify(CZ));
+  nueva.uid = ''; nueva.estado = 'Borrador'; nueva.numero = base + '-' + letra; nueva.fecha = czHoy(); nueva.vigencia = ''; nueva.despachos_hasta = ''; nueva.ap_id = ''; nueva.origen = origen;
+  delete nueva._desdePedido; delete nueva._respaldoAP;
+  CZ = nueva; czMostrarForm();
+  var ok = await czGuardar('Borrador', false, true);
+  toast(ok ? '🆕 Versión ' + CZ.numero + ' creada (la ' + origen.numero + ' queda intacta). Ajusta lo necesario y define la nueva vigencia.' : 'Versión creada sin guardar: revisa los datos y guarda', 7000);
+}
 // ===== Cotización aceptada → AP (pedido) =====
 // Pre-llena el formulario de pedido con la cotización; el vendedor completa fecha, destino y
 // datos de entrega y guarda como siempre. Al guardar, la AP queda enlazada a la cotización.
@@ -5180,6 +5264,11 @@ async function czAAP() {
   czLeer();
   if (CZ.ap_id && !confirm('Esta cotización ya se convirtió en la AP ' + CZ.ap_id + '.\n\n¿Crear otra AP de todas formas?')) return;
   if (!CZ.lineas.length || !CZ.cliente.nit) { toast('La cotización necesita cliente y productos'); return; }
+  var _dias = czDiasDesde(CZ.fecha);
+  if (_dias > 90) {
+    if (confirm('Esta cotización tiene ' + _dias + ' días (más de 90): los precios pueden estar vencidos.\n\nPara convertirla en AP se debe crear una NUEVA VERSIÓN con precios vigentes.\n\n¿Crear la nueva versión ahora?')) czNuevaVersion();
+    return;
+  }
   if (!(await czGuardar('Aceptada'))) return;
   var q = JSON.parse(JSON.stringify(CZ));
   CZ_VINCULO = { uid: q.uid, numero: q.numero };
@@ -5201,6 +5290,7 @@ async function czAAP() {
     if (q.pago === 8) set('formaPago', 'CONTADO');
     renderLineasAP(); calcularTotales();
     apModo(true);
+    var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; }); if (_ex.length) setTimeout(function () { toast('⚠️ La cotización tiene ' + _ex.length + ' flete(s) adicional(es) (' + fmt(_ex.reduce(function (a, f) { return a + Number(f.valor); }, 0)) + '): inclúyelos en el flete de la AP.', 8000); }, 7500);
     toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + ': elige el destino y verifica el flete' : '') + '. Completa fecha y entrega y guarda.', 7000);
   }, 250);
 }
@@ -5281,7 +5371,9 @@ function czTextoWA() {
   var T = czCalc(), c = CZ.cliente;
   var t = '*COTIZACIÓN ' + CZ.numero + '* — POSTECSA\nCliente: ' + c.nombre + (c.obra ? '\nObra: ' + c.obra : '') + '\nFecha: ' + fmtFecha(CZ.fecha) + (CZ.vigencia ? ' · Vigencia: ' + fmtFecha(CZ.vigencia) : '') + '\n\n';
   CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
-  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(T.iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + 'Pago: ' + (CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1]);
+  (CZ.fletes_extra || []).forEach(function (f) { if (Number(f.valor) > 0) t += '• Flete' + (f.desc ? ' ' + f.desc : '') + (f.grav === 'G' ? ' (+ IVA)' : ' (excluido)') + ' = ' + fmt(f.valor) + '\n'; });
+  var _nt = czNotaTransp(); if (_nt) t += '\n' + _nt + '\n';
+  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(czSumas(T).iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + 'Pago: ' + (CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1]);
   return t;
 }
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
@@ -5334,14 +5426,15 @@ async function czPDF(opts) {
     var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
   });
   if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
+  (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v > 0) { sumLin = r2(sumLin + v); filaTabla('', f.grav === 'G' ? 'G' : 'E', 'FLETE' + (f.desc ? ': ' + f.desc : ' adicional'), '', 'VIAJE', '1', fmt(v), fmt(v), ''); } });
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
-  var _obT = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n'); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+  var _obT = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota, czNotaTransp()].filter(Boolean).join('\n'); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
   var _obH = Math.max(26, wrap(_obT, 118).length * 3 + 12);
   if (y > 158 || y + 7 + _obH > 250) { piePag(); doc.addPage(); y = 14; }
   y += 7; var yObs = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-  var ob = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n');
+  var ob = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota, czNotaTransp()].filter(Boolean).join('\n');
   var ol = wrap(ob, 118); txt(ol, M, y + 8); var hObs = Math.max(26, ol.length * 3 + 12);
   var bx = 135, put = function (e, v, yy, bold) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(e, bx + 2, yy); doc.setFont('helvetica', bold ? 'bold' : 'normal'); txt(v, R - 2, yy, { align: 'right' }); };
   box(bx, y, R - bx, 24); doc.line(bx, y + 8, R, y + 8); doc.line(bx, y + 16, R, y + 16); put('SUBTOTAL', fmt(subt), y + 5); put('IVA 19%', fmt(ivaT), y + 13); put('TOTAL A PAGAR', fmt(tot), y + 21, true);
