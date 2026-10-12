@@ -91,6 +91,7 @@ function doPost(e) {
       case "guardarCotizacion": resultado = guardarCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
+      case "respaldarCotizacionDrive": resultado = respaldarCotizacionDrive(body); break;
       case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
       case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
       case "resetSistema": resultado = resetSistema(body); break;
@@ -1886,6 +1887,48 @@ function guardarCotizacion(body) {
   }
   return { ok: true, uid: uid, numero: num };
 }
+// ===== Respaldo de cotizaciones en Google Drive (12 oct 2026) =====
+// Carpeta raiz "SIVIL - Cotizaciones" > una subcarpeta por vendedor ("<id> - <nombre>") > un PDF por cotizacion
+// (borradores incluidos). El nombre lleva el estado y se actualiza cuando cambia.
+function _carpetaRespaldoCotiz(vendedorId, vendedorNombre) {
+  const props = PropertiesService.getScriptProperties();
+  let raiz;
+  const idRaiz = props.getProperty("COTIZ_DRIVE_RAIZ");
+  if (idRaiz) { try { raiz = DriveApp.getFolderById(idRaiz); if (raiz.isTrashed()) raiz = null; } catch (e) { raiz = null; } }
+  if (!raiz) {
+    const it = DriveApp.getFoldersByName("SIVIL - Cotizaciones");
+    raiz = it.hasNext() ? it.next() : DriveApp.createFolder("SIVIL - Cotizaciones");
+    props.setProperty("COTIZ_DRIVE_RAIZ", raiz.getId());
+  }
+  const etiqueta = String(vendedorId || "SIN-VENDEDOR") + (vendedorNombre ? " - " + String(vendedorNombre).replace(/[\\/:*?"<>|]+/g, " ").trim() : "");
+  const sub = raiz.getFoldersByName(etiqueta);
+  return sub.hasNext() ? sub.next() : raiz.createFolder(etiqueta);
+}
+function _nombreRespaldoCotiz(numero, cliente, estado) {
+  const limpio = function (t) { return String(t || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 40); };
+  return "COT " + limpio(numero) + " - " + limpio(cliente) + " [" + (estado || "Borrador") + "].pdf";
+}
+function respaldarCotizacionDrive(body) {
+  try {
+    if (!body.uid || !body.pdf_base64) return { ok: false, error: "Faltan datos del respaldo" };
+    const props = PropertiesService.getScriptProperties();
+    const claveId = "COTIZ_DRIVE_" + body.uid;
+    const carpeta = _carpetaRespaldoCotiz(body.vendedor_id, body.vendedor_nombre);
+    const viejo = props.getProperty(claveId);
+    if (viejo) { try { DriveApp.getFileById(viejo).setTrashed(true); } catch (e) {} }
+    const nombre = _nombreRespaldoCotiz(body.numero, body.cliente_nombre, body.estado);
+    const blob = Utilities.newBlob(Utilities.base64Decode(body.pdf_base64), "application/pdf", nombre);
+    const archivo = carpeta.createFile(blob);
+    props.setProperty(claveId, archivo.getId());
+    return { ok: true, url: archivo.getUrl() };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+function _renombrarRespaldoCotiz(uid, numero, cliente, estado) {
+  try {
+    const id = PropertiesService.getScriptProperties().getProperty("COTIZ_DRIVE_" + uid);
+    if (id) DriveApp.getFileById(id).setName(_nombreRespaldoCotiz(numero, cliente, estado));
+  } catch (e) {}
+}
 function cambiarEstadoCotizacion(body) {
   const hoja = _hojaCotiz();
   const datos = hoja.getDataRange().getValues();
@@ -1896,6 +1939,7 @@ function cambiarEstadoCotizacion(body) {
       hoja.getRange(i + 1, COTIZ_COLS.indexOf("actualizado") + 1).setValue(new Date().toISOString());
       if (body.nota !== undefined) hoja.getRange(i + 1, COTIZ_COLS.indexOf("nota_estado") + 1).setValue(body.nota);
       if (body.ap_id) hoja.getRange(i + 1, COTIZ_COLS.indexOf("ap_id") + 1).setValue(body.ap_id);
+      _renombrarRespaldoCotiz(body.uid, datos[i][COTIZ_COLS.indexOf("numero")], datos[i][COTIZ_COLS.indexOf("cliente_nombre")], body.estado);
       return { ok: true };
     }
   }
