@@ -521,7 +521,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card">
         <div class="card-title">🧾 Cotizaciones</div>
         <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNueva()">➕ Nueva cotización</button>
-        <input id="czBuscar" class="form-control" placeholder="Buscar por número, cliente u obra..." oninput="czRenderLista()" style="margin-bottom:6px;">
+        <input id="czBuscar" class="form-control" placeholder="🔍 Buscar por número, cliente, NIT, obra o AP..." oninput="czRenderLista()" style="margin-bottom:6px;">
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;font-size:.72rem;color:#555;">
           <span>Desde</span><input id="czDesde" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
           <span>Hasta</span><input id="czHasta" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
@@ -1197,7 +1197,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <span class="icon">📝</span>Pasos previos
   </button>
   <button class="nav-btn" onclick="irA('screenCotizador')" id="navCotiz">
-    <span class="icon">🧾</span>Cotizaciones
+    <span class="icon">🧾</span>Mis Cotiz.
   </button>
   <button class="nav-btn" onclick="irA('screenPedidos')" id="navPedidos">
     <span class="icon">📋</span>Mis APs
@@ -3120,10 +3120,7 @@ toast(`✅ ${p.tmdescrip.substring(0,30)} agregado`);
 // =============================================================================
 function renderLineasAP() {
   const cont = document.getElementById('lineasAP');
-  // Validar número de AP
-  const apId = parseInt(document.getElementById('inputApId')?.value);
-  if (!apId || apId < 1) { toast('⚠️ Escribe el número de AP del libro físico'); return; }
-
+  // Pasos previos (borrador): los productos se ven SIEMPRE; el número de AP solo se exige al confirmar y guardar.
   if (!STATE.pedido.lineas.length) {
     cont.innerHTML = '<div style="text-align:center;color:#aaa;padding:1rem;font-size:0.82rem;">Sin productos agregados</div>';
     return;
@@ -3283,8 +3280,7 @@ P._totales = { subtotal: R.subtotal, descuentos: R.descuentos, estiba: R.estiba 
 
 // Solo re-renderizar líneas si ya hay un número de AP válido, para no
 // disparar el aviso de renderLineasAP() en cada tecla mientras se escribe.
-const apIdActual = parseInt(document.getElementById('inputApId')?.value);
-if (apIdActual && apIdActual >= 1) renderLineasAP();
+renderLineasAP();
 guardarBorradorPedido();
 if ((document.getElementById('modoEntregaInput')||{}).value==='tandas' && typeof renderTandas==='function') renderTandas();
 }
@@ -5011,13 +5007,15 @@ function czRenderLista() {
       if (d2 && fc > new Date(d2 + 'T23:59:59')) return false;
     }
     var as = (document.getElementById('czAsesor') || {}).value || ''; if (as && String(c.vendedor_id) !== as) return false;
-    if (q && czNorm(c.numero + c.cliente_nombre + c.obra).toLowerCase().indexOf(q) < 0) return false;
+    if (q && czNorm(c.numero + ' ' + c.cliente_nombre + ' ' + c.cliente_nit + ' ' + c.obra + ' ' + (c.ap_id || '') + ' ' + c.vendedor_id).toLowerCase().indexOf(q) < 0) return false;
     return true;
   }).sort(function (a, b) { return String(b.creado || '').localeCompare(String(a.creado || '')); });
   var selA = document.getElementById('czAsesor');
   if (selA && /GERENTE|GERENCIA|ADMIN|JEFE/.test(rol)) { selA.style.display = ''; if (selA.options.length <= 1) { var vs = {}; CZ_LISTA.forEach(function (c) { if (c.vendedor_id) vs[c.vendedor_id] = 1; }); Object.keys(vs).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v; selA.appendChild(o); }); } }
+  var cnt = { todas: 0 };
+  CZ_LISTA.forEach(function (c) { if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo) return; cnt.todas++; cnt[c.estado] = (cnt[c.estado] || 0) + 1; });
   var tabs = ['todas', 'Borrador', 'Enviada', 'Aceptada', 'Perdida', 'Anulada'].map(function (e) {
-    return '<button class="btn ' + (CZ_FILTRO === e ? 'btn-primary' : 'btn-outline') + ' btn-sm" style="font-size:.7rem;padding:4px 9px;" onclick="CZ_FILTRO=\'' + e + '\';czRenderLista()">' + (e === 'todas' ? 'Todas' : e) + '</button>';
+    return '<button class="btn ' + (CZ_FILTRO === e ? 'btn-primary' : 'btn-outline') + ' btn-sm" style="font-size:.7rem;padding:4px 9px;" onclick="CZ_FILTRO=\'' + e + '\';czRenderLista()">' + (e === 'todas' ? 'Todas' : e) + ' (' + (cnt[e] || 0) + ')</button>';
   }).join(' ');
   cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
     (ver.length ? ver.map(function (c) {
@@ -5040,11 +5038,12 @@ function czAbrir(uid) {
 function czMostrarForm() {
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
-  var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
+  var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '" data-full="' + czH(t).replace(/"/g, '&quot;') + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
   document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago, false, 'pago');
   document.getElementById('czEntrega').innerHTML = sel(T.entrega, CZ.entrega, true, 'entrega');
   document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true, 'obs');
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
+  czPickers();
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
     czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
@@ -5053,6 +5052,33 @@ function czMostrarForm() {
   document.getElementById('czNumAlert').textContent = '';
   var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
   czRenderLineas(); window.scrollTo(0, 0);
+}
+// Selector de condiciones con el texto COMPLETO (el desplegable nativo corta los textos largos).
+function czPickerTxt(id) {
+  var s = document.getElementById(id), b = document.getElementById(id + 'Btn'); if (!s || !b) return;
+  var o = s.options[s.selectedIndex];
+  b.innerHTML = (o && o.value !== '0' ? '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent) : '<span style="color:#888;">— ninguna —</span>') + ' <span style="float:right;color:#1d4ed8;">▾</span>';
+}
+function czPickers() {
+  ['czPago', 'czEntrega', 'czObs1', 'czObs2'].forEach(function (id) {
+    var s = document.getElementById(id); if (!s) return; s.style.display = 'none';
+    var b = document.getElementById(id + 'Btn');
+    if (!b) { b = document.createElement('div'); b.id = id + 'Btn'; b.className = 'form-control'; b.style.cssText = 'cursor:pointer;white-space:normal;height:auto;min-height:40px;line-height:1.35;font-size:.8rem;padding:8px 10px;'; b.onclick = function () { czAbrirPicker(id); }; s.parentNode.insertBefore(b, s.nextSibling); }
+    czPickerTxt(id);
+  });
+}
+function czAbrirPicker(id) {
+  var s = document.getElementById(id); if (!s) return;
+  var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99998;display:flex;align-items:flex-end;justify-content:center;';
+  var box = document.createElement('div'); box.style.cssText = 'background:#fff;width:100%;max-width:720px;max-height:85vh;overflow:auto;border-radius:14px 14px 0 0;padding:10px;';
+  Array.prototype.forEach.call(s.options, function (o) {
+    var d = document.createElement('div'); var sel = o.selected;
+    d.style.cssText = 'padding:10px 12px;margin-bottom:6px;border:1.5px solid ' + (sel ? '#1d4ed8' : '#e2e8f0') + ';background:' + (sel ? '#eff6ff' : '#fff') + ';border-radius:10px;font-size:.82rem;line-height:1.4;cursor:pointer;white-space:normal;word-break:break-word;';
+    d.innerHTML = o.value === '0' ? '<span style="color:#666;">— ninguna —</span>' : '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent);
+    d.onclick = function () { s.value = o.value; czPickerTxt(id); ov.remove(); if (typeof czTotales === 'function') { try { czTotales(); } catch (e) {} } };
+    box.appendChild(d);
+  });
+  ov.appendChild(box); ov.onclick = function (e) { if (e.target === ov) ov.remove(); }; document.body.appendChild(ov);
 }
 function czVolver() { var _vp = CZ && CZ._desdePedido; CZ = null; if (_vp) { irA('screenPedido'); return; } document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
 function czLeer() {
@@ -5123,7 +5149,7 @@ function czTotales() {
     f('IVA productos', T.ivaProductos) + f('IVA flete', T.ivaFlete) + '<div style="display:flex;justify-content:space-between;font-size:1rem;border-top:1px solid #ccc;margin-top:4px;padding-top:4px;"><span>TOTAL A PAGAR</span><b>' + fmt(czSumas(T).total) + '</b></div>';
 }
 function czPayload() { czLeer(); var T = calcPedido(CZ.lineas, czCfg()); return { T: T }; }
-async function czGuardar(estado, confirmarDup) {
+async function czGuardar(estado, confirmarDup, sinRespaldo) {
   czLeer();
   if (!CZ.numero) { toast('Escribe el número de cotización'); return false; }
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
@@ -5135,7 +5161,7 @@ async function czGuardar(estado, confirmarDup) {
     vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: T.iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup, ap_id: CZ.ap_id || CZ._respaldoAP || '' };
   var r = await escribirGAS(body);
   if (r && r.duplicado) {
-    if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true);
+    if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true, sinRespaldo);
     return false;
   }
   if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return false; }
@@ -5145,7 +5171,9 @@ async function czGuardar(estado, confirmarDup) {
     CZ_VINCULO = { uid: CZ.uid, numero: CZ.numero };
   }
   if (CZ._respaldoAP) { STATE.cotizDeAP = STATE.cotizDeAP || {}; STATE.cotizDeAP[String(CZ._respaldoAP)] = CZ.numero; CZ.ap_id = CZ._respaldoAP; }
-  toast('✅ Cotización ' + CZ.numero + ' guardada' + (CZ._desdePedido ? ' · queda como referencia del pedido' : '')); return true;
+  toast('✅ Cotización ' + CZ.numero + ' guardada' + (CZ._desdePedido ? ' · queda como referencia del pedido' : ''));
+  if (!sinRespaldo) czRespaldoDrive();
+  return true;
 }
 
 // ===== Cotización aceptada → AP (pedido) =====
@@ -5230,6 +5258,22 @@ async function czDesdeAP(ap_id) {
     obra: ap.nombre_obra, dir: ap.direccion_obra, atn: ap.contacto_obra, cel: ap.cel_contacto, numero: '', pago: String(ap.forma_pago).toUpperCase() === 'CONTADO' ? 8 : 0 });
   toast('🧾 Cotización de respaldo de la AP ' + ap_id + ': al guardar queda Aceptada y enlazada a esa AP. Los valores de la AP no cambian.', 7000);
 }
+// Respaldo automatico en Google Drive: una carpeta por vendedor con el PDF de cada cotizacion (y borrador).
+// Es "en segundo plano": si falla no interrumpe el trabajo del vendedor.
+async function czRespaldoDrive() {
+  try {
+    if (!CZ || !CZ.uid || !window.jspdf) return;
+    var r = await czPDF({ backup: true }); if (r && r.b64) czEnviarRespaldo(r.name, r.b64);
+  } catch (e) { console.warn('Respaldo Drive:', e); }
+}
+function czEnviarRespaldo(nombre, b64) {
+  try {
+    if (!b64 || !CZ || !CZ.uid) return;
+    var vv = STATE.vendedor || {}, mio = String(CZ.vendedor_id) === String(vv.id_vendedor);
+    escribirGAS({ accion: 'respaldarCotizacionDrive', uid: CZ.uid, numero: CZ.numero, estado: CZ.estado || 'Borrador', vendedor_id: CZ.vendedor_id,
+      vendedor_nombre: CZ.vendedor_nombre || (mio ? (vv.nombre_vendedor || '') : ''), cliente_nombre: CZ.cliente.nombre, nombre_archivo: nombre, pdf_base64: b64 }).catch(function () {});
+  } catch (e) {}
+}
 async function czCambiarEstado(estado) {
   if (!CZ.uid) { toast('Primero guarda la cotización'); return; }
   var nota = estado === 'Perdida' ? (prompt('¿Por qué se perdió? (precio, tiempo de entrega, competencia...)') || '') : '';
@@ -5245,8 +5289,9 @@ function czTextoWA() {
 }
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
 function czImg(url) { return fetch(url).then(function (r) { return r.blob(); }).then(function (b) { return new Promise(function (ok) { var f = new FileReader(); f.onload = function () { ok(f.result); }; f.readAsDataURL(b); }); }).catch(function () { return null; }); }
-async function czPDF() {
-  if (!(await czGuardar())) return;
+async function czPDF(opts) {
+  opts = opts || {};
+  if (!opts.backup && !(await czGuardar(undefined, false, true))) return;
   var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = STATE.vendedor || {};
   var logo1 = await czImg('../assets/logo_postecsa.jpg'), logo2 = await czImg('../assets/logo_postec.jpg');
   var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 10, R = W - M, y;
@@ -5294,17 +5339,23 @@ async function czPDF() {
   if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
-  if (y > 158) { piePag(); doc.addPage(); y = 14; }
+  var _obT = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n'); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+  var _obH = Math.max(26, wrap(_obT, 118).length * 3 + 12);
+  if (y > 158 || y + 7 + _obH > 250) { piePag(); doc.addPage(); y = 14; }
   y += 7; var yObs = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
   var ob = [CZ_TEXTOS.obs[(CZ.obs[0] || 0) - 1], CZ_TEXTOS.obs[(CZ.obs[1] || 0) - 1], CZ.nota].filter(Boolean).join('\n');
-  var ol = wrap(ob, 118); txt(ol.slice(0, 12), M, y + 8); var hObs = Math.max(26, ol.slice(0, 12).length * 3 + 12);
+  var ol = wrap(ob, 118); txt(ol, M, y + 8); var hObs = Math.max(26, ol.length * 3 + 12);
   var bx = 135, put = function (e, v, yy, bold) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(e, bx + 2, yy); doc.setFont('helvetica', bold ? 'bold' : 'normal'); txt(v, R - 2, yy, { align: 'right' }); };
   box(bx, y, R - bx, 24); doc.line(bx, y + 8, R, y + 8); doc.line(bx, y + 16, R, y + 16); put('SUBTOTAL', fmt(subt), y + 5); put('IVA 19%', fmt(ivaT), y + 13); put('TOTAL A PAGAR', fmt(tot), y + 21, true);
   y += Math.max(hObs, 26) + 2;
-  // Condiciones
-  box(M, y, (R - M) / 2, 28); box(M + (R - M) / 2, y, (R - M) / 2, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
-  txt(wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88).slice(0, 6), M + 2, y + 10); txt(wrap(CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1] || '', 88).slice(0, 6), M + (R - M) / 2 + 2, y + 10); y += 34;
+  // Condiciones — la caja crece segun el texto (antes se cortaba a 6 lineas)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+  var cEnt = wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88), cPag = wrap(CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1] || '', 88);
+  var hCond = Math.max(28, 10 + Math.max(cEnt.length, cPag.length) * 3 + 3);
+  if (y + hCond > 262) { piePag(); doc.addPage(); y = 14; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
+  box(M, y, (R - M) / 2, hCond); box(M + (R - M) / 2, y, (R - M) / 2, hCond); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+  txt(cEnt, M + 2, y + 10); txt(cPag, M + (R - M) / 2 + 2, y + 10); y += hCond + 6;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
   doc.setFontSize(8); txt('Favor realizar sus pagos a través de Transferencia o Consignación a nombre de', W / 2, y, { align: 'center' }); txt('POSTECSA DE COLOMBIA SAS', W / 2, y + 4, { align: 'center' }); y += 7;
   box(M, y, R - M, 11); doc.setFontSize(7); txt('Banco de COLOMBIA', M + 20, y + 4, { align: 'center' }); txt('Cuenta Ahorros  82900008335', M + 20, y + 8, { align: 'center' }); txt('Banco BOGOTA', M + 90, y + 4, { align: 'center' }); txt('Cuenta Corriente  256433533', M + 90, y + 8, { align: 'center' }); txt('Banco BBVA', M + 158, y + 4, { align: 'center' }); txt('Cuenta Corriente  0243021417', M + 158, y + 8, { align: 'center' }); y += 14;
@@ -5320,7 +5371,11 @@ async function czPDF() {
   y = Math.max(y + 8, 262); if (y > 270) { piePag(); doc.addPage(); y = 40; } doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
   txt('PREPARADA POR', M + 10, y - 14); txt('ACEPTADA POR', 112, y - 14); doc.line(M + 10, y - 3, M + 70, y - 3); doc.line(112, y - 3, R, y - 3);
   txt((v.nombre_vendedor || '').toUpperCase(), M + 10, y); doc.setFont('helvetica', 'normal'); txt(v.cargo || 'Asesor comercial', M + 10, y + 3.5); doc.setFont('helvetica', 'bold'); txt(String(c.nombre).toUpperCase(), 112, y); doc.setFont('helvetica', 'normal'); txt('Nombre y Cargo del Firmante:', 112, y + 3.5); piePag();
-  doc.save('Cotizacion_' + CZ.numero.replace(/[^A-Za-z0-9_-]+/g, '_') + '_' + String(c.nombre).replace(/[^A-Za-z0-9]+/g, '_').slice(0, 28) + '.pdf');
+  var _nomPdf = 'Cotizacion_' + CZ.numero.replace(/[^A-Za-z0-9_-]+/g, '_') + '_' + String(c.nombre).replace(/[^A-Za-z0-9]+/g, '_').slice(0, 28) + '.pdf';
+  var _b64 = ''; try { _b64 = doc.output('datauristring').split(',')[1] || ''; } catch (e) {}
+  if (opts.backup) return { name: _nomPdf, b64: _b64 };
+  doc.save(_nomPdf);
+  czEnviarRespaldo(_nomPdf, _b64);
   if (CZ.estado === 'Borrador') await czCambiarEstado('Enviada');
 }
 </script>
