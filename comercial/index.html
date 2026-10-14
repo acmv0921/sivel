@@ -536,7 +536,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         <div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-title" style="margin:0;">🧾 Cotización · <span id="czEstadoTxt"></span></div><button class="btn btn-outline btn-sm" onclick="czVolver()">← Volver</button></div>
         <div class="form-group"><label>Número de cotización (manual)</label><input id="czNumero" class="form-control" placeholder="Ej: AF 123" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
         <div style="font-size:.78rem;margin-bottom:6px;">Fecha: <b id="czFecha"></b></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><div class="form-group"><label>Vigencia de precios</label><input id="czVig" class="form-control" type="date"></div><div class="form-group"><label>Despachos hasta</label><input id="czDesp" class="form-control" type="date"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><div class="form-group"><label>Vigencia de precios</label><select id="czVigModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 15 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czVig" class="form-control" type="date" style="margin-top:4px;"></div><div class="form-group"><label>Despachos hasta</label><select id="czDespModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 30 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czDesp" class="form-control" type="date" style="margin-top:4px;"></div></div>
       </div>
       <div class="card">
         <div class="card-title">Cliente</div>
@@ -579,7 +579,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card">
         <div class="card-title">Condiciones</div>
         <div class="form-group"><label>Condiciones de pago</label><select id="czPago" class="form-control"></select>
-          <textarea id="czPagoLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Texto libre (opcional): si lo escribes, REEMPLAZA la opción de arriba — úsalo para convenios especiales"></textarea></div>
+          <textarea id="czPagoLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Escribe aquí la nueva condición (elige OTRA arriba) — también REEMPLAZA la opción elegida; úsalo para convenios especiales"></textarea></div>
         <div class="form-group"><label>Condiciones de entrega</label><select id="czEntrega" class="form-control"></select>
           <textarea id="czEntregaLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Texto libre (opcional): si lo escribes, REEMPLAZA la opción de arriba"></textarea></div>
         <div class="form-group"><label>Observación 1</label><select id="czObs1" class="form-control"></select></div>
@@ -5042,7 +5042,7 @@ function czRenderLista() {
 function czNueva() {
   var v = STATE.vendedor || {};
   CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
-    lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
+    lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, vig_modo: 'auto', desp_modo: 'auto', fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
   czMostrarForm();
 }
 function czAbrir(uid) {
@@ -5055,18 +5055,19 @@ function czMostrarForm() {
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
   var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '" data-full="' + czH(t).replace(/"/g, '&quot;') + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
-  document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago, false, 'pago');
+  document.getElementById('czPago').innerHTML = sel(T.pago, CZ.pago, true, 'pago') + '<option value="99" data-full="OTRA — escribir una nueva condición"' + (CZ.pago === 99 ? ' selected' : '') + '>OTRA — escribir nueva condición</option>';
   document.getElementById('czEntrega').innerHTML = sel(T.entrega, CZ.entrega, true, 'entrega');
   document.getElementById('czObs1').innerHTML = sel(T.obs, CZ.obs[0] || 0, true, 'obs');
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   czPickers();
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
-    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
   document.getElementById('czNumAlert').textContent = '';
   var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
+  czModoFechas();
   CZ.fletes_extra = CZ.fletes_extra || []; czExtraRender();
   if (ai && CZ.origen) ai.textContent = (ai.textContent ? ai.textContent + ' · ' : '') + '🔗 Nueva versión de ' + CZ.origen.numero;
   czRenderLineas(); window.scrollTo(0, 0);
@@ -5075,7 +5076,7 @@ function czMostrarForm() {
 function czPickerTxt(id) {
   var s = document.getElementById(id), b = document.getElementById(id + 'Btn'); if (!s || !b) return;
   var o = s.options[s.selectedIndex];
-  b.innerHTML = (o && o.value !== '0' ? '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent) : '<span style="color:#888;">— ninguna —</span>') + ' <span style="float:right;color:#1d4ed8;">▾</span>';
+  b.innerHTML = (o && o.value === '99' ? '✍️ <b>OTRA</b> — escribe la nueva condición en el recuadro de abajo' : o && o.value !== '0' ? '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent) : '<span style="color:#888;">— ninguna —</span>') + ' <span style="float:right;color:#1d4ed8;">▾</span>';
 }
 function czPickers() {
   ['czPago', 'czEntrega', 'czObs1', 'czObs2'].forEach(function (id) {
@@ -5092,20 +5093,38 @@ function czAbrirPicker(id) {
   Array.prototype.forEach.call(s.options, function (o) {
     var d = document.createElement('div'); var sel = o.selected;
     d.style.cssText = 'padding:10px 12px;margin-bottom:6px;border:1.5px solid ' + (sel ? '#1d4ed8' : '#e2e8f0') + ';background:' + (sel ? '#eff6ff' : '#fff') + ';border-radius:10px;font-size:.82rem;line-height:1.4;cursor:pointer;white-space:normal;word-break:break-word;';
-    d.innerHTML = o.value === '0' ? '<span style="color:#666;">— ninguna —</span>' : '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent);
-    d.onclick = function () { s.value = o.value; czPickerTxt(id); ov.remove(); if (typeof czTotales === 'function') { try { czTotales(); } catch (e) {} } };
+    d.innerHTML = o.value === '99' ? '✍️ <b>OTRA</b> — escribir una nueva condición' : o.value === '0' ? '<span style="color:#666;">— ninguna —</span>' : '<b>' + o.value + '.</b> ' + czH(o.getAttribute('data-full') || o.textContent);
+    d.onclick = function () { s.value = o.value; czPickerTxt(id); ov.remove(); if (id === 'czPago' && o.value === '99') { var _t = document.getElementById('czPagoLibre'); if (_t) { _t.focus(); _t.scrollIntoView({ block: 'center' }); } } if (typeof czTotales === 'function') { try { czTotales(); } catch (e) {} } };
     box.appendChild(d);
   });
   ov.appendChild(box); ov.onclick = function (e) { if (e.target === ov) ov.remove(); }; document.body.appendChild(ov);
 }
 function czVolver() { var _vp = CZ && CZ._desdePedido; CZ = null; if (_vp) { irA('screenPedido'); return; } document.getElementById('czForm').style.display = 'none'; document.getElementById('czListaWrap').style.display = 'block'; czCargarLista(); }
+function czSumarDias(f, n) {
+  var m = String(f || '').slice(0, 10).split('-'); if (m.length < 3) return '';
+  var d = new Date(+m[0], +m[1] - 1, +m[2] + n);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function czModoFechas() {
+  var f = (CZ && CZ.fecha) || czHoy();
+  [['czVigModo', 'czVig', 15], ['czDespModo', 'czDesp', 30]].forEach(function (a) {
+    var m = document.getElementById(a[0]), i = document.getElementById(a[1]); if (!m || !i) return;
+    var auto = m.value === 'auto'; i.readOnly = auto; i.style.background = auto ? '#f1f5f9' : '';
+    if (auto) i.value = czSumarDias(f, a[2]);
+  });
+}
+// Texto vigente de pago: el texto libre (OTRA / convenio) reemplaza la opcion elegida; 0 = ninguna
+function czTxtPago() { return CZ.pago_libre || ((CZ.pago > 0 && CZ.pago < 99) ? (CZ_TEXTOS.pago[CZ.pago - 1] || '') : ''); }
 function czLeer() {
   var g = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
   CZ.numero = g('czNumero').trim(); CZ.vigencia = g('czVig'); CZ.despachos_hasta = g('czDesp');
+  CZ.vig_modo = g('czVigModo') || CZ.vig_modo || 'manual'; CZ.desp_modo = g('czDespModo') || CZ.desp_modo || 'manual';
+  if (CZ.vig_modo === 'auto') CZ.vigencia = czSumarDias(CZ.fecha || czHoy(), 15);
+  if (CZ.desp_modo === 'auto') CZ.despachos_hasta = czSumarDias(CZ.fecha || czHoy(), 30);
   CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
   CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota'); CZ.pago_libre = g('czPagoLibre').trim(); CZ.entrega_libre = g('czEntregaLibre').trim();
   CZ.tope_kg = parseFloat(g('czTope')) || 0; CZ.tarifa_viaje = parseFloat(g('czTarifa')) || 0; CZ.flete_motivo = g('czFleteMotivo').trim(); CZ.nota_transp = g('czNotaTransp').trim(); CZ.fletes_extra = CZ.fletes_extra || [];
-  CZ.pago = parseInt(g('czPago')) || 8; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
+  var _pg = parseInt(g('czPago')); CZ.pago = isNaN(_pg) ? 8 : _pg; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
 }
 function czElegirCliente() {
   var v = document.getElementById('czCliente').value, nit = (v.split(' · ')[1] || '').trim();
@@ -5215,6 +5234,7 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
   if (!CZ.numero) { toast('Escribe el número de cotización'); return false; }
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
   if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
+  if (CZ.pago === 99 && !CZ.pago_libre) { toast('Elegiste OTRA condición de pago: escribe la condición en el recuadro'); return false; }
   var _tr = czTransporte();
   if (CZ.tarifa_viaje > 0 && _tr.viajes > 0 && CZ.fleteModo !== 'NO' && Math.round(CZ.flete) !== Math.round(_tr.sugerido) && !CZ.flete_motivo) { toast('El flete (' + fmt(CZ.flete) + ') difiere del sugerido por topes de carga (' + fmt(_tr.sugerido) + ' por ' + _tr.viajes + ' viaje(s)). Escribe el motivo del ajuste.', 6500); return false; }
   var T = calcPedido(CZ.lineas, czCfg());
@@ -5251,7 +5271,7 @@ async function czNuevaVersion() {
   var letra = 'B'; while (usados[letra] && letra < 'Z') letra = String.fromCharCode(letra.charCodeAt(0) + 1);
   var origen = { uid: CZ.uid, numero: CZ.numero };
   var nueva = JSON.parse(JSON.stringify(CZ));
-  nueva.uid = ''; nueva.estado = 'Borrador'; nueva.numero = base + '-' + letra; nueva.fecha = czHoy(); nueva.vigencia = ''; nueva.despachos_hasta = ''; nueva.ap_id = ''; nueva.origen = origen;
+  nueva.uid = ''; nueva.estado = 'Borrador'; nueva.numero = base + '-' + letra; nueva.fecha = czHoy(); nueva.vigencia = ''; nueva.despachos_hasta = ''; nueva.vig_modo = 'auto'; nueva.desp_modo = 'auto'; nueva.ap_id = ''; nueva.origen = origen;
   delete nueva._desdePedido; delete nueva._respaldoAP;
   CZ = nueva; czMostrarForm();
   var ok = await czGuardar('Borrador', false, true);
@@ -5374,7 +5394,7 @@ function czTextoWA() {
   CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
   (CZ.fletes_extra || []).forEach(function (f) { if (Number(f.valor) > 0) t += '• Flete' + (f.desc ? ' ' + f.desc : '') + (f.grav === 'G' ? ' (+ IVA)' : ' (excluido)') + ' = ' + fmt(f.valor) + '\n'; });
   var _nt = czNotaTransp(); if (_nt) t += '\n' + _nt + '\n';
-  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(czSumas(T).iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + 'Pago: ' + (CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1]);
+  t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(czSumas(T).iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + (czTxtPago() ? 'Pago: ' + czTxtPago() : '');
   return t;
 }
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
@@ -5442,7 +5462,7 @@ async function czPDF(opts) {
   y += Math.max(hObs, 26) + 2;
   // Condiciones — la caja crece segun el texto (antes se cortaba a 6 lineas)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
-  var cEnt = wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88), cPag = wrap(CZ.pago_libre || CZ_TEXTOS.pago[CZ.pago - 1] || '', 88);
+  var cEnt = wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88), cPag = wrap(czTxtPago(), 88);
   var hCond = Math.max(28, 10 + Math.max(cEnt.length, cPag.length) * 3 + 3);
   if (y + hCond > 262) { piePag(); doc.addPage(); y = 14; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
   box(M, y, (R - M) / 2, hCond); box(M + (R - M) / 2, y, (R - M) / 2, hCond); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
