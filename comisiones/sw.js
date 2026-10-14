@@ -1,1 +1,41 @@
-if(!self.define){let e,i={};const n=(n,s)=>(n=new URL(n+".js",s).href,i[n]||new Promise(i=>{if("document"in self){const e=document.createElement("script");e.src=n,e.onload=i,document.head.appendChild(e)}else e=n,importScripts(n),i()}).then(()=>{let e=i[n];if(!e)throw new Error(`Module ${n} didn’t register its module`);return e}));self.define=(s,r)=>{const o=e||("document"in self?document.currentScript.src:"")||location.href;if(i[o])return;let c={};const t=e=>n(e,o),l={module:{uri:o},exports:c,require:t};i[o]=Promise.all(s.map(e=>l[e]||t(e))).then(e=>(r(...e),c))}}define(["./workbox-9c191d2f"],function(e){"use strict";self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"registerSW.js",revision:"c93272fc28050779ec09f2687e940387"},{url:"index.html",revision:"bc7228ac9243a8449d07c6de9192b570"},{url:"assets/index-DlCtif3W.js",revision:null},{url:"assets/index-CqEpGnw1.css",revision:null},{url:"apple-touch-icon.png",revision:"0671c43790ac903825de487288f90f15"},{url:"icon-192.png",revision:"0671c43790ac903825de487288f90f15"},{url:"icon-512.png",revision:"7c5f259a5c543ee22c9b980baaea3514"},{url:"icon-maskable.png",revision:"7c5f259a5c543ee22c9b980baaea3514"},{url:"icon.svg",revision:"aa19dfe4b20de4f6ed59fac23e8a33b1"},{url:"manifest.webmanifest",revision:"848588e437f2b02300a4fa470d5e5e42"}],{}),e.cleanupOutdatedCaches(),e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html")))});
+// Service worker de SIVIL Comisiones: permite instalar la app y abrirla aunque no haya internet.
+// Estrategia: red primero (siempre la versión más nueva) y copia local si no hay conexión.
+const CACHE = 'sivil-comisiones-v2';
+const PRECARGA = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(PRECARGA)).catch(() => {}).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  // Las descargas grandes (zip, ejecutables) no se guardan en caché
+  if (/\.(zip|exe|tgz)$/i.test(url.pathname)) return;
+
+  event.respondWith(
+    fetch(req)
+      .then(res => {
+        if (res && res.ok) {
+          const copia = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copia)).catch(() => {});
+        }
+        return res;
+      })
+      .catch(() =>
+        caches.match(req).then(hit => hit || (req.mode === 'navigate' ? caches.match('index.html') : undefined))
+      )
+  );
+});
