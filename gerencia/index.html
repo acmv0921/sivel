@@ -1341,7 +1341,7 @@ async function leerGVIZ(hoja) {
   // Cache-busting: evita que el navegador devuelva una respuesta vieja para
   // la misma URL — causaba que Gerencia (en computador) no mostrara datos
   // recién guardados desde el celular hasta pasado un buen rato.
-  const url=GVIZ+encodeURIComponent(hoja)+'&_='+Date.now();
+  const url=GVIZ+encodeURIComponent(hoja)+(/^COTIZ/.test(hoja)?'&headers=1':'')+'&_='+Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   let resp;
