@@ -1890,7 +1890,8 @@ async function leerGVIZ(hoja) {
   // Cache-busting: sin esto, el navegador (o el borde de Google) puede devolver
   // una respuesta vieja para la misma URL — causaba que datos recién guardados
   // desde el celular no aparecieran actualizados al abrir la app en computador.
-  const url  = GVIZ + encodeURIComponent(hoja) + '&_=' + Date.now();
+  // headers=1: sin esto Google fusiona el encabezado con filas de datos cuando una columna mezcla texto y números (ej. número de cotización "20" y "AF 001") y la lista salía vacía.
+  const url  = GVIZ + encodeURIComponent(hoja) + (/^COTIZ/.test(hoja) ? '&headers=1' : '') + '&_=' + Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   let resp;
