@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/sivel/comisiones-ap/sw.js', { scope: '/sivel/comisiones-ap/' })})}

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="metalBezel" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2E8F0"/>
+      <stop offset="0.3" stop-color="#94A3B8"/>
+      <stop offset="0.7" stop-color="#CBD5E1"/>
+      <stop offset="1" stop-color="#64748B"/>
+    </linearGradient>
+    <linearGradient id="postecsaOrange" x1="100" y1="80" x2="412" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FB923C"/>
+      <stop offset="0.5" stop-color="#EA580C"/>
+      <stop offset="1" stop-color="#C2410C"/>
+    </linearGradient>
+    <filter id="iconShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Fondo Premium Oscuro con bordes redondeados estándar PWA / App -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#334155" stroke-width="4"/>
+
+  <!-- Anillo exterior metálico cromado del emblema POSTECSA -->
+  <g filter="url(#iconShadow)">
+    <circle cx="256" cy="220" r="150" fill="url(#metalBezel)"/>
+    <circle cx="256" cy="220" r="140" fill="#FFFFFF" opacity="0.95"/>
+    <circle cx="256" cy="220" r="132" fill="url(#metalBezel)"/>
+    
+    <!-- Centro Naranja Corporativo POSTECSA -->
+    <circle cx="256" cy="220" r="122" fill="url(#postecsaOrange)"/>
+    <circle cx="256" cy="220" r="118" fill="none" stroke="#FFFFFF" stroke-width="2.5" opacity="0.6"/>
+
+    <!-- Monograma geométrico oficial 'P' de POSTECSA en blanco brillante -->
+    <path d="M206 148 H268 C298 148 322 168 322 202 C322 236 298 256 268 256 H240 V296 H206 V148 Z M240 226 H266 C280 226 290 216 290 202 C290 188 280 178 266 178 H240 V226 Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Píldora / Insignia Inferior con Tipografía POSTECSA -->
+  <rect x="116" y="396" width="280" height="48" rx="24" fill="#1E293B" stroke="url(#metalBezel)" stroke-width="3" filter="url(#iconShadow)"/>
+  <text x="256" y="428" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="24" font-weight="900" fill="#FFFFFF" letter-spacing="4">POSTECSA</text>
+
+  <!-- Badge SIVIL COMISIONES en esquina superior derecha -->
+  <rect x="310" y="60" width="134" height="34" rx="17" fill="#0284C7" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="377" y="82" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="13" font-weight="900" fill="#FFFFFF" letter-spacing="1">SIVIL APP</text>
+</svg>
