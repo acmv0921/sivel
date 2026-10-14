@@ -720,12 +720,12 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 </div>
 <div class="form-group">
 <label class="form-label">💳 Condiciones de pago</label>
-<select id="formaPago" class="form-control" onchange="calcularTotales()">
+<select id="formaPago" class="form-control" onchange="STATE.pedido._condPagoTexto='';calcularTotales()">
 <option value="">— Seleccione —</option><option value="CONTADO">Contado</option><option value="CREDITO">Crédito</option>
 </select>
 <div id="diasCreditoGrp" style="display:none;margin-top:6px;">
 <label class="form-label">📆 Días de crédito</label>
-<input id="diasCredito" class="form-control" type="number" min="1" step="1" placeholder="Ej: 30" oninput="calcularTotales()">
+<input id="diasCredito" class="form-control" type="number" min="1" step="1" placeholder="Ej: 30" oninput="STATE.pedido._condPagoTexto='';calcularTotales()">
 </div>
 <input id="condicionesPago" type="hidden">
 </div>
@@ -3233,7 +3233,7 @@ P.transportista_flete = val('transportistaFleteInput');
 P.forma_pago = val('formaPago');
 P.dias_credito = val('diasCredito');
 if (g('diasCreditoGrp')) g('diasCreditoGrp').style.display = P.forma_pago === 'CREDITO' ? 'block' : 'none';
-P.condiciones_pago = P.forma_pago === 'CREDITO' ? ('Crédito ' + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
+P.condiciones_pago = P._condPagoTexto ? P._condPagoTexto : P.forma_pago === 'CREDITO' ? ('Crédito ' + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
 if (g('condicionesPago')) g('condicionesPago').value = P.condiciones_pago;
 P.lleva_estiba = val('llevaEstiba');
 P.flete_incluido = val('fleteIncluidoSel');
@@ -5307,14 +5307,33 @@ async function czAAP() {
     set('llevaEstiba', q.estiba === 'SI' ? 'SI' : 'NO');
     var hayFlete = q.fleteModo !== 'NO' && q.flete > 0;
     set('conFlete', hayFlete ? 'SI' : 'NO'); if (typeof cambiarConFlete === 'function') cambiarConFlete();
-    if (hayFlete) set('fleteIncluidoSel', q.fleteModo === 'INCLUIDO' ? 'SI' : 'NO');
-    if (q.pago === 8) set('formaPago', 'CONTADO');
+    var _avisoDestino = false;
+    if (hayFlete) {
+      // El destino se deduce de la direccion de despachos; el VALOR del flete es el cotizado (no se recalcula).
+      var _dd = String(q.cliente.dir_despacho || '').toUpperCase(), _dest = /NORTE/.test(_dd) ? 'CALI NORTE' : /\bSUR\b/.test(_dd) ? 'CALI SUR' : /YUMBO/.test(_dd) ? 'YUMBO' : /JAMUND/.test(_dd) ? 'JAMUNDI' : /PALMIRA/.test(_dd) ? 'PALMIRA' : '';
+      if (!_dest) { _dest = 'CALI NORTE'; _avisoDestino = true; }
+      set('tipoEntrega', _dest); if (typeof toggleDatosEntrega === 'function') toggleDatosEntrega();
+      set('fleteIncluidoSel', q.fleteModo === 'INCLUIDO' ? 'SI' : 'NO');
+      set('numViajes', Math.max(1, (function () { var t = CZ_TRANSP_Q(q); return t.viajes; })()));
+      var _fi = document.getElementById('fleteValorInput'); if (_fi) { _fi.value = Math.round(q.flete); _fi.dataset.autofilled = '0'; }
+      var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; });
+      set('transportistaFleteInput', [q.nota_transp || '', _ex.length ? 'Fletes adicionales cotizados: ' + _ex.map(function (f) { return (f.desc || 'flete') + ' ' + fmt(f.valor) + (f.grav === 'G' ? ' (+IVA)' : ' (excl.)'); }).join('; ') : '', q.flete_motivo ? 'Ajuste de flete: ' + q.flete_motivo : ''].filter(Boolean).join(' | '));
+    }
+    // Condiciones de pago: se traducen a Contado/Credito y se conserva el texto cotizado completo.
+    var _tp = (function () { var bak = CZ; try { CZ = q; return czTxtPago(); } finally { CZ = bak; } })(), _dm = /(\d+)\s*d[ií]as/i.exec(_tp || '');
+    if (_tp) {
+      if (_dm) { set('formaPago', 'CREDITO'); set('diasCredito', parseInt(_dm[1])); } else { set('formaPago', 'CONTADO'); set('diasCredito', ''); }
+      STATE.pedido._condPagoTexto = _tp;
+    }
+    var _te = q.entrega_libre || (q.entrega ? CZ_TEXTOS.entrega[q.entrega - 1] : '');
+    if (_te) set('obsEntrega', _te);
     renderLineasAP(); calcularTotales();
     apModo(true);
     var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; }); if (_ex.length) setTimeout(function () { toast('⚠️ La cotización tiene ' + _ex.length + ' flete(s) adicional(es) (' + fmt(_ex.reduce(function (a, f) { return a + Number(f.valor); }, 0)) + '): inclúyelos en el flete de la AP.', 8000); }, 7500);
-    toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + ': elige el destino y verifica el flete' : '') + '. Completa fecha y entrega y guarda.', 7000);
+    toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + (_avisoDestino ? ' (verifica el destino de entrega)' : '') : '') + '. Completa fecha y entrega y guarda.', 7000);
   }, 250);
 }
+function CZ_TRANSP_Q(q) { var bak = CZ; try { CZ = q; return czTransporte(); } finally { CZ = bak; } }
 async function czVincularAP(apId) {
   if (!CZ_VINCULO || !apId) return;
   if (STATE.pedido && STATE.pedido.cotizacion_ref && czNorm(STATE.pedido.cotizacion_ref) !== czNorm(CZ_VINCULO.numero)) { CZ_VINCULO = null; return; }
