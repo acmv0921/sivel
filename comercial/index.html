@@ -715,7 +715,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <label class="form-label">📄 N° Orden de Compra (cliente)</label>
 <input id="ordenCompraCliente" class="form-control" placeholder="Opcional">
 </div>
-<div id="avisoObsInternas" style="display:none;background:#fffbeb;border:1.5px solid #d97706;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.78rem;color:#78350f;"></div>
+<div class="form-group" style="background:#fffbeb;border:1.5px dashed #d97706;border-radius:8px;padding:8px;"><label class="form-label">🔒 Observaciones internas (privadas; las ve Despacho, no el cliente)</label><textarea id="obsInternasAP" class="form-control" rows="2" placeholder="Ej: flete negociado con el transportador Pérez a $1.200.000 por viaje" oninput="calcularTotales()"></textarea></div>
 <div class="form-group">
 <label class="form-label">📋 N° Cotización</label>
 <input id="cotizacionRef" class="form-control" placeholder="Opcional">
@@ -2537,6 +2537,7 @@ const cliente = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cli
 let extraInfo = '';
 if (ap.orden_compra_cliente) extraInfo += `<div style="font-size:0.72rem;color:#888;">📄 OC: ${ap.orden_compra_cliente}</div>`;
 if (ap.cotizacion_ref) extraInfo += `<div style="font-size:0.72rem;color:#888;">📋 Cotización: ${ap.cotizacion_ref}</div>`;
+if (ap.obs_internas) extraInfo += `<div style="font-size:0.72rem;color:#78350f;background:#fffbeb;border-radius:6px;padding:2px 6px;">🔒 ${String(ap.obs_internas).replace(/</g,'&lt;')}</div>`;
 if (ap.condiciones_pago) extraInfo += `<div style="font-size:0.72rem;color:#888;">💳 Pago: ${ap.condiciones_pago}</div>`;
 if (ap.nombre_obra) extraInfo += `<div style="font-size:0.72rem;color:#888;">🏗️ Obra: ${ap.nombre_obra}</div>`;
 if (ap.transportista_flete) extraInfo += `<div style="font-size:0.72rem;color:#888;">🚚 Transportista: ${ap.transportista_flete}</div>`;
@@ -2880,13 +2881,12 @@ function limpiarCliente() {
 }
 
 function limpiarPedido() {
-  var _abi = document.getElementById('avisoObsInternas'); if (_abi) _abi.style.display = 'none';
 STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, flete_sugerido:0,
 transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','llevaEstiba','conFlete','fleteIncluidoSel']
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
 const _nv = document.getElementById('numViajes'); if (_nv) _nv.value = '1';
@@ -3226,6 +3226,7 @@ P.destino = tipo;
 P.con_flete = conFlete;
 P.fecha_entrega = val('fechaEntregaSolicitada');
 P.obs_entrega = val('obsEntrega');
+P.obs_internas = val('obsInternasAP');
 P.direccion_obra = val('direccionObra');
 P.contacto_obra = val('contactoObra');
 P.cel_contacto = val('celContactoObra');
@@ -3483,7 +3484,7 @@ setVal('contactoObra', p.contacto_obra);
 setVal('celContactoObra', p.cel_contacto);
 setVal('ordenCompraCliente', p.orden_compra_cliente);
 setVal('cotizacionRef', p.cotizacion_ref);
-setVal('condicionesPago', p.condiciones_pago);
+setVal('condicionesPago', p.condiciones_pago); setVal('obsInternasAP', p.obs_internas);
 setVal('formaPago', p.forma_pago); setVal('diasCredito', p.dias_credito); setVal('llevaEstiba', p.lleva_estiba);
 setVal('conFlete', p.con_flete || (((p.destino || p.tipo_entrega || 'PLANTA') === 'PLANTA') ? 'NO' : 'SI'));
 setVal('fleteIncluidoSel', p.flete_incluido); setVal('numViajes', p.num_viajes || 1);
@@ -4071,6 +4072,7 @@ cotizacion_ref: STATE.pedido.cotizacion_ref || '',
 condiciones_pago: STATE.pedido.condiciones_pago || '',
 nombre_obra: STATE.pedido.nombre_obra || '',
 plan_entregas: STATE.pedido.plan_entregas || '',
+obs_internas: STATE.pedido.obs_internas || '',
 // Datos de la negociación para Despacho (9 oct 2026): todo lo acordado viaja con la AP
 forma_pago: STATE.pedido.forma_pago || '',
 dias_credito: STATE.pedido.forma_pago === 'CREDITO' ? (parseInt(STATE.pedido.dias_credito) || '') : '',
@@ -5342,7 +5344,7 @@ function czAvisoInterno(texto, numero) {
   var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:1.2rem;border-top:6px solid #d97706;"><div style="font-weight:800;color:#92400e;margin-bottom:.4rem;">🔒 Observaciones internas de la cotización ' + czH(numero) + '</div><div style="font-size:.85rem;white-space:pre-wrap;margin-bottom:.9rem;">' + czH(texto) + '</div><div style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Verifica estos acuerdos (fletes, transportadores, tarifas) antes de guardar la AP. Quedan visibles arriba en el formulario.</div><button class="btn btn-primary" style="width:100%;" id="btnOkObsInt">Entendido</button></div>';
   document.body.appendChild(ov); document.getElementById('btnOkObsInt').onclick = function () { ov.remove(); };
-  var b = document.getElementById('avisoObsInternas'); if (b) { b.style.display = 'block'; b.innerHTML = '🔒 <b>Observaciones internas de la cotización ' + czH(numero) + ':</b><br>' + czH(texto).replace(/\n/g, '<br>'); }
+  var b = document.getElementById('obsInternasAP'); if (b) { b.value = texto; STATE.pedido.obs_internas = texto; }
 }
 function CZ_TRANSP_Q(q) { var bak = CZ; try { CZ = q; return czTransporte(); } finally { CZ = bak; } }
 async function czVincularAP(apId) {
