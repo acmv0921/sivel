@@ -1,0 +1,39 @@
+{
+ "revisado": "2026-10-14",
+ "resumen": "Primera revisión de seguimiento: ninguno de los 8 consejos se ha aplicado todavía en postecsa.com.",
+ "hallazgos": {
+  "fichas": {
+   "aplicado": false,
+   "nota": "Siguen sin aparecer fichas técnicas descargables."
+  },
+  "normas": {
+   "aplicado": false,
+   "nota": "Solo hay una afirmación general de cumplimiento; no se cita ninguna norma NTC ni certificado."
+  },
+  "cotizador": {
+   "aplicado": false,
+   "nota": "El cotizador sigue publicado; no se verificó el cambio del campo de altura ni de los textos."
+  },
+  "datos": {
+   "aplicado": false,
+   "nota": "Los enlaces del pie de página siguen cruzados (Términos y Tratamiento de datos)."
+  },
+  "casos": {
+   "aplicado": false,
+   "nota": "Siguen 14 obras solo con nombre y ciudad, sin detalle técnico."
+  },
+  "captacion": {
+   "aplicado": false,
+   "nota": "Sigue sin formulario en la portada; hay tres WhatsApp de ejecutivos."
+  },
+  "ubicacion": {
+   "aplicado": false,
+   "nota": "Solo direcciones escritas; sin mapa ni zona de cobertura."
+  },
+  "mensaje": {
+   "aplicado": false,
+   "nota": "El titular y los textos siguen genéricos."
+  }
+ },
+ "nuevos": []
+}
