@@ -1133,6 +1133,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="ncNombre" class="form-control" placeholder="Ej: Constructora Andina S.A.S.">
     </div>
     <div class="form-group">
+      <label class="form-label">¿De qué vendedor es este cliente? *</label>
+      <select id="ncVendedor" class="form-control"></select>
+    </div>
+    <div class="form-group">
       <label class="form-label">Coordenadas GPS</label>
       <div class="gps-row">
         <div class="form-group" style="margin-bottom:0;">
@@ -1181,6 +1185,8 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <label class="form-label">NIT</label>
       <input id="ecNit" class="form-control" placeholder="NIT" style="margin-bottom:6px;">
       <div style="font-size:0.72rem;color:var(--rojo);margin-bottom:10px;">⚠️ Cambiar el NIT actualiza automaticamente todos los pedidos, contactos y visitas de este cliente.</div>
+ <label class="form-label">Vendedor dueño del cliente</label>
+      <select id="ecVendedor" class="form-control" style="margin-bottom:6px;"></select>
       <label class="form-label">Razon social</label>
       <input id="ecRazonSocial" class="form-control" placeholder="Razon social" style="margin-bottom:6px;">
       <label class="form-label">Telefono</label>
@@ -2690,6 +2696,7 @@ function abrirModalEditarCliente(nit) {
   _ECNitOriginal = String(nit);
   document.getElementById('ecNit').value = c.cliente_nit;
   document.getElementById('ecRazonSocial').value = c.razon_social || '';
+  (function () { var sel = document.getElementById('ecVendedor'); if (!sel) return; var act = String(c.vendedor_asignado || ''); var lista = (STATE.todosUsuariosActivos || []).slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre)); }); var ops = lista.map(function (v) { return '<option value="' + czH(v.id_vendedor) + '"' + (String(v.id_vendedor) === act ? ' selected' : '') + '>' + czH(v.nombre) + '</option>'; }); if (act && !lista.some(function (v) { return String(v.id_vendedor) === act; })) ops.unshift('<option value="' + czH(act) + '" selected>' + czH(act) + '</option>'); sel.innerHTML = ops.join(''); })();
   document.getElementById('ecTelefono').value = c.telefono || '';
   document.getElementById('ecCiudad').value = c.ciudad || '';
   document.getElementById('ecDireccion').value = c.direccion || '';
@@ -2731,7 +2738,7 @@ async function guardarEdicionCliente() {
       const rNit = await escribirGAS({accion:'cambiarNitCliente', cliente_nit_actual: nitOriginal, cliente_nit_nuevo: nitNuevo});
       if (!rNit || !rNit.ok) { errEl.textContent = (rNit && rNit.error) || 'Error al cambiar el NIT.'; if (btn) btn.disabled = false; return; }
     }
-    const rUpd = await escribirGAS({accion:'actualizarCliente', cliente_nit: nitNuevo, razon_social, telefono, ciudad, direccion, coordenadas_home});
+    const rUpd = await escribirGAS({accion:'actualizarCliente', cliente_nit: nitNuevo, razon_social, telefono, ciudad, direccion, coordenadas_home, vendedor_asignado: (document.getElementById('ecVendedor') || {}).value || undefined});
     if (!rUpd || !rUpd.ok) { errEl.textContent = (rUpd && rUpd.error) || 'Error al actualizar el cliente.'; if (btn) btn.disabled = false; return; }
     toast('✅ Cliente actualizado');
     cerrarModal('modalEditarCliente');
@@ -4129,6 +4136,12 @@ await continuarOCerrarCesion();
 // NUEVO CLIENTE
 // =============================================================================
 function mostrarFormCliente() {
+  (function () {
+    var sel = document.getElementById('ncVendedor'); if (!sel) return;
+    var yo = String((STATE.vendedor || {}).id_vendedor || '');
+    var lista = (STATE.todosUsuariosActivos || []).slice().sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre)); });
+    sel.innerHTML = '<option value="">— Escoge el vendedor dueño del cliente —</option>' + lista.map(function (v) { return '<option value="' + czH(v.id_vendedor) + '"' + (String(v.id_vendedor) === yo ? ' selected' : '') + '>' + czH(v.nombre) + (String(v.id_vendedor) === yo ? ' (yo)' : '') + '</option>'; }).join('');
+  })();
   document.getElementById('ncNit').value    = '';
   document.getElementById('ncNombre').value = '';
   document.getElementById('ncGps').value    = '';
@@ -4185,6 +4198,8 @@ async function guardarCliente() {
 
   if (!nit)    { err.textContent = "NIT requerido"; return; }
   if (!nombre) { err.textContent = "Nombre requerido"; return; }
+  const vendDueno = (document.getElementById('ncVendedor') || {}).value || '';
+  if (!vendDueno) { err.textContent = "Escoge de qué vendedor es el cliente"; return; }
 
   const existe = STATE.clientes.find(c => String(c.cliente_nit) === nit);
   if (existe) { err.textContent = "❌ NIT ya registrado"; return; }
@@ -4193,7 +4208,7 @@ async function guardarCliente() {
     accion:            'crearCliente',
     cliente_nit:       nit,
     razon_social:      nombre,
-    vendedor_asignado: STATE.vendedor.id_vendedor,
+    vendedor_asignado: vendDueno,
     coordenadas_home:  gps,
     foto_fachada_url:  ''
   };
@@ -4243,7 +4258,7 @@ async function guardarCliente() {
   }
 
   // Agregar localmente para uso inmediato
-  STATE.clientes.push({ cliente_nit:nit, razon_social:nombre, vendedor_asignado:STATE.vendedor.id_vendedor, coordenadas_home:gps });
+  STATE.clientes.push({ cliente_nit:nit, razon_social:nombre, vendedor_asignado:vendDueno, coordenadas_home:gps });
   renderClientes();
   cerrarModal('modalCliente');
   toast("✅ Cliente registrado");
