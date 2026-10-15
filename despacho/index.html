@@ -1367,7 +1367,7 @@ async function leerGVIZ(hoja) {
   // Cache-busting: evita que el navegador devuelva una respuesta vieja para
   // la misma URL cuando datos recién guardados desde otro dispositivo (celular)
   // aún no se reflejaban al abrir/actualizar esta app.
-  const url  = GVIZ + encodeURIComponent(hoja) + '&_=' + Date.now();
+  const url  = GVIZ + encodeURIComponent(hoja) + (/^COTIZ/.test(hoja) ? '&headers=1' : '') + '&_=' + Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   let resp;
@@ -1450,6 +1450,7 @@ async function cargarTodo() {
       leerGVIZSafe("FUNCIONARIOS")
     ]);
     sincronizarFuncionariosBackend(funcionariosBackend);
+    leerGVIZSafe('COTIZACIONES').then(function (c) { S.cotiz = c; try { renderAPs(); } catch (e) {} });
     cargarMetaActualizacion();
     poblarSelectProductos();
     actualizarKPIs();
@@ -1462,6 +1463,20 @@ async function cargarTodo() {
     calcularInventario();
     if (document.getElementById('screenInventario')?.classList.contains('active')) renderInventario();
   } catch(e) { toast("Error cargando datos: " + e.message); }
+}
+
+// Observaciones internas de la cotizacion de origen (privadas de la empresa; acuerdos con transportadores)
+function obsInternaDe(ap) {
+  try {
+    const n = String(ap.cotizacion_ref || '').toUpperCase().replace(/\s+/g, ''); if (!n) return '';
+    const cs = (S.cotiz || []).filter(c => String(c.numero).toUpperCase().replace(/\s+/g, '') === n && c.estado !== 'Anulada');
+    for (const c of cs) { const oi = (JSON.parse(c.payload) || {}).obs_interna; if (oi) return String(oi); }
+  } catch (e) {}
+  return '';
+}
+function htmlObsInterna(ap) {
+  const t = obsInternaDe(ap); if (!t) return '';
+  return `<div style="font-size:0.72rem;color:#78350f;background:#fffbeb;border:1px solid #d97706;border-radius:6px;padding:4px 6px;margin-top:4px;">🔒 <b>Obs. internas (cotización ${ap.cotizacion_ref}):</b> ${t.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`;
 }
 
 function poblarSelectProductos() {
@@ -1997,6 +2012,7 @@ function renderAPs() {
           ${ap.vendedor_id ? `<div style="font-size:0.70rem;color:#7c3200;margin-top:2px;font-weight:700;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
           ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:3px;">🗓️ Entrega: ${fmtFecha(ap.fecha_entrega)}</div>` : ''}
           ${ap.obs_entrega ? `<div style="font-size:0.70rem;color:#555;margin-top:2px;">💬 ${ap.obs_entrega}</div>` : ''}
+          ${htmlObsInterna(ap)}
           ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: '+fmt(ap.flete_valor) : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
@@ -2195,6 +2211,7 @@ function abrirDespacho(ap_id) {
       ${ap.vendedor_id ? `<div style="font-size:0.72rem;color:#7c3200;font-weight:700;margin-top:4px;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
       ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:4px;">🗓️ Entrega solicitada: <b>${fmtFecha(ap.fecha_entrega)}</b></div>` : ''}
       ${ap.obs_entrega ? `<div style="font-size:0.71rem;color:#555;margin-top:3px;">💬 ${ap.obs_entrega}</div>` : ''}
+      ${htmlObsInterna(ap)}
       ${ap.direccion_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:3px;">📍 Obra: ${ap.direccion_obra}</div>` : ''}
       ${ap.contacto_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">👤 Contacto: ${ap.contacto_obra}${ap.cel_contacto ? ' — <a href="tel:'+ap.cel_contacto+'" style="color:var(--verde);">'+ap.cel_contacto+'</a>' : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#0a5c36;margin-top:4px;font-weight:700;">🚚 Destino: ${ap.destino}</div>
