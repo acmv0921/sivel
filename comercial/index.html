@@ -584,6 +584,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <textarea id="czEntregaLibre" class="form-control" rows="2" style="margin-top:4px;" placeholder="Texto libre (opcional): si lo escribes, REEMPLAZA la opción de arriba"></textarea></div>
         <div class="form-group"><label>Observación 1</label><select id="czObs1" class="form-control"></select></div>
         <div class="form-group"><label>Observación 2</label><select id="czObs2" class="form-control"></select></div>
+        <div class="form-group" style="background:#fffbeb;border:1.5px dashed #d97706;border-radius:8px;padding:8px;"><label>🔒 Observaciones internas (privadas: NO salen en el PDF ni en WhatsApp)</label><textarea id="czObsInterna" class="form-control" rows="3" placeholder="Ej: flete negociado con el transportador Pérez a $1.200.000 por viaje; tarifa pactada por 3 meses..."></textarea><div style="font-size:.7rem;color:#92400e;margin-top:2px;">Se muestran como alerta al convertir la cotización en AP y las ve Despacho en la AP.</div></div>
         <div class="form-group"><label>Nota adicional (opcional)</label><textarea id="czNota" class="form-control" rows="2"></textarea></div>
       </div>
       <div class="card">
@@ -714,6 +715,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <label class="form-label">📄 N° Orden de Compra (cliente)</label>
 <input id="ordenCompraCliente" class="form-control" placeholder="Opcional">
 </div>
+<div id="avisoObsInternas" style="display:none;background:#fffbeb;border:1.5px solid #d97706;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.78rem;color:#78350f;"></div>
 <div class="form-group">
 <label class="form-label">📋 N° Cotización</label>
 <input id="cotizacionRef" class="form-control" placeholder="Opcional">
@@ -2878,6 +2880,7 @@ function limpiarCliente() {
 }
 
 function limpiarPedido() {
+  var _abi = document.getElementById('avisoObsInternas'); if (_abi) _abi.style.display = 'none';
 STATE.pedido = { cliente:null, tipo_entrega:"PLANTA", destino:"PLANTA", flete_valor:0, flete_sugerido:0,
 transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
@@ -5036,7 +5039,7 @@ function czRenderLista() {
   cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
     (ver.length ? ver.map(function (c) {
       return '<div class="card" style="padding:.7rem;margin-bottom:8px;cursor:pointer;" onclick="czAbrir(\'' + czH(c.uid) + '\')"><div style="display:flex;justify-content:space-between;gap:8px;"><b>' + czH(c.numero) + '</b><span style="font-size:.7rem;font-weight:700;color:' + czEstadoColor(c.estado) + ';">' + czH(c.estado) + '</span></div>' +
-        '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b>' + (c.ap_id ? ' · <span style="color:#166534;">AP ' + czH(c.ap_id) + '</span>' : '') + '</div></div>';
+        (function () { try { var oi = (JSON.parse(c.payload) || {}).obs_interna; return oi ? '<div style="font-size:.7rem;color:#92400e;background:#fffbeb;border-radius:6px;padding:2px 6px;margin-top:3px;">🔒 ' + czH(String(oi).slice(0, 110)) + '</div>' : ''; } catch (e) { return ''; } })() + '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b>' + (c.ap_id ? ' · <span style="color:#166534;">AP ' + czH(c.ap_id) + '</span>' : '') + '</div></div>';
     }).join('') : '<div style="text-align:center;color:#888;padding:1rem;">Sin cotizaciones</div>');
 }
 function czNueva() {
@@ -5061,7 +5064,7 @@ function czMostrarForm() {
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   czPickers();
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
-    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czObsInterna: CZ.obs_interna || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
@@ -5123,7 +5126,7 @@ function czLeer() {
   if (CZ.desp_modo === 'auto') CZ.despachos_hasta = czSumarDias(CZ.fecha || czHoy(), 30);
   CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
   CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota'); CZ.pago_libre = g('czPagoLibre').trim(); CZ.entrega_libre = g('czEntregaLibre').trim();
-  CZ.tope_kg = parseFloat(g('czTope')) || 0; CZ.tarifa_viaje = parseFloat(g('czTarifa')) || 0; CZ.flete_motivo = g('czFleteMotivo').trim(); CZ.nota_transp = g('czNotaTransp').trim(); CZ.fletes_extra = CZ.fletes_extra || [];
+  CZ.obs_interna = g('czObsInterna').trim(); CZ.tope_kg = parseFloat(g('czTope')) || 0; CZ.tarifa_viaje = parseFloat(g('czTarifa')) || 0; CZ.flete_motivo = g('czFleteMotivo').trim(); CZ.nota_transp = g('czNotaTransp').trim(); CZ.fletes_extra = CZ.fletes_extra || [];
   var _pg = parseInt(g('czPago')); CZ.pago = isNaN(_pg) ? 8 : _pg; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
 }
 function czElegirCliente() {
@@ -5296,6 +5299,7 @@ async function czAAP() {
   irA('screenPedido'); limpiarPedido();
   setTimeout(function () {
     seleccionarCliente(q.cliente.nit);
+    if (q.obs_interna) czAvisoInterno(q.obs_interna, q.numero);
     STATE.pedido.lineas = q.lineas.map(function (l) {
       return { tmcode: l.tmcode, tmdescrip: l.tmdescrip, tmund: l.tmund, calidad: 'PRIMERA', cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado, descuento_segunda_pct: 0,
         precio_base: l.precio_base, precio_base_primera: l.precio_base, tipo_iva: l.tipo_iva || 'E', valor_estiba: l.estiba_tabla || 0, valor_postes: 0, peso_kg_unitario: l.peso_kg_unitario || 0, peso_origen: l.peso_kg_unitario ? 'MAESTRO' : '',
@@ -5332,6 +5336,13 @@ async function czAAP() {
     var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; }); if (_ex.length) setTimeout(function () { toast('⚠️ La cotización tiene ' + _ex.length + ' flete(s) adicional(es) (' + fmt(_ex.reduce(function (a, f) { return a + Number(f.valor); }, 0)) + '): inclúyelos en el flete de la AP.', 8000); }, 7500);
     toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + (_avisoDestino ? ' (verifica el destino de entrega)' : '') : '') + '. Completa fecha y entrega y guarda.', 7000);
   }, 250);
+}
+// Alerta de observaciones internas de la cotizacion al convertirla en AP (acuerdos con transportadores/proveedores)
+function czAvisoInterno(texto, numero) {
+  var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:1.2rem;border-top:6px solid #d97706;"><div style="font-weight:800;color:#92400e;margin-bottom:.4rem;">🔒 Observaciones internas de la cotización ' + czH(numero) + '</div><div style="font-size:.85rem;white-space:pre-wrap;margin-bottom:.9rem;">' + czH(texto) + '</div><div style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Verifica estos acuerdos (fletes, transportadores, tarifas) antes de guardar la AP. Quedan visibles arriba en el formulario.</div><button class="btn btn-primary" style="width:100%;" id="btnOkObsInt">Entendido</button></div>';
+  document.body.appendChild(ov); document.getElementById('btnOkObsInt').onclick = function () { ov.remove(); };
+  var b = document.getElementById('avisoObsInternas'); if (b) { b.style.display = 'block'; b.innerHTML = '🔒 <b>Observaciones internas de la cotización ' + czH(numero) + ':</b><br>' + czH(texto).replace(/\n/g, '<br>'); }
 }
 function CZ_TRANSP_Q(q) { var bak = CZ; try { CZ = q; return czTransporte(); } finally { CZ = bak; } }
 async function czVincularAP(apId) {
