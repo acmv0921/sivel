@@ -1857,12 +1857,51 @@ function _hojaCotiz() {
   return h;
 }
 function _normNumCotiz(n) { return String(n || "").toUpperCase().replace(/\s+/g, ""); }
+// Consecutivo GENERAL de cotizaciones (toda la empresa) con iniciales por vendedor (15 oct 2026).
+// Número = INICIALES + "-" + consecutivo de 3+ cifras (ej. AF-001). El contador es uno solo para todos
+// los vendedores (propiedad COTIZ_CONSEC) y se asigna dentro de un candado para que dos vendedores
+// guardando a la vez nunca reciban el mismo número. Las iniciales por defecto están abajo; si aparece
+// un vendedor nuevo, la app pide sus iniciales la primera vez y quedan en la propiedad COTIZ_INICIALES.
+const COTIZ_INICIALES_DEF = { "16777882": "AF", "10243199": "EG", "1193585144": "JJL", "31409227": "NC", "1144160845": "JF" };
+function _inicialesCotiz(vid, propuesta) {
+  const props = PropertiesService.getScriptProperties();
+  let mapa = {}; try { mapa = JSON.parse(props.getProperty("COTIZ_INICIALES") || "{}"); } catch (e) {}
+  const id = String(vid || "");
+  if (mapa[id]) return mapa[id];
+  if (COTIZ_INICIALES_DEF[id]) return COTIZ_INICIALES_DEF[id];
+  const p = String(propuesta || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  if (p) { mapa[id] = p; props.setProperty("COTIZ_INICIALES", JSON.stringify(mapa)); return p; }
+  return "";
+}
+function _siguienteNumeroCotiz(ini, datos) {
+  const props = PropertiesService.getScriptProperties();
+  const iN = COTIZ_COLS.indexOf("numero");
+  const usados = {}; for (let i = 1; i < datos.length; i++) usados[String(datos[i][iN]).toUpperCase().replace(/[^A-Z0-9]/g, "")] = 1;
+  let n = parseInt(props.getProperty("COTIZ_CONSEC") || "0", 10) || 0, num;
+  do { n++; num = ini + "-" + ("000" + n).slice(-3); } while (usados[num.replace(/[^A-Z0-9]/g, "")]);
+  props.setProperty("COTIZ_CONSEC", String(n));
+  return num;
+}
 function guardarCotizacion(body) {
-  const num = String(body.numero || "").trim();
-  if (!num) return { ok: false, error: "Falta el número de cotización" };
+  let num = String(body.numero || "").trim();
+  if (!num && !body.auto_numero) return { ok: false, error: "Falta el número de cotización" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado asignando números, intenta de nuevo." }; }
+  try {
+    return _guardarCotizacionLock(body, num);
+  } finally { lock.releaseLock(); }
+}
+function _guardarCotizacionLock(body, num) {
   const hoja = _hojaCotiz();
   const datos = hoja.getDataRange().getValues();
   const iU = COTIZ_COLS.indexOf("uid"), iN = COTIZ_COLS.indexOf("numero");
+  if (!num) {
+    const ini = _inicialesCotiz(body.vendedor_id, body.iniciales);
+    if (!ini) return { ok: false, needs_iniciales: true, error: "Faltan las iniciales de este vendedor" };
+    num = _siguienteNumeroCotiz(ini, datos);
+    body.confirmar_duplicado = true;
+    if (body.payload && typeof body.payload === "object") body.payload.numero = num;
+  }
   let fila = -1;
   if (body.uid) for (let i = 1; i < datos.length; i++) if (String(datos[i][iU]) === String(body.uid)) { fila = i + 1; break; }
   if (!body.confirmar_duplicado) {
