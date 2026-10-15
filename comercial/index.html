@@ -5002,13 +5002,15 @@ function czEsMio(c) {
   var ids = [ced].concat(CZ_ID_LEGADO[ced] || []); if (v.id_usuario) ids.push(String(v.id_usuario));
   return ids.indexOf(a) >= 0;
 }
+function czSinDueno(c) { return !String(c.vendedor_asignado == null ? '' : c.vendedor_asignado).trim(); }
 function czMisClientes() { return (STATE.clientes || []).filter(czEsMio); }
+function czClientesSinDueno() { return (STATE.clientes || []).filter(czSinDueno); }
 function czArmarClientesDL() {
   var dl = document.getElementById('czClientesDL'); if (!dl) return;
-  var lista = CZ_MODO_CLI === 'mis' ? czMisClientes() : CZ_MODO_CLI === 'nuevo' ? [] : (STATE.clientes || []);
+  var lista = CZ_MODO_CLI === 'mis' ? czMisClientes().concat(czClientesSinDueno()) : CZ_MODO_CLI === 'nuevo' ? [] : (STATE.clientes || []);
   dl.innerHTML = lista.map(function (c) { return '<option value="' + czH(c.razon_social) + ' · ' + czH(c.cliente_nit) + '">'; }).join('');
   var t = document.getElementById('czModoCli');
-  if (t) t.innerHTML = CZ_MODO_CLI ? '👥 Trabajando con: <b>' + (CZ_MODO_CLI === 'mis' ? 'mis clientes (' + lista.length + ')' : CZ_MODO_CLI === 'nuevo' ? 'cliente nuevo' : 'listado general (' + lista.length + ')') + '</b> · <a href="#" onclick="czAvisoClientes();return false;">cambiar</a>' : '';
+  if (t) t.innerHTML = CZ_MODO_CLI ? '👥 Trabajando con: <b>' + (CZ_MODO_CLI === 'mis' ? 'mis clientes (' + czMisClientes().length + ') + sin vendedor (' + czClientesSinDueno().length + ')' : CZ_MODO_CLI === 'nuevo' ? 'cliente nuevo' : 'listado general (' + lista.length + ')') + '</b> · <a href="#" onclick="czAvisoClientes();return false;">cambiar</a>' : '';
 }
 // Histórico de lo cotizado antes al mismo cliente (precios y productos)
 var CZ_HIST_ABIERTO = false;
@@ -5061,6 +5063,7 @@ function czAvisoClientes() {
   var b = 'display:block;width:100%;margin-top:8px;padding:12px;border-radius:10px;border:1.5px solid #1a3a5c;background:#fff;color:#1a3a5c;font-weight:700;font-size:.9rem;text-align:left;';
   o.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;"><div style="font-weight:800;font-size:1rem;color:#1a3a5c;">⚠️ ¿Con qué clientes vas a trabajar esta cotización?</div>' +
     '<div style="font-size:.82rem;margin-top:6px;color:#444;">Escoge una opción: desde aquí el buscador se enfocará solo en esos clientes, para no tomar clientes de otro asesor por error.</div>' +
+    (czClientesSinDueno().length ? '<div style="font-size:.78rem;margin-top:8px;padding:8px;border-radius:8px;background:#fff7e0;border:1px solid #e0b100;color:#5a4400;">📢 Hay <b>' + czClientesSinDueno().length + ' clientes sin vendedor asignado</b>. Todos pueden verlos y cotizarles, hasta que un asesor o Nohra se los adjudique.</div>' : '') +
     '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'mis\')">👤 Mis clientes (' + n + ')<br><span style="font-weight:400;font-size:.76rem;">Solo los que tengo asignados</span></button>' +
     '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'nuevo\')">🆕 Un cliente nuevo<br><span style="font-weight:400;font-size:.76rem;">Lo registro ahora y cotizo con él</span></button>' +
     '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'general\')">📚 Listado general<br><span style="font-weight:400;font-size:.76rem;">Cualquier cliente de la empresa</span></button></div>';
@@ -5240,14 +5243,30 @@ function czElegirCliente() {
   var v = document.getElementById('czCliente').value, nit = (v.split(' · ')[1] || '').trim();
   var c = (STATE.clientes || []).filter(function (x) { return String(x.cliente_nit) === nit; })[0];
   if (!c) return;
-  if (CZ_MODO_CLI === 'mis' && !czEsMio(c)) { toast('Ese cliente no está en tu cartera. Usa "cambiar" para el listado general.', 4500); document.getElementById('czCliente').value = ''; return; }
+  if (CZ_MODO_CLI === 'mis' && !czEsMio(c) && !czSinDueno(c)) { toast('Ese cliente no está en tu cartera. Usa "cambiar" para el listado general.', 4500); document.getElementById('czCliente').value = ''; return; }
   CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
   var ct = (STATE.contactos || []).filter(function (x) { return String(x.cliente_nit) === nit; });
   var p = ct.filter(function (x) { return x.es_principal === true || String(x.es_principal).toUpperCase() === 'TRUE'; })[0] || ct[0] || {};
   var set = function (id, val) { var e = document.getElementById(id); if (e && val != null) e.value = val; };
-  czRenderHistorico();
+  czRenderHistorico(); czMostrarAdjudicar(c);
   set('czAtn', p.nombre_contacto || ''); set('czTel', p.telefono || c.telefono || ''); set('czCorreo', p.correo || ''); set('czDirOf', c.direccion || '');
   czVerNumero();
+}
+function czMostrarAdjudicar(c) {
+  var d = document.getElementById('czAdjud'); if (!d) { d = document.createElement('div'); d.id = 'czAdjud'; var ref = document.getElementById('czModoCli'); if (ref && ref.parentNode) ref.parentNode.insertBefore(d, ref.nextSibling); else return; }
+  if (!c || !czSinDueno(c)) { d.innerHTML = ''; return; }
+  var yo = String((STATE.vendedor || {}).id_vendedor || '');
+  d.innerHTML = '<div style="font-size:.78rem;margin:4px 0 8px;padding:8px;border-radius:8px;background:#fff7e0;border:1px solid #e0b100;color:#5a4400;">⚠️ Este cliente <b>no tiene vendedor asignado</b>. <button type="button" class="btn" style="margin-left:6px;padding:4px 10px;font-size:.76rem;" onclick="czAdjudicar(\'' + String(c.cliente_nit).replace(/'/g, '') + '\')">Adjudicármelo</button></div>';
+}
+async function czAdjudicar(nit) {
+  var yo = String((STATE.vendedor || {}).id_vendedor || ''); if (!yo) { toast('No se identificó tu usuario'); return; }
+  var c = (STATE.clientes || []).filter(function (x) { return String(x.cliente_nit) === String(nit); })[0]; if (!c || !czSinDueno(c)) return;
+  if (!confirm('¿Adjudicarte el cliente ' + c.razon_social + '? Pasará a tu cartera.')) return;
+  try {
+    var r = await escribirGAS({ accion: 'actualizarCliente', cliente_nit: String(nit), vendedor_asignado: yo });
+    if (r && r.ok === false) { toast('No se pudo adjudicar: ' + (r.error || ''), 4500); return; }
+    c.vendedor_asignado = yo; czMostrarAdjudicar(c); czArmarClientesDL(); toast('Cliente adjudicado a tu cartera', 3500);
+  } catch (e) { toast('No se pudo adjudicar: ' + e.message, 4500); }
 }
 function czVerNumero() {
   var n = czNorm(document.getElementById('czNumero').value), al = document.getElementById('czNumAlert'); if (!al) return;
