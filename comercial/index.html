@@ -4994,7 +4994,15 @@ function czProductos() {
   return out;
 }
 var CZ_MODO_CLI = '';
-function czMisClientes() { var yo = String((STATE.vendedor || {}).id_vendedor || ''); return (STATE.clientes || []).filter(function (c) { return String(c.vendedor_asignado) === yo; }); }
+// En CLIENTES hay clientes antiguos con vendedor_asignado = id_usuario (2,4,5,6,9,10) y nuevos con la cédula.
+var CZ_ID_LEGADO = { '31409227': ['2'], '16777882': ['4'], '10243199': ['5'], '1193585144': ['6'], '31434163': ['9'], '1144160845': ['10'] };
+function czEsMio(c) {
+  var v = STATE.vendedor || {}, ced = String(v.id_vendedor || v.cedula || ''), a = String(c.vendedor_asignado == null ? '' : c.vendedor_asignado).trim();
+  if (!a) return false;
+  var ids = [ced].concat(CZ_ID_LEGADO[ced] || []); if (v.id_usuario) ids.push(String(v.id_usuario));
+  return ids.indexOf(a) >= 0;
+}
+function czMisClientes() { return (STATE.clientes || []).filter(czEsMio); }
 function czArmarClientesDL() {
   var dl = document.getElementById('czClientesDL'); if (!dl) return;
   var lista = CZ_MODO_CLI === 'mis' ? czMisClientes() : CZ_MODO_CLI === 'nuevo' ? [] : (STATE.clientes || []);
@@ -5232,7 +5240,7 @@ function czElegirCliente() {
   var v = document.getElementById('czCliente').value, nit = (v.split(' · ')[1] || '').trim();
   var c = (STATE.clientes || []).filter(function (x) { return String(x.cliente_nit) === nit; })[0];
   if (!c) return;
-  if (CZ_MODO_CLI === 'mis' && String(c.vendedor_asignado) !== String((STATE.vendedor || {}).id_vendedor || '')) { toast('Ese cliente no está en tu cartera. Usa "cambiar" para el listado general.', 4500); document.getElementById('czCliente').value = ''; return; }
+  if (CZ_MODO_CLI === 'mis' && !czEsMio(c)) { toast('Ese cliente no está en tu cartera. Usa "cambiar" para el listado general.', 4500); document.getElementById('czCliente').value = ''; return; }
   CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
   var ct = (STATE.contactos || []).filter(function (x) { return String(x.cliente_nit) === nit; });
   var p = ct.filter(function (x) { return x.es_principal === true || String(x.es_principal).toUpperCase() === 'TRUE'; })[0] || ct[0] || {};
