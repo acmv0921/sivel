@@ -520,7 +520,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="czListaWrap">
       <div class="card">
         <div class="card-title">🧾 Cotizaciones</div>
-        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNueva()">➕ Nueva cotización</button>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNuevaConAviso()">➕ Nueva cotización</button>
         <input id="czBuscar" class="form-control" placeholder="🔍 Buscar por número, cliente, NIT, obra o AP..." oninput="czRenderLista()" style="margin-bottom:6px;">
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;font-size:.72rem;color:#555;">
           <span>Desde</span><input id="czDesde" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
@@ -540,6 +540,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
       <div class="card">
         <div class="card-title">Cliente</div>
+        <div id="czModoCli" style="font-size:.78rem;margin-bottom:6px;color:#1a3a5c;"></div>
         <div class="form-group"><label>Buscar cliente</label><input id="czCliente" class="form-control" list="czClientesDL" placeholder="Nombre o NIT..." onchange="czElegirCliente()"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
           <div class="form-group"><label>Atención</label><input id="czAtn" class="form-control"></div><div class="form-group"><label>Teléfono</label><input id="czTel" class="form-control"></div>
@@ -4250,6 +4251,11 @@ async function guardarCliente() {
   cerrarModal('modalCliente');
   toast("✅ Cliente registrado");
 
+  if (window._czRegistrando) {
+    window._czRegistrando = false; czArmarClientesDL();
+    var _ce = document.getElementById('czCliente'); if (_ce) { _ce.value = nombre + ' · ' + nit; czElegirCliente(); }
+    return;
+  }
   // Preguntar si crear AP de inmediato
   if (confirm(`¿Crear pedido para ${nombre} ahora?`)) {
     seleccionarCliente(nit);
@@ -4972,11 +4978,39 @@ function czProductos() {
   (STATE.inventario || []).forEach(function (p) { var k = String(p.tmcode); if (!vistos[k] && (p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA') { vistos[k] = 1; out.push(p); } });
   return out;
 }
+var CZ_MODO_CLI = '';
+function czMisClientes() { var yo = String((STATE.vendedor || {}).id_vendedor || ''); return (STATE.clientes || []).filter(function (c) { return String(c.vendedor_asignado) === yo; }); }
+function czArmarClientesDL() {
+  var dl = document.getElementById('czClientesDL'); if (!dl) return;
+  var lista = CZ_MODO_CLI === 'mis' ? czMisClientes() : CZ_MODO_CLI === 'nuevo' ? [] : (STATE.clientes || []);
+  dl.innerHTML = lista.map(function (c) { return '<option value="' + czH(c.razon_social) + ' · ' + czH(c.cliente_nit) + '">'; }).join('');
+  var t = document.getElementById('czModoCli');
+  if (t) t.innerHTML = CZ_MODO_CLI ? '👥 Trabajando con: <b>' + (CZ_MODO_CLI === 'mis' ? 'mis clientes (' + lista.length + ')' : CZ_MODO_CLI === 'nuevo' ? 'cliente nuevo' : 'listado general (' + lista.length + ')') + '</b> · <a href="#" onclick="czAvisoClientes();return false;">cambiar</a>' : '';
+}
+function czNuevaConAviso() { window._czRegistrando = false; czNueva(); czAvisoClientes(); }
+function czAvisoClientes() {
+  var o = document.getElementById('czAvisoCli'); if (o) o.remove();
+  var n = czMisClientes().length;
+  o = document.createElement('div'); o.id = 'czAvisoCli';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var b = 'display:block;width:100%;margin-top:8px;padding:12px;border-radius:10px;border:1.5px solid #1a3a5c;background:#fff;color:#1a3a5c;font-weight:700;font-size:.9rem;text-align:left;';
+  o.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:18px;"><div style="font-weight:800;font-size:1rem;color:#1a3a5c;">⚠️ ¿Con qué clientes vas a trabajar esta cotización?</div>' +
+    '<div style="font-size:.82rem;margin-top:6px;color:#444;">Escoge una opción: desde aquí el buscador se enfocará solo en esos clientes, para no tomar clientes de otro asesor por error.</div>' +
+    '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'mis\')">👤 Mis clientes (' + n + ')<br><span style="font-weight:400;font-size:.76rem;">Solo los que tengo asignados</span></button>' +
+    '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'nuevo\')">🆕 Un cliente nuevo<br><span style="font-weight:400;font-size:.76rem;">Lo registro ahora y cotizo con él</span></button>' +
+    '<button type="button" style="' + b + '" onclick="czEscogerClientes(\'general\')">📚 Listado general<br><span style="font-weight:400;font-size:.76rem;">Cualquier cliente de la empresa</span></button></div>';
+  document.body.appendChild(o);
+}
+function czEscogerClientes(m) {
+  CZ_MODO_CLI = m; var o = document.getElementById('czAvisoCli'); if (o) o.remove();
+  czArmarClientesDL();
+  if (m === 'nuevo') { window._czRegistrando = true; mostrarFormCliente(); }
+  else { var e = document.getElementById('czCliente'); if (e) e.focus(); }
+}
 async function czInit() {
   if (!STATE.inventario || !STATE.inventario.length) { try { await cargarInventario(); } catch (e) {} }
   if (!STATE.clientes || !STATE.clientes.length) { try { await cargarClientes(); } catch (e) {} }
-  var dl = document.getElementById('czClientesDL');
-  if (dl) dl.innerHTML = (STATE.clientes || []).map(function (c) { return '<option value="' + czH(c.razon_social) + ' · ' + czH(c.cliente_nit) + '">'; }).join('');
+  czArmarClientesDL();
   var dp = document.getElementById('czProdDL');
   if (dp) dp.innerHTML = czProductos().map(function (p) { return '<option value="' + czH(p.tmcode) + ' — ' + czH(p.tmdescrip) + '">'; }).join('');
   await czCargarTextos();
@@ -5059,6 +5093,7 @@ function czAbrir(uid) {
   CZ.uid = c.uid; CZ.estado = c.estado; czMostrarForm();
 }
 function czMostrarForm() {
+  czArmarClientesDL();
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
   var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '" data-full="' + czH(t).replace(/"/g, '&quot;') + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
@@ -5137,6 +5172,7 @@ function czElegirCliente() {
   var v = document.getElementById('czCliente').value, nit = (v.split(' · ')[1] || '').trim();
   var c = (STATE.clientes || []).filter(function (x) { return String(x.cliente_nit) === nit; })[0];
   if (!c) return;
+  if (CZ_MODO_CLI === 'mis' && String(c.vendedor_asignado) !== String((STATE.vendedor || {}).id_vendedor || '')) { toast('Ese cliente no está en tu cartera. Usa "cambiar" para el listado general.', 4500); document.getElementById('czCliente').value = ''; return; }
   CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
   var ct = (STATE.contactos || []).filter(function (x) { return String(x.cliente_nit) === nit; });
   var p = ct.filter(function (x) { return x.es_principal === true || String(x.es_principal).toUpperCase() === 'TRUE'; })[0] || ct[0] || {};
