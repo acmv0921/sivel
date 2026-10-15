@@ -719,7 +719,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <label class="form-label">📄 N° Orden de Compra (cliente)</label>
 <input id="ordenCompraCliente" class="form-control" placeholder="Opcional">
 </div>
-<div class="form-group" style="background:#fffbeb;border:1.5px dashed #d97706;border-radius:8px;padding:8px;"><label class="form-label">🔒 Observaciones internas (privadas; las ve Despacho, no el cliente)</label><textarea id="obsInternasAP" class="form-control" rows="2" placeholder="Ej: flete negociado con el transportador Pérez a $1.200.000 por viaje" oninput="calcularTotales()"></textarea></div>
+<div class="form-group" id="obsInternasWrap" style="display:none;background:#fffbeb;border:1.5px dashed #d97706;border-radius:8px;padding:8px;"><label class="form-label">🔒 Observaciones internas (privadas; las ve Despacho, no el cliente)</label><textarea id="obsInternasAP" class="form-control" rows="2" placeholder="Ej: flete negociado con el transportador Pérez a $1.200.000 por viaje" oninput="calcularTotales()"></textarea></div>
 <div class="form-group">
 <label class="form-label">📋 N° Cotización</label>
 <input id="cotizacionRef" class="form-control" placeholder="Opcional">
@@ -2896,6 +2896,7 @@ orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' 
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
 'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
+{ const _ow = document.getElementById('obsInternasWrap'); if (_ow) _ow.style.display = 'none'; }
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
 const _nv = document.getElementById('numViajes'); if (_nv) _nv.value = '1';
 const _ce = document.getElementById('fleteContraEntregaCheck'); if (_ce) _ce.checked = false;
@@ -3492,7 +3493,7 @@ setVal('contactoObra', p.contacto_obra);
 setVal('celContactoObra', p.cel_contacto);
 setVal('ordenCompraCliente', p.orden_compra_cliente);
 setVal('cotizacionRef', p.cotizacion_ref);
-setVal('condicionesPago', p.condiciones_pago); setVal('obsInternasAP', p.obs_internas);
+setVal('condicionesPago', p.condiciones_pago); setVal('obsInternasAP', p.obs_internas); { const _ow = document.getElementById('obsInternasWrap'); if (_ow && p.obs_internas) _ow.style.display = ''; }
 setVal('formaPago', p.forma_pago); setVal('diasCredito', p.dias_credito); setVal('llevaEstiba', p.lleva_estiba);
 setVal('conFlete', p.con_flete || (((p.destino || p.tipo_entrega || 'PLANTA') === 'PLANTA') ? 'NO' : 'SI'));
 setVal('fleteIncluidoSel', p.flete_incluido); setVal('numViajes', p.num_viajes || 1);
@@ -5456,7 +5457,7 @@ function czAvisoInterno(texto, numero) {
   var ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:1.2rem;border-top:6px solid #d97706;"><div style="font-weight:800;color:#92400e;margin-bottom:.4rem;">🔒 Observaciones internas de la cotización ' + czH(numero) + '</div><div style="font-size:.85rem;white-space:pre-wrap;margin-bottom:.9rem;">' + czH(texto) + '</div><div style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Verifica estos acuerdos (fletes, transportadores, tarifas) antes de guardar la AP. Quedan visibles arriba en el formulario.</div><button class="btn btn-primary" style="width:100%;" id="btnOkObsInt">Entendido</button></div>';
   document.body.appendChild(ov); document.getElementById('btnOkObsInt').onclick = function () { ov.remove(); };
-  var b = document.getElementById('obsInternasAP'); if (b) { b.value = texto; STATE.pedido.obs_internas = texto; }
+  var b = document.getElementById('obsInternasAP'); if (b) { b.value = texto; STATE.pedido.obs_internas = texto; var _ow = document.getElementById('obsInternasWrap'); if (_ow) _ow.style.display = ''; }
 }
 function CZ_TRANSP_Q(q) { var bak = CZ; try { CZ = q; return czTransporte(); } finally { CZ = bak; } }
 async function czVincularAP(apId) {
@@ -5596,7 +5597,7 @@ async function czPDF(opts) {
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
   var _obT = [czObsTxt(0), czObsTxt(1), CZ.nota, czNotaTransp()].filter(Boolean).join('\n'); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
   var _obH = Math.max(26, wrap(_obT, 118).length * 3 + 12);
-  if (y > 158 || y + 7 + _obH > 250) { piePag(); doc.addPage(); y = 14; }
+  if (y + 7 + _obH > 262) { piePag(); doc.addPage(); y = 14; }
   y += 7; var yObs = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
   var ob = [czObsTxt(0), czObsTxt(1), CZ.nota, czNotaTransp()].filter(Boolean).join('\n');
@@ -5608,7 +5609,7 @@ async function czPDF(opts) {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
   var cEnt = wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88), cPag = wrap(czTxtPago(), 88);
   var hCond = Math.max(28, 10 + Math.max(cEnt.length, cPag.length) * 3 + 3);
-  if (y + hCond > 262) { piePag(); doc.addPage(); y = 14; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
+  if (y + hCond + 55 > 272) { piePag(); doc.addPage(); y = 14; doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
   box(M, y, (R - M) / 2, hCond); box(M + (R - M) / 2, y, (R - M) / 2, hCond); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
   txt(cEnt, M + 2, y + 10); txt(cPag, M + (R - M) / 2 + 2, y + 10); y += hCond + 6;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
