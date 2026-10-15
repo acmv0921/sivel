@@ -1821,12 +1821,12 @@ function _setCamposExtraAP(hoja, fila, body) {
   // numero_viajes, lleva_estiba y flete_gravado; la fecha de entrega, observaciones, direccion
   // y contacto de la obra viajaban en la peticion pero no se escribian en la hoja.
   const extra = { numero_viajes: body.numero_viajes || '', lleva_estiba: body.lleva_estiba || '', flete_gravado: body.flete_gravado || '',
-    fecha_entrega: body.fecha_entrega || '', obs_entrega: body.obs_entrega || '', direccion_obra: body.direccion_obra || '',
+    fecha_entrega: body.fecha_entrega || '', obs_entrega: body.obs_entrega || '', obs_internas: body.obs_internas || '', direccion_obra: body.direccion_obra || '',
     contacto_obra: body.contacto_obra || '', cel_contacto: body.cel_contacto || '',
     forma_pago: body.forma_pago || '', dias_credito: body.dias_credito || '', flete_incluido: body.flete_incluido || '',
     subtotal_ap: body.subtotal_ap, descuento_ap: body.descuento_ap, estiba_ap: body.estiba_ap,
     iva_productos_ap: body.iva_productos_ap, iva_flete_ap: body.iva_flete_ap, iva_ap: body.iva_ap, total_ap: body.total_ap };
-  const textos = { fecha_entrega: 1, cel_contacto: 1, direccion_obra: 1, contacto_obra: 1, obs_entrega: 1 };
+  const textos = { fecha_entrega: 1, cel_contacto: 1, direccion_obra: 1, contacto_obra: 1, obs_entrega: 1, obs_internas: 1 };
   let lc = hoja.getLastColumn();
   const hdr = hoja.getRange(1, 1, 1, lc).getValues()[0].map(String);
   Object.keys(extra).forEach(function (k) {
