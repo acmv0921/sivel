@@ -1,0 +1,55 @@
+{
+  "actualizado": "2026-10-14",
+  "semana": "Edición 1 · semana del 12 al 18 de octubre de 2026",
+  "nota": "Primera edición armada a mano con fuentes oficiales y de prensa. Cada dato lleva su enlace; lo que no se pudo verificar se dice expresamente.",
+  "mercado": [
+    {
+      "fecha": "2026-09-01",
+      "titulo": "Camacol Santander dona 150 toneladas de materiales y Camacol ofrece subsidio de $20.000 millones",
+      "resumen": "El Ministerio de Vivienda informó que Camacol Santander elevó a 150 toneladas el total de materiales donados para la reconstrucción de Cali. Camacol también anunció un subsidio de $20.000 millones (cerca de $20 millones por familia, alcance aproximado de 1.000 hogares) en alianza con constructoras. Hay un decreto en preparación con alivio en servicios públicos para estratos 4, 5 y 6 afectados.",
+      "relevancia": "Las constructoras con bono Camacol son clientes potenciales de bloque y prefabricados: conviene pedir a Camacol Valle el listado de afiliadas con proyectos activos.",
+      "fuente": "Ministerio de Vivienda",
+      "url": "https://minvivienda.gov.co/sala-de-prensa/minvivienda-avanza-en-la-reconstruccion-de-cali-con-soluciones-de-vivienda-y-nuevos-materiales-para-las-familias-damnificadas"
+    },
+    {
+      "fecha": "2026-07-31",
+      "titulo": "DANE: el área licenciada en Valle del Cauca cayó 37,3 % anual en julio de 2026",
+      "resumen": "En julio de 2026 (cifras preliminares) el país licenció 1.541.665 m², 27,1 % menos que en julio de 2025. La vivienda cayó 27,3 % (VIS -38,0 %, no VIS -22,0 %). Valle del Cauca restó 4,5 puntos a la variación nacional y representó el 10,3 % del área aprobada. El boletín no trae cifras propias de Cali.",
+      "relevancia": "Las licencias son la demanda futura de bloque: menos licencias en el Valle significa menos obra nueva dentro de unos meses, aunque la reconstrucción por el sismo puede compensar parte de la caída.",
+      "fuente": "DANE, Licencias de construcción (ELIC) julio 2026",
+      "url": "https://www.dane.gov.co/files/operaciones/ELIC/bol-ELIC-jul2026.pdf"
+    },
+    {
+      "fecha": "2026-08-18",
+      "titulo": "Balance de daños del terremoto: más de 12.000 viviendas destruidas y 75.000 averiadas en el país",
+      "resumen": "Según el Ministerio de Vivienda, el país reporta más de 12.000 viviendas destruidas y más de 75.000 averiadas. Para las cinco capitales en alerta roja (Cali, Armenia, Manizales, Pereira y Quibdó), Asocapitales reportó 3.010 viviendas colapsadas y 42.208 averiadas, estas últimas aún en verificación. Cifras al 18 de agosto; no separan Cali del resto.",
+      "relevancia": "Es la base de la demanda de reconstrucción y mejoramiento. Las cifras cambian con la verificación, por eso se muestran con su fecha de corte.",
+      "fuente": "El Colombiano (cifras del Ministerio de Vivienda y Asocapitales)",
+      "url": "https://www.elcolombiano.com/negocios/cuantas-viviendas-destruidas-por-terremoto-OA40048897"
+    }
+  ],
+  "autores": [
+    {
+      "autor": "Neil Rackham (Huthwaite)",
+      "titulo": "In conversation with Neil Rackham (serie de entrevistas en video)",
+      "fecha": "",
+      "resumen": "Rackham insiste en pasar de la venta transaccional a la consultiva, con preguntas orientadas al futuro del cliente, y en que las metodologías simples con coaching sistemático son las que cambian el comportamiento de un equipo de ventas. La página no indica la fecha de la entrevista.",
+      "aplicacion": "En la cotización a una constructora, pregunte por el cronograma y por lo que le cuesta una entrega tardía antes de hablar de precio.",
+      "url": "https://www.huthwaiteinternational.com/in-conversation-with-neil-rackham",
+      "verificado": true
+    },
+    {
+      "autor": "Jeb Blount (Sales Gravy)",
+      "titulo": "25 Ways to Ask for an Appointment on a Cold Call",
+      "fecha": "",
+      "resumen": "La portada de Sales Gravy destaca una guía con 25 formas de pedir una cita en una llamada en frío y un artículo sobre por qué los vendedores fallan en ellas. El sitio no muestra la fecha de publicación, por eso no se presenta como novedad de la semana.",
+      "aplicacion": "Antes de llamar a un residente de obra, defina la cita que va a pedir (visita a obra, muestra de producto) y propóngala con dos opciones de día.",
+      "url": "https://www.salesgravy.com/",
+      "verificado": false
+    }
+  ],
+  "sinNovedad": [
+    "Matthew Dixon y Brent Adamson (The Challenger Sale): sin publicación nueva verificada esta semana.",
+    "Brian Tracy, Zig Ziglar y Jeffrey Gitomer: sin publicación nueva verificada esta semana."
+  ]
+}
