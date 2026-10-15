@@ -1475,8 +1475,8 @@ function obsInternaDe(ap) {
   return '';
 }
 function htmlObsInterna(ap) {
-  const t = obsInternaDe(ap); if (!t) return '';
-  return `<div style="font-size:0.72rem;color:#78350f;background:#fffbeb;border:1px solid #d97706;border-radius:6px;padding:4px 6px;margin-top:4px;">🔒 <b>Obs. internas (cotización ${ap.cotizacion_ref}):</b> ${t.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`;
+  const t = String(ap.obs_internas || '') || obsInternaDe(ap); if (!t) return '';
+  return `<div style="font-size:0.72rem;color:#78350f;background:#fffbeb;border:1px solid #d97706;border-radius:6px;padding:4px 6px;margin-top:4px;">🔒 <b>Obs. internas${ap.cotizacion_ref ? ' (cotización '+ap.cotizacion_ref+')' : ''}:</b> ${t.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`;
 }
 
 function poblarSelectProductos() {
