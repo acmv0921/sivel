@@ -438,7 +438,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <div style="color:rgba(255,255,255,0.45);font-size:0.65rem;text-align:center;margin-top:1.5rem;line-height:1.7;">
     Desarrollado por <strong style="color:rgba(255,255,255,0.7);">Abdiel Cicar Moreno Velásquez</strong><br>
     Área de Gestión de Mantenimiento y Confiabilidad<br>
-    POSTECSA DE COLOMBIA S.A.S. · v1.27 · Compilación 29 · 4 oct 2026
+    POSTECSA DE COLOMBIA S.A.S. · Compilación 38 · 15 oct 2026
   </div>
 </div>
 
@@ -449,7 +449,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="header-left">
       <img src="../assets/logo_postecsa.jpg" alt="POSTECSA" style="height:38px;object-fit:contain;border-radius:6px;">
       <div>
-        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 29</span></div>
+        <div class="header-title">SIVIL Comercial <span id="headerBuild" style="font-size:.6rem;font-weight:400;opacity:.55;vertical-align:middle;">Compilación 38</span></div>
         <div class="header-sub" id="headerSub">Cargando...</div>
       </div>
     </div>
@@ -1847,7 +1847,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // clave de esta compilación) para avisar a los vendedores de las novedades.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con las novedades de esa versión.
-const BUILD_ACTUAL = 37;
+const BUILD_ACTUAL = 38;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1856,16 +1856,13 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#1a3a5c;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">12 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">15 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>💲 <b>Precios y subtotales en pesos enteros</b>: el unitario resultante se aproxima al peso siguiente ($3.889,20 → $3.890)</li>
-      <li>🧮 <b>IVA sin decimales</b> con la norma legal: menos de 0,50 baja, 0,50 o más sube. Flete sin IVA si lo excluido supera el 50%</li>
-      <li>📝 <b>Pasos previos → Cotización → AP</b>: el número de AP se otorga al pulsar “Convertir en AP” en la cotización aprobada</li>
-      <li>🗂️ <b>Mis Cotizaciones</b> y <b>Mis APs</b> con búsqueda, fechas y último año</li>
-      <li>📦 <b>Despachos parciales por unidades</b> (ya no por %) y textos libres en pago y entrega</li>
-      <li>🚚 <b>Fletes adicionales</b> (gravado / no gravado), <b>topes de carga</b> con flete sugerido y nota de transporte en el PDF</li>
-      <li>🆕 <b>Nueva versión (A/B)</b> de una cotización; si tiene más de 90 días se debe crear una nueva antes de pasar a AP</li>
-      <li>📱 Vista horizontal mejorada en tablets</li>
+      <li>👥 <b>Nueva cotización</b>: primero se escoge con qué clientes trabajar (mis clientes, nuevo o listado general)</li>
+      <li>💳 Condiciones de pago con <b>OTRA</b> y <b>NINGUNA</b>; <b>OTRA observación</b> y <b>otro plazo de entrega</b> en texto libre</li>
+      <li>📅 <b>Vigencia y despachos</b> automáticos (+15 / +30 días) o manuales</li>
+      <li>🔒 <b>Observaciones internas</b>: privadas (no salen en el PDF), pasan a la AP y las ve Despacho</li>
+      <li>🚚 El <b>flete</b> en el PDF muestra viajes y valor unitario; al convertir en AP pasan flete, crédito y precios</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -4930,6 +4927,7 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+try { if (window.caches) caches.keys().then(function (ks) { var n = 0; ks.forEach(function (k) { var m = /^sivil-cache-v(\d+)$/.exec(k); if (m) n = Math.max(n, +m[1]); }); var e = document.getElementById('headerBuild'); if (e && n) e.textContent = 'Compilación ' + BUILD_ACTUAL + ' · v' + n; }); } catch (e) {}
 function mostrarAvisoActualizacion(reg) {
   if (document.getElementById('avisoActualizacionBanner')) return;
   const b = document.createElement('div');
