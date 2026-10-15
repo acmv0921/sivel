@@ -5197,9 +5197,13 @@ function czAplicarFlete() {
   document.getElementById('czFlete').value = t.sugerido; czTotales();
 }
 function czNotaTransp() {
+  var a = [];
+  if (CZ.nota_transp) a.push('Transporte: ' + CZ.nota_transp);
+  return a.join('\n');
+}
+function czNotaTranspAuto() {
   var t = czTransporte(), a = [];
   if (t.viajes > 1) a.push('TRANSPORTE: el despacho requiere ' + t.viajes + ' viajes por ' + (t.vp >= t.vv ? 'exceso de peso' : 'volumen (unidades por viaje)') + ' (peso estimado ' + Math.round(t.peso).toLocaleString('es-CO') + ' kg' + (t.tope ? ', capacidad por vehículo ' + t.tope.toLocaleString('es-CO') + ' kg' : '') + ').');
-  if (CZ.nota_transp) a.push('Transporte: ' + CZ.nota_transp);
   return a.join('\n');
 }
 function czSumas(T) {
@@ -5478,7 +5482,7 @@ async function czPDF(opts) {
     var r = T.lineas[i], vu = pUnit(r.precioDesc + r.estiba + r.fleteUnit), tot = r2(r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
     var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
   });
-  if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', '1', fmt(T.flete), fmt(T.flete), ''); }
+  if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); var _tv = czTransporte().viajes, _nv = (_tv > 1 && Math.round(T.flete) % _tv === 0) ? _tv : 1; filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', String(_nv), fmt(T.flete / _nv), fmt(T.flete), ''); }
   (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v > 0) { sumLin = r2(sumLin + v); filaTabla('', f.grav === 'G' ? 'G' : 'E', 'FLETE' + (f.desc ? ': ' + f.desc : ' adicional'), '', 'VIAJE', '1', fmt(v), fmt(v), ''); } });
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
