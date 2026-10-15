@@ -5611,9 +5611,10 @@ async function czPDF(opts) {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
   var cEnt = wrap(CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1] || '', 88), cPag = wrap(czTxtPago(), 88);
   var hCond = Math.max(28, 10 + Math.max(cEnt.length, cPag.length) * 3 + 3);
-  if (y + hCond + 55 > 272) { piePag(); doc.addPage(); y = 14; doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
+  if (y + hCond + 6 > 268) { piePag(); doc.addPage(); y = 14; doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); }
   box(M, y, (R - M) / 2, hCond); box(M + (R - M) / 2, y, (R - M) / 2, hCond); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(30, 60, 150); txt('Condiciones de Entrega', M + (R - M) / 4, y + 4.5, { align: 'center' }); txt('Condiciones de pago', M + 3 * (R - M) / 4, y + 4.5, { align: 'center' }); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
   txt(cEnt, M + 2, y + 10); txt(cPag, M + (R - M) / 2 + 2, y + 10); y += hCond + 6;
+  if (y + 56 > 272) { piePag(); doc.addPage(); y = 14; }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt('Los pagos parciales limitan la producción y se fabricará únicamente el valor del anticipo o del abono', W / 2, y, { align: 'center' }); y += 5;
   doc.setFontSize(8); txt('Favor realizar sus pagos a través de Transferencia o Consignación a nombre de', W / 2, y, { align: 'center' }); txt('POSTECSA DE COLOMBIA SAS', W / 2, y + 4, { align: 'center' }); y += 7;
   box(M, y, R - M, 11); doc.setFontSize(7); txt('Banco de COLOMBIA', M + 20, y + 4, { align: 'center' }); txt('Cuenta Ahorros  82900008335', M + 20, y + 8, { align: 'center' }); txt('Banco BOGOTA', M + 90, y + 4, { align: 'center' }); txt('Cuenta Corriente  256433533', M + 90, y + 8, { align: 'center' }); txt('Banco BBVA', M + 158, y + 4, { align: 'center' }); txt('Cuenta Corriente  0243021417', M + 158, y + 8, { align: 'center' }); y += 14;
