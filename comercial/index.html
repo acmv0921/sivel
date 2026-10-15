@@ -552,6 +552,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
       <div class="card">
         <div class="card-title">Productos</div>
+        <div id="czHistorico"></div>
         <div style="display:flex;gap:6px;margin-bottom:8px;"><input id="czProd" class="form-control" list="czProdDL" placeholder="Código o nombre del producto..."><button class="btn btn-primary" style="white-space:nowrap;" onclick="czAgregar()">➕ Agregar</button></div>
         <div id="czLineas"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
@@ -5000,6 +5001,48 @@ function czArmarClientesDL() {
   var t = document.getElementById('czModoCli');
   if (t) t.innerHTML = CZ_MODO_CLI ? '👥 Trabajando con: <b>' + (CZ_MODO_CLI === 'mis' ? 'mis clientes (' + lista.length + ')' : CZ_MODO_CLI === 'nuevo' ? 'cliente nuevo' : 'listado general (' + lista.length + ')') + '</b> · <a href="#" onclick="czAvisoClientes();return false;">cambiar</a>' : '';
 }
+// Histórico de lo cotizado antes al mismo cliente (precios y productos)
+var CZ_HIST_ABIERTO = false;
+function czHistLineas() {
+  var nit = String((CZ && CZ.cliente && CZ.cliente.nit) || ''); if (!nit) return [];
+  var out = [];
+  (CZ_LISTA || []).forEach(function (c) {
+    if (String(c.cliente_nit) !== nit || (CZ.uid && String(c.uid) === String(CZ.uid))) return;
+    var q; try { q = JSON.parse(c.payload); } catch (e) { return; }
+    if (!q || !q.lineas || !q.lineas.length) return;
+    var T; try { T = calcPedido(q.lineas, { llevaEstiba: q.estiba, conFlete: q.fleteModo !== 'NO' && q.flete > 0, flete: q.flete, incluido: q.fleteModo === 'INCLUIDO' }); } catch (e) { return; }
+    q.lineas.forEach(function (l, i) {
+      var r = T.lineas[i]; if (!r) return;
+      out.push({ fecha: c.fecha, numero: c.numero, estado: c.estado, tmcode: l.tmcode, desc: l.tmdescrip, und: l.tmund, cant: l.cantidad_solicitada, dto: l.descuento_aplicado, vu: pUnit(r.precioDesc + r.estiba + r.fleteUnit), grav: l.tipo_iva === 'G', linea: l });
+    });
+  });
+  out.sort(function (a, b) { var fa = parseFecha(a.fecha), fb = parseFecha(b.fecha); return (fb ? fb.getTime() : 0) - (fa ? fa.getTime() : 0); });
+  return out;
+}
+function czRenderHistorico() {
+  var box = document.getElementById('czHistorico'); if (!box) return;
+  var nit = String((CZ && CZ.cliente && CZ.cliente.nit) || '');
+  if (!nit) { box.innerHTML = ''; return; }
+  var h = czHistLineas();
+  if (!h.length) { box.innerHTML = '<div style="font-size:.76rem;color:#6b7280;margin-bottom:8px;">📜 Sin cotizaciones anteriores con este cliente.</div>'; return; }
+  var cab = '<button type="button" onclick="CZ_HIST_ABIERTO=!CZ_HIST_ABIERTO;czRenderHistorico()" style="width:100%;text-align:left;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:8px 10px;font-weight:700;font-size:.8rem;color:#1a3a5c;margin-bottom:8px;">📜 Histórico con este cliente (' + h.length + ' renglones) ' + (CZ_HIST_ABIERTO ? '▲' : '▼') + '</button>';
+  if (!CZ_HIST_ABIERTO) { box.innerHTML = cab; return; }
+  var vig = {}; czProductos().forEach(function (p) { vig[String(p.tmcode)] = parseFloat(p.precio_base) || 0; });
+  box.innerHTML = cab + '<div style="max-height:260px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;">' + h.slice(0, 60).map(function (x, i) {
+    var lh = vig[String(x.tmcode)];
+    return '<div style="padding:7px 9px;border-bottom:1px solid #eef2f7;font-size:.76rem;"><div style="display:flex;justify-content:space-between;gap:6px;"><b>' + czH(x.tmcode) + ' ' + czH(x.desc) + '</b><span style="color:#6b7280;white-space:nowrap;">' + czH(fmtFecha(x.fecha)) + '</span></div>' +
+      '<div style="color:#374151;">' + czH(x.numero) + ' · ' + czH(x.estado || '') + ' · ' + czH(x.cant) + ' ' + czH(x.und) + ' · <b>' + fmt(x.vu) + '</b>' + (x.grav ? ' + IVA' : '') + (x.dto ? ' · dto ' + (Math.round(x.dto * 10000) / 100) + '%' : '') + (lh ? ' · lista hoy ' + fmt(lh) : '') + '</div>' +
+      '<button type="button" onclick="czHistUsar(' + i + ')" style="margin-top:3px;border:1px solid #1a3a5c;background:#fff;color:#1a3a5c;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:700;">➕ Usar este producto (cantidad y descuento)</button></div>';
+  }).join('') + '</div>';
+}
+function czHistUsar(i) {
+  var x = czHistLineas()[i]; if (!x) return;
+  var p = czProductos().filter(function (q) { return String(q.tmcode) === String(x.tmcode); })[0];
+  if (!p) { toast('Ese producto ya no está en el inventario vigente'); return; }
+  czLeer();
+  CZ.lineas.push(czLineaDe({ tmcode: p.tmcode, tmdescrip: p.tmdescrip, tmund: p.tmund, tipo_iva: p.tipo_iva, precio_base: parseFloat(p.precio_base) || 0, cantidad_solicitada: x.cant, descuento_aplicado: x.dto }, p));
+  czRenderLineas(); toast('Producto agregado con precio de lista de hoy');
+}
 function czNuevaConAviso() { window._czRegistrando = false; czNueva(); czAvisoClientes(); }
 function czAvisoClientes() {
   var o = document.getElementById('czAvisoCli'); if (o) o.remove();
@@ -5060,6 +5103,7 @@ async function czCargarLista() {
   if (cont) cont.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando...</div>';
   try { CZ_LISTA = await leerGVIZ('COTIZACIONES'); } catch (e) { CZ_LISTA = []; }
   czRenderLista();
+  try { czRenderHistorico(); } catch (e) {}
 }
 function czRenderLista() {
   var cont = document.getElementById('czLista'); if (!cont) return;
@@ -5107,6 +5151,7 @@ function czAbrir(uid) {
 }
 function czMostrarForm() {
   czArmarClientesDL();
+  setTimeout(czRenderHistorico, 0);
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
   var T = CZ_TEXTOS, sel = function (arr, v, cero, tipo) { return (cero ? '<option value="0">— ninguna —</option>' : '') + arr.map(function (t, i) { if (((CZ_INACTIVOS[tipo] || {})[i + 1]) && v !== i + 1) return ''; return '<option value="' + (i + 1) + '" data-full="' + czH(t).replace(/"/g, '&quot;') + '"' + (v === i + 1 ? ' selected' : '') + '>' + (i + 1) + '. ' + czH(t.slice(0, 70)) + '</option>'; }).join(''); };
@@ -5190,6 +5235,7 @@ function czElegirCliente() {
   var ct = (STATE.contactos || []).filter(function (x) { return String(x.cliente_nit) === nit; });
   var p = ct.filter(function (x) { return x.es_principal === true || String(x.es_principal).toUpperCase() === 'TRUE'; })[0] || ct[0] || {};
   var set = function (id, val) { var e = document.getElementById(id); if (e && val != null) e.value = val; };
+  czRenderHistorico();
   set('czAtn', p.nombre_contacto || ''); set('czTel', p.telefono || c.telefono || ''); set('czCorreo', p.correo || ''); set('czDirOf', c.direccion || '');
   czVerNumero();
 }
