@@ -534,7 +534,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="czForm" style="display:none;">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-title" style="margin:0;">🧾 Cotización · <span id="czEstadoTxt"></span></div><button class="btn btn-outline btn-sm" onclick="czVolver()">← Volver</button></div>
-        <div class="form-group"><label>Número de cotización (manual)</label><input id="czNumero" class="form-control" placeholder="Ej: AF 123" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
+        <div class="form-group"><label>Número de cotización (automático)</label><input id="czNumero" class="form-control" placeholder="Se asigna solo al guardar: iniciales + consecutivo general" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
         <div style="font-size:.78rem;margin-bottom:6px;">Fecha: <b id="czFecha"></b></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><div class="form-group"><label>Vigencia de precios</label><select id="czVigModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 15 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czVig" class="form-control" type="date" style="margin-top:4px;"></div><div class="form-group"><label>Despachos hasta</label><select id="czDespModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 30 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czDesp" class="form-control" type="date" style="margin-top:4px;"></div></div>
       </div>
@@ -5147,10 +5147,11 @@ function czAbrir(uid) {
   var c = CZ_LISTA.filter(function (x) { return String(x.uid) === String(uid); })[0]; if (!c) return;
   try { CZ = JSON.parse(c.payload); } catch (e) { toast('No se pudo abrir la cotización'); return; }
   CZ.ap_id = c.ap_id || '';
-  CZ.uid = c.uid; CZ.estado = c.estado; czMostrarForm();
+  CZ.uid = c.uid; CZ.estado = c.estado; if (c.numero) CZ.numero = String(c.numero); czMostrarForm();
 }
 function czMostrarForm() {
   czArmarClientesDL();
+  (function () { var e = document.getElementById('czNumero'); if (!e) return; var rol = String((STATE.vendedor && STATE.vendedor.rol) || '').toUpperCase(); e.readOnly = !/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol); })();
   setTimeout(czRenderHistorico, 0);
   document.getElementById('czListaWrap').style.display = 'none';
   document.getElementById('czForm').style.display = 'block';
@@ -5337,9 +5338,10 @@ function czTotales() {
     f('Fletes adicionales', czExtras().sub) + f('IVA productos', T.ivaProductos) + f('IVA flete', T.ivaFlete) + f('IVA fletes adicionales', czExtras().iva) + '<div style="display:flex;justify-content:space-between;font-size:1rem;border-top:1px solid #ccc;margin-top:4px;padding-top:4px;"><span>TOTAL A PAGAR</span><b>' + fmt(czSumas(T).total) + '</b></div>';
 }
 function czPayload() { czLeer(); var T = calcPedido(CZ.lineas, czCfg()); return { T: T }; }
+var CZ_INICIALES_PROPIAS = '';
+function czIniciales() { return CZ_INICIALES_PROPIAS || ''; }
 async function czGuardar(estado, confirmarDup, sinRespaldo) {
   czLeer();
-  if (!CZ.numero) { toast('Escribe el número de cotización'); return false; }
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
   if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
   if (CZ.pago === 99 && !CZ.pago_libre) { toast('Elegiste OTRA condición de pago: escribe la condición en el recuadro'); return false; }
@@ -5350,12 +5352,19 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
   if (CZ._respaldoAP) estado = 'Aceptada';
   var body = { accion: 'guardarCotizacion', uid: CZ.uid, numero: CZ.numero, fecha: CZ.fecha, vendedor_id: CZ.vendedor_id, cliente_nit: CZ.cliente.nit, cliente_nombre: CZ.cliente.nombre, obra: CZ.cliente.obra,
     vigencia: CZ.vigencia, despachos_hasta: CZ.despachos_hasta, subtotal: czSumas(T).subt, iva: czSumas(T).iva, total: czSumas(T).total, estado: estado || CZ.estado || 'Borrador', payload: datos, confirmar_duplicado: !!confirmarDup, ap_id: CZ.ap_id || CZ._respaldoAP || '' };
+  if (!CZ.numero) { body.auto_numero = true; var _ini = czIniciales(); if (_ini) body.iniciales = _ini; }
   var r = await escribirGAS(body);
   if (r && r.duplicado) {
     if (confirm('⚠️ El número ' + CZ.numero + ' ya fue usado en la cotización de ' + r.existente.cliente + ' (' + fmtFecha(r.existente.fecha) + ').\n\n¿Guardar de todas formas con el mismo número?')) return czGuardar(estado, true, sinRespaldo);
     return false;
   }
+  if (r && r.needs_iniciales) {
+    var _n = (window.prompt('Es tu primera cotización: escribe las INICIALES que llevarán tus números (ej: AF, EG, JJL):') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+    if (!_n) { toast('Sin iniciales no se puede asignar el número'); return false; }
+    CZ_INICIALES_PROPIAS = _n; return czGuardar(estado, confirmarDup, sinRespaldo);
+  }
   if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); return false; }
+  if (r && r.numero && !CZ.numero) { CZ.numero = r.numero; var _en = document.getElementById('czNumero'); if (_en) _en.value = r.numero; }
   if (r && r.uid) CZ.uid = r.uid; if (estado) CZ.estado = estado;
   if (CZ._desdePedido && STATE.pedido) {
     STATE.pedido.cotizacion_ref = CZ.numero; var _r = document.getElementById('cotizacionRef'); if (_r) _r.value = CZ.numero;
