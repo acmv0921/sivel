@@ -5554,7 +5554,7 @@ async function czPDF(opts) {
   var txt = function (s, x, yy, o) { doc.text(Array.isArray(s) ? s : String(s == null ? '' : s), x, yy, o || {}); };
   var box = function (x, yy, w, h) { doc.rect(x, yy, w, h); };
   var wrap = function (s, w) { return doc.splitTextToSize(String(s || ''), w); };
-  var piePag = function () { doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(60); txt('Despachos: Vía Cali – Cencar – Aeropuerto, Vereda Piles Km 2 Tel. (2) 521 70 32 Cel. 316 502 0568', W / 2, 287, { align: 'center' }); txt('www.postecsa.com - ventas@postecsa.com', W / 2, 290.5, { align: 'center' }); doc.setTextColor(0); };
+  var piePag = function () { doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(60); txt('www.postecsa.com - comercial@postecsa.com', W / 2, 289, { align: 'center' }); doc.setTextColor(0); };
   doc.setLineWidth(0.25); doc.setDrawColor(0);
   // Encabezado
   if (logo1) doc.addImage(logo1, 'JPEG', M, 8, 42, 14.7);
