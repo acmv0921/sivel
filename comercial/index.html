@@ -5322,6 +5322,7 @@ function czRenderLineas() {
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="form-control" type="number" inputmode="decimal" min="0" step="any" value="' + l.cantidad_solicitada + '" oninput="czEdit(' + i + ',\'cant\',this.value)" placeholder="Cantidad">' +
       '<input class="form-control" type="number" inputmode="decimal" min="0" max="100" step="any" value="' + (Math.round(l.descuento_aplicado * 10000) / 100 || '') + '" oninput="czEdit(' + i + ',\'desc\',this.value)" placeholder="% descuento"></div>' +
       '<select class="form-control" style="margin-top:6px;font-size:.74rem;" onchange="czEdit(' + i + ',\'plazo\',this.value)">' + CZ_TEXTOS.plazo.map(function (t, k) { if ((CZ_INACTIVOS.plazo || {})[k + 1] && (l.plazo || 1) !== k + 1) return ''; return '<option value="' + (k + 1) + '"' + ((l.plazo || 1) === k + 1 ? ' selected' : '') + '>Plazo ' + (k + 1) + ': ' + czH(t.slice(0, 60)) + '</option>'; }).join('') + '</select>' +
+      '<div style="font-size:.72rem;color:#445;margin-top:4px;line-height:1.3;">' + czH(l.plazo_libre || CZ_TEXTOS.plazo[(l.plazo || 1) - 1] || '') + '</div>' +
       '<input class="form-control" style="margin-top:4px;font-size:.74rem;" placeholder="OTRO plazo de entrega (opcional, reemplaza el de arriba)" value="' + czH(l.plazo_libre || '') + '" oninput="czEdit(' + i + ',\'plazo_libre\',this.value)">' +
       '<div id="czL' + i + '" style="font-size:.76rem;margin-top:6px;color:#1a3a5c;"></div></div>';
   }).join('') : '<div style="text-align:center;color:#888;font-size:.8rem;padding:.5rem;">Agrega productos con el buscador</div>';
@@ -5595,13 +5596,14 @@ async function czPDF(opts) {
   (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v > 0) { sumLin = r2(sumLin + v); filaTabla('', f.grav === 'G' ? 'G' : 'E', 'FLETE' + (f.desc ? ': ' + f.desc : ' adicional'), '', 'VIAJE', '1', fmt(v), fmt(v), ''); } });
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
-  var _obT = [czObsTxt(0), czObsTxt(1), CZ.nota, czNotaTransp()].filter(Boolean).join('\n'); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-  var _obH = Math.max(26, wrap(_obT, 118).length * 3 + 12);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+  var _obItems = [czObsTxt(0), czObsTxt(1), CZ.nota, czNotaTransp()].map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+  var _obLin = []; _obItems.forEach(function (it, k) { var pre = (k + 1) + '.  '; wrap(it.replace(/\s*\n\s*/g, ' '), 112).forEach(function (ln, j) { _obLin.push((j === 0 ? pre : '      ') + ln); }); });
+  var _obH = Math.max(26, _obLin.length * 3 + 12);
   if (y + 7 + _obH > 262) { piePag(); doc.addPage(); y = 14; }
   y += 7; var yObs = y;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(200, 0, 0); txt('OBSERVACIONES:', M, y + 3); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-  var ob = [czObsTxt(0), czObsTxt(1), CZ.nota, czNotaTransp()].filter(Boolean).join('\n');
-  var ol = wrap(ob, 118); txt(ol, M, y + 8); var hObs = Math.max(26, ol.length * 3 + 12);
+  var ol = _obLin; txt(ol, M, y + 8); var hObs = Math.max(26, ol.length * 3 + 12);
   var bx = 135, put = function (e, v, yy, bold) { doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(e, bx + 2, yy); doc.setFont('helvetica', bold ? 'bold' : 'normal'); txt(v, R - 2, yy, { align: 'right' }); };
   box(bx, y, R - bx, 24); doc.line(bx, y + 8, R, y + 8); doc.line(bx, y + 16, R, y + 16); put('SUBTOTAL', fmt(subt), y + 5); put('IVA 19%', fmt(ivaT), y + 13); put('TOTAL A PAGAR', fmt(tot), y + 21, true);
   y += Math.max(hObs, 26) + 2;
