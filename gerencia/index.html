@@ -1131,7 +1131,6 @@ function verLogSandbox() {
 const GAS_URL  = "https://script.google.com/macros/s/AKfycbyokqX6vLzefzVVOhnETZa6zPHo8DJj6-0mJuMZ1JjPsFNACib_WFeLqgg2Cs_ibp2gzQ/exec";
 const SHEET_ID = "1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 const GVIZ     = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
-const PIN_GERENCIA = "GER2025";
 
 let G = {
   usuario:null, vendedor:null,
@@ -1145,6 +1144,30 @@ restaurarSesionGuardada();
 // =============================================================================
 // LOGIN
 // =============================================================================
+// ===== Ingreso verificado en el SERVIDOR (Seguridad Fase 1, 16 oct 2026) =====
+// El PIN ya no se compara en el navegador: se envía al backend, que responde ok/error
+// y entrega un "pase" firmado (se guarda para que las demás apps lo reutilicen).
+async function loginServidor(correo, pin) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ accion: 'login', correo: correo, pin: pin }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const r = await resp.json();
+    if (r && r.ok && r.pase) {
+      try { localStorage.setItem('sivil_pase', JSON.stringify({ pase: r.pase, correo: correo, ts: Date.now() })); } catch(e) {}
+    }
+    return r || { ok: false, error: 'Respuesta vacía del servidor' };
+  } catch (e) {
+    return { ok: false, error: 'Sin conexión con el servidor: ' + e.message };
+  }
+}
+
 async function hacerLogin() {
   const correo = document.getElementById('loginCorreo').value.trim().toLowerCase();
   const pin    = document.getElementById('loginPin').value.trim();
@@ -1167,12 +1190,10 @@ async function hacerLogin() {
       err.textContent = '❌ Usuario inactivo'; return;
     }
     
-    // Validar PIN individual (con fallback a PINs anteriores)
-    const pinGuardado = String(usuario.pin_individual || usuario.pin || '').trim();
+    // Validar PIN en el SERVIDOR (el PIN ya no viaja al navegador)
     const esSuperusuario = ["acmv0921@gmail.com","gerencia@postecsa.com"].indexOf(correo) >= 0;
-    if (pin !== pinGuardado) {
-      err.textContent = '❌ PIN incorrecto'; return;
-    }
+    const rLogin = await loginServidor(correo, pin);
+    if (!rLogin.ok) { err.textContent = '❌ ' + (rLogin.error || 'PIN incorrecto'); return; }
     
     // Validar rol (superusuarios pasan siempre)
     const rol = String(usuario.rol || usuario.cargo || '').trim();
@@ -1330,7 +1351,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 5;
+const BUILD_ACTUAL = 6;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1339,10 +1360,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#14532d;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">16 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>💲 Los valores del informe y de los KPI llevan <b>2 decimales</b> y se <b>truncan</b> (68,794 queda en 68,79)</li>
-      <li>🧾 Nuevo módulo <b>Cotiz.</b>: embudo de cotizaciones (enviadas, aceptadas, perdidas con motivo) y edición de los textos de pago, entrega, plazo y observaciones</li>
+      <li>🔐 <b>Ingreso más seguro:</b> tu PIN ahora se verifica en el servidor y ya no se descarga al teléfono. Entras igual, con tu correo y tu PIN</li>
+      <li>⏳ Después de <b>5 intentos fallidos</b> con un correo, hay que esperar 15 minutos</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;

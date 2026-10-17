@@ -77,6 +77,7 @@ function doPost(e) {
       case "actualizarFuncionario": resultado = actualizarFuncionario(body); break;
       case "guardarInformePDF": resultado = guardarInformePDF(body); break;
       case "actualizarVendedor": resultado = actualizarVendedor(body); break;
+      case "login": resultado = login(body); break;   // Seguridad Fase 1 (gas/seguridad.gs)
       case "crearUsuario": resultado = crearUsuario(body); break;
       case "actualizarUsuario": resultado = actualizarUsuario(body); break;
       case "crearCliente": resultado = crearCliente(body); break;
@@ -621,10 +622,11 @@ function crearUsuario(body) {
   }
   const reg = {
     id_usuario: maxId + 1, cedula: body.cedula || "", nombre_completo: nombre, correo: correo,
-    pin_individual: pin, rol: rol, estado: "ACTIVO", cargo: body.cargo || "",
+    pin_individual: (segActiva() ? "" : pin), rol: rol, estado: "ACTIVO", cargo: body.cargo || "",
     creado_por: body.creado_por || "", fecha_creacion: new Date(), celular: body.celular || ""
   };
   u.hoja.appendRow(u.hdrs.map(h => reg[h] !== undefined ? reg[h] : ""));
+  if (segActiva()) _segGuardarPin(correo, pin);   // el PIN vive solo en el Sheet privado (con hash)
   return { ok: true, mensaje: "Usuario creado", id_usuario: reg.id_usuario };
 }
 function actualizarUsuario(body) {
@@ -639,7 +641,8 @@ function actualizarUsuario(body) {
       const pin = String(body.pin_individual || "").trim();
       if (pin) {
         if (pin.length < 4) return { ok: false, error: "La clave debe tener al menos 4 caracteres" };
-        u.hoja.getRange(i + 1, u.hdrs.indexOf("pin_individual") + 1).setValue(pin);
+        if (segActiva()) _segGuardarPin(correo, pin);   // Sheet privado (con hash)
+        else u.hoja.getRange(i + 1, u.hdrs.indexOf("pin_individual") + 1).setValue(pin);
       }
       return { ok: true, mensaje: "Usuario actualizado" };
     }

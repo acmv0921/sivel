@@ -20,11 +20,7 @@ const SIVEL_CONFIG = {
     VERDE:    { min: 11,  label: "Disponible",       color: "#1a7a4a" },
     AMARILLO: { min: 1,   label: "Stock Bajo",        color: "#856404" },
     ROJO:     { min: -Infinity, label: "Agotado",     color: "#b91c1c" }
-  },
-
-  // Passwords de acceso (se pueden cambiar desde Gerencia)
-  PASS: {
-    SUPERVISOR: "POST2025",
-    GERENCIA:   "GER2025"
   }
+  // Las claves de acceso ya NO viven en el código (16 oct 2026): el ingreso
+  // se verifica en el servidor (login en gas/seguridad.gs).
 };

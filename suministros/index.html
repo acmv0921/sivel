@@ -572,6 +572,30 @@ function togglePin() {
 }
 
 // ─── AUTENTICACIÓN ──────────────────────────────────────────
+// ===== Ingreso verificado en el SERVIDOR (Seguridad Fase 1, 16 oct 2026) =====
+// El PIN ya no se compara en el navegador: se envía al backend, que responde ok/error
+// y entrega un "pase" firmado (se guarda para que las demás apps lo reutilicen).
+async function loginServidor(correo, pin) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify({ accion: 'login', correo: correo, pin: pin }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const r = await resp.json();
+    if (r && r.ok && r.pase) {
+      try { localStorage.setItem('sivil_pase', JSON.stringify({ pase: r.pase, correo: correo, ts: Date.now() })); } catch(e) {}
+    }
+    return r || { ok: false, error: 'Respuesta vacía del servidor' };
+  } catch (e) {
+    return { ok: false, error: 'Sin conexión con el servidor: ' + e.message };
+  }
+}
+
 async function hacerLogin() {
   const correo = document.getElementById('loginCorreo').value.trim();
   const pin    = document.getElementById('loginPin').value.trim();
@@ -590,12 +614,19 @@ async function hacerLogin() {
 
     const usuario = usuarios.find(u =>
       u.correo?.toLowerCase() === correo.toLowerCase() &&
-      u.pin_individual === pin &&
       u.estado === 'ACTIVO'
     );
 
     if (!usuario) {
       document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+
+    // Validar PIN en el SERVIDOR (el PIN ya no viaja al navegador)
+    const rLogin = await loginServidor(correo, pin);
+    if (!rLogin.ok) {
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('loginError').textContent = '❌ ' + (rLogin.error || 'PIN incorrecto');
       return;
     }
 
@@ -1133,7 +1164,7 @@ async function enviarReceta() {
 let _guardandoReceta = false;
 
 // ─── AVISO DE NOVEDADES POR COMPILACIÓN ─────────────────────
-const BUILD_ACTUAL = 2;
+const BUILD_ACTUAL = 3;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_suministros_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) { return; }
@@ -1143,9 +1174,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:1.3rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;">🎉</div>
     <div style="font-weight:800;color:#4c1d95;font-size:1.05rem;margin:.3rem 0 .2rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">9 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">16 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>📅 Todas las fechas se muestran como <b>día/mes/año</b> (dd/mm/aaaa), también al escribirlas en las notas de compra</li>
+      <li>🔐 <b>Ingreso más seguro:</b> tu PIN ahora se verifica en el servidor y ya no se descarga al teléfono. Entras igual, con tu correo y tu PIN</li>
+      <li>⏳ Después de <b>5 intentos fallidos</b> con un correo, hay que esperar 15 minutos</li>
     </ul>
     <button id="btnCerrarAvisoUpdate" style="width:100%;background:#4c1d95;color:#fff;border:none;border-radius:10px;padding:.8rem;font-weight:800;cursor:pointer;">Entendido</button>
   </div>`;
