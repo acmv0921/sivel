@@ -1176,13 +1176,18 @@ async function hacerLogin() {
       card.style.display = 'block';
     }
     
+    // El administrador ya validó su PIN al entrar: no se le vuelve a pedir clave
+    // para gestionar usuarios (16 oct 2026).
+    if (correo === ADMIN_EMAIL || rol === 'ADMIN') {
+      _esAdmin = true;
+      try { sessionStorage.setItem('sivel_admin', '1'); } catch(e) {}
+    }
+
     // ADMIN entra automáticamente en MODO PRUEBA (igual que Comercial y Despacho),
     // para poder hacer ejercicios completos sin afectar datos reales.
     // Puede salir del modo prueba manualmente con el botón "Salir del modo prueba".
-    if (correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
-      activarSandbox();
-      console.log('ADMIN logueado — modo prueba activado automáticamente');
-    }
+    // (16 oct 2026) El modo prueba YA NO se activa solo: el administrador hace cambios reales
+    // en Gerencia. Se puede activar a mano con el botón "Activar modo prueba".
 
     // Persistir sesión (fix BUG-02): así el reload automático del Service
     // Worker tras una actualización no expulsa al usuario a login.
@@ -1241,8 +1246,9 @@ async function restaurarSesionGuardada() {
     G.usuario  = guardada.correo;
     G.vendedor = usuario;
 
-    if (guardada.correo === 'acmv0921@gmail.com' && typeof activarSandbox === 'function') {
-      activarSandbox();
+    if (guardada.correo === ADMIN_EMAIL || rol === 'ADMIN') {
+      _esAdmin = true;
+      try { sessionStorage.setItem('sivel_admin', '1'); } catch(e) {}
     }
 
     iniciarApp();
