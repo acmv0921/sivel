@@ -77,6 +77,8 @@ function doPost(e) {
       case "actualizarFuncionario": resultado = actualizarFuncionario(body); break;
       case "guardarInformePDF": resultado = guardarInformePDF(body); break;
       case "actualizarVendedor": resultado = actualizarVendedor(body); break;
+      case "crearUsuario": resultado = crearUsuario(body); break;
+      case "actualizarUsuario": resultado = actualizarUsuario(body); break;
       case "crearCliente": resultado = crearCliente(body); break;
       case "actualizarCliente": resultado = actualizarCliente(body); break;
       case "recibirLoteDatax": resultado = recibirLoteDatax(body); break;
@@ -592,6 +594,57 @@ function actualizarVendedor(body) {
     }
   }
   return { ok: false, error: "Vendedor no encontrado" };
+}
+
+// ===== Usuarios del sistema (USUARIOS_MAESTRO) - 16 oct 2026 =====
+// Crea o edita un usuario con rol, cargo, celular y clave. NUNCA cambia la clave de un usuario
+// existente a menos que se envie pin_individual con un valor.
+function _usuariosHoja() {
+  const hoja = getHoja("USUARIOS_MAESTRO");
+  const datos = hoja.getDataRange().getValues();
+  const hdrs = datos[0].map(h => String(h).trim());
+  return { hoja: hoja, datos: datos, hdrs: hdrs };
+}
+function crearUsuario(body) {
+  const u = _usuariosHoja();
+  const correo = String(body.correo || "").trim().toLowerCase();
+  const nombre = String(body.nombre_completo || "").trim();
+  const pin = String(body.pin_individual || "").trim();
+  const rol = String(body.rol || "").trim().toUpperCase();
+  if (!correo || !nombre || !rol) return { ok: false, error: "Faltan datos: nombre, correo y rol" };
+  if (pin.length < 4) return { ok: false, error: "La clave debe tener al menos 4 caracteres" };
+  const colCorreo = u.hdrs.indexOf("correo"), colId = u.hdrs.indexOf("id_usuario");
+  let maxId = 0;
+  for (let i = 1; i < u.datos.length; i++) {
+    if (String(u.datos[i][colCorreo]).trim().toLowerCase() === correo) return { ok: false, error: "Ya existe un usuario con ese correo" };
+    const n = Number(u.datos[i][colId]); if (n > maxId) maxId = n;
+  }
+  const reg = {
+    id_usuario: maxId + 1, cedula: body.cedula || "", nombre_completo: nombre, correo: correo,
+    pin_individual: pin, rol: rol, estado: "ACTIVO", cargo: body.cargo || "",
+    creado_por: body.creado_por || "", fecha_creacion: new Date(), celular: body.celular || ""
+  };
+  u.hoja.appendRow(u.hdrs.map(h => reg[h] !== undefined ? reg[h] : ""));
+  return { ok: true, mensaje: "Usuario creado", id_usuario: reg.id_usuario };
+}
+function actualizarUsuario(body) {
+  const u = _usuariosHoja();
+  const correo = String(body.correo || "").trim().toLowerCase();
+  const colCorreo = u.hdrs.indexOf("correo");
+  for (let i = 1; i < u.datos.length; i++) {
+    if (String(u.datos[i][colCorreo]).trim().toLowerCase() === correo) {
+      ["nombre_completo", "cedula", "rol", "cargo", "celular", "estado"].forEach(function (c) {
+        if (body[c] !== undefined && body[c] !== "" && u.hdrs.indexOf(c) >= 0) u.hoja.getRange(i + 1, u.hdrs.indexOf(c) + 1).setValue(c === "rol" ? String(body[c]).toUpperCase() : body[c]);
+      });
+      const pin = String(body.pin_individual || "").trim();
+      if (pin) {
+        if (pin.length < 4) return { ok: false, error: "La clave debe tener al menos 4 caracteres" };
+        u.hoja.getRange(i + 1, u.hdrs.indexOf("pin_individual") + 1).setValue(pin);
+      }
+      return { ok: true, mensaje: "Usuario actualizado" };
+    }
+  }
+  return { ok: false, error: "Usuario no encontrado" };
 }
 
 function getClientes(vendedor_id) {
