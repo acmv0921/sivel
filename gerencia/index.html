@@ -591,6 +591,30 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input id="vendCorreo" class="form-control" type="email" placeholder="joseduardo@postecsa.com">
     </div>
     <div class="form-group">
+      <label class="form-label">Rol (a qué apps entra) *</label>
+      <select id="vendRol" class="form-control">
+        <option value="VENDEDOR">VENDEDOR — Comercial</option>
+        <option value="JEFE_VENTAS">JEFE_VENTAS — Comercial y Gerencia</option>
+        <option value="DESPACHADOR">DESPACHADOR — Despacho</option>
+        <option value="SUMINISTROS">SUMINISTROS — Suministros</option>
+        <option value="GERENTE">GERENTE — todas las apps</option>
+        <option value="ADMIN">ADMIN — todas las apps</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cargo</label>
+      <input id="vendCargo" class="form-control" placeholder="Asesor comercial">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Celular</label>
+      <input id="vendCelular" class="form-control" type="tel" placeholder="3001234567">
+    </div>
+    <div class="form-group">
+      <label class="form-label" id="vendPinLabel">Clave de entrada (PIN) *</label>
+      <input id="vendPin" class="form-control" type="text" autocomplete="off" placeholder="Mínimo 4 caracteres">
+      <div id="vendPinAyuda" style="font-size:.68rem;color:#888;margin-top:3px;"></div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Estado</label>
       <select id="vendEstado" class="form-control">
         <option value="Activo">Activo</option>
@@ -1391,6 +1415,9 @@ async function cargarDatos() {
       leerGVIZ("VEHICULOS"),
       leerGVIZ("APROBACIONES").catch(()=>[])
     ]);
+    // Usuarios con acceso (para editar rol/cargo/celular sin tocar claves; el PIN no se guarda en memoria)
+    try { G.usuariosMaestro = (await leerGVIZ("USUARIOS_MAESTRO")).map(u => ({correo:u.correo, rol:u.rol, cargo:u.cargo, celular:u.celular})); }
+    catch(e) { G.usuariosMaestro = []; }
     // Defensivo: si la hoja APROBACIONES tiene encabezados pero cero filas de
     // datos, GVIZ a veces malinterpreta la fila de encabezado como si fuera
     // un registro (columnas A,B,C... en vez de los nombres reales), lo que
@@ -2218,12 +2245,19 @@ function renderFlota() {
 
 function abrirModalVendedor(vend=null) {
   if (!_esAdmin) { abrirLoginAdmin(); return; }
+  const um = (G.usuariosMaestro || []).find(u => String(u.correo||'').toLowerCase().trim() === String(vend?.correo_usuario||'').toLowerCase().trim()) || {};
   document.getElementById('vendId').value     = vend?.id_vendedor||'';
   document.getElementById('vendNombre').value = vend?.nombre_vendedor||'';
   document.getElementById('vendCorreo').value = vend?.correo_usuario||'';
   document.getElementById('vendEstado').value = vend?.estado||'Activo';
+  document.getElementById('vendRol').value    = um.rol || 'VENDEDOR';
+  document.getElementById('vendCargo').value  = um.cargo || vend?.cargo || '';
+  document.getElementById('vendCelular').value= um.celular || '';
+  document.getElementById('vendPin').value    = '';
+  document.getElementById('vendPinLabel').textContent = vend ? 'Clave de entrada (PIN)' : 'Clave de entrada (PIN) *';
+  document.getElementById('vendPinAyuda').textContent = vend ? 'Déjala vacía para NO cambiar la clave actual del usuario.' : 'Esta es la clave con la que el usuario entrará a las apps.';
   document.getElementById('vendErr').textContent='';
-  document.getElementById('modalVendTitle').textContent = vend ? 'Editar Vendedor' : 'Nuevo Vendedor';
+  document.getElementById('modalVendTitle').textContent = vend ? 'Editar usuario' : 'Nuevo usuario';
   document.getElementById('modalVendedor').dataset.editId = vend?.id_vendedor||'';
   document.getElementById('modalVendedor').classList.add('show');
 }
@@ -2237,22 +2271,51 @@ let _guardandoVendedor = false;
 async function guardarVendedor() {
   if (_guardandoVendedor) return;
   if (!_esAdmin) { toast("⛔ Solo el Administrador puede gestionar usuarios"); return; }
-  const id     = document.getElementById('vendId').value.trim();
-  const nombre = document.getElementById('vendNombre').value.trim();
-  const correo = document.getElementById('vendCorreo').value.trim().toLowerCase();
-  const estado = document.getElementById('vendEstado').value;
-  const err    = document.getElementById('vendErr');
-  if (!id||!nombre||!correo) { err.textContent="Todos los campos son obligatorios"; return; }
+  const id      = document.getElementById('vendId').value.trim();
+  const nombre  = document.getElementById('vendNombre').value.trim();
+  const correo  = document.getElementById('vendCorreo').value.trim().toLowerCase();
+  const estado  = document.getElementById('vendEstado').value;
+  const rol     = document.getElementById('vendRol').value;
+  const cargo   = document.getElementById('vendCargo').value.trim();
+  const celular = document.getElementById('vendCelular').value.trim();
+  const pin     = document.getElementById('vendPin').value.trim();
+  const err     = document.getElementById('vendErr');
+  if (!id||!nombre||!correo) { err.textContent="Cédula, nombre y correo son obligatorios"; return; }
   const editId = document.getElementById('modalVendedor').dataset.editId;
+  if (!editId && pin.length < 4) { err.textContent="Escribe una clave de entrada de al menos 4 caracteres"; return; }
+  if (pin && pin.length < 4) { err.textContent="La clave debe tener al menos 4 caracteres"; return; }
   _guardandoVendedor = true;
   err.textContent="Guardando...";
+  const falla = r => r && r.ok === false ? (r.error || 'Error del servidor') : '';
   try {
+    let e1 = '';
     if (editId) {
-      await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
-      toast("✅ Vendedor actualizado");
+      let r = await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
+      e1 = falla(r);
+      const existeUM = (G.usuariosMaestro || []).some(u => String(u.correo||'').toLowerCase().trim() === correo);
+      if (existeUM) {
+        const datosU = {accion:'actualizarUsuario',correo,nombre_completo:nombre,cedula:id,rol,cargo,celular,estado:estado==='Activo'?'ACTIVO':'INACTIVO'};
+        if (pin) datosU.pin_individual = pin;   // solo si se escribió una clave nueva
+        r = await escribirGAS(datosU);
+        e1 = e1 || falla(r);
+      } else if (pin) {
+        // el usuario solo estaba en la lista antigua de vendedores: se le crea el acceso con la clave escrita
+        r = await escribirGAS({accion:'crearUsuario',correo,nombre_completo:nombre,cedula:id,rol,cargo,celular,pin_individual:pin,creado_por:G.usuario||''});
+        e1 = e1 || falla(r);
+      }
+      if (e1) { err.textContent = '❌ ' + e1; return; }
+      toast("✅ Usuario actualizado");
     } else {
-      await escribirGAS({accion:'crearVendedor',id_vendedor:id,nombre_vendedor:nombre,correo_usuario:correo,estado});
-      toast("✅ Vendedor creado");
+      let r = await escribirGAS({accion:'crearUsuario',correo,nombre_completo:nombre,cedula:id,rol,cargo,celular,pin_individual:pin,creado_por:G.usuario||''});
+      e1 = falla(r);
+      if (e1) { err.textContent = '❌ ' + e1; return; }
+      if (rol === 'VENDEDOR' || rol === 'JEFE_VENTAS') {
+        // los asesores también van en la lista de vendedores (APs, informes, asignación de clientes)
+        r = await escribirGAS({accion:'crearVendedor',id_vendedor:id,nombre_vendedor:nombre,correo_usuario:correo,estado});
+        e1 = falla(r);
+        if (e1) { err.textContent = '❌ El usuario se creó, pero no se pudo agregar a vendedores: ' + e1; return; }
+      }
+      toast("✅ Usuario creado: ya puede entrar con su correo y clave");
     }
     cerrarModal('modalVendedor');
     await cargarDatos();
