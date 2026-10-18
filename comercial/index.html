@@ -3312,7 +3312,19 @@ lineas.forEach(function (l, i) {
 });
 
 if (msg) {
-  if (hayFlete && P.flete_incluido === 'SI') {
+  if (hayFlete && P.flete_incluido === 'NO') {
+    // Flete facturado aparte: solo informativo (solicitud de Despacho, 18 oct 2026): mostrar cuántos viajes hacen falta.
+    const capN = capacidadViajes(lineas, 1);
+    P._viajesNecesarios = capN.minViajes;
+    let t = '🚛 Flete facturado aparte: se necesitan ' + capN.minViajes + ' viaje(s) para este pedido (' + Math.round(capN.fraccion * 1000) / 10 + '% de un viaje lleno).';
+    if (capN.detalle.length > 1 || capN.sinDato.length) {
+      t += '\nCupo que ocupa cada producto en un viaje lleno:';
+      capN.detalle.forEach(function (d) { t += '\n• ' + d.nombre + ': ' + fmtNum(d.cant) + ' de ' + fmtNum(d.cap) + ' ' + d.und + ' por viaje = ' + (Math.round(d.pct * 10) / 10) + '%'; });
+    }
+    if (capN.pesoTotal > 0) t += '\nPeso total del pedido: ' + fmtNum(Math.round(capN.pesoTotal)) + ' kg.';
+    if (capN.sinDato.length) t += '\n(Sin dato de unidades por viaje: ' + capN.sinDato.join(', ') + ')';
+    msg.textContent = t; msg.style.whiteSpace = 'pre-line'; msg.style.display = 'block'; msg.style.color = '#1d4ed8';
+  } else if (hayFlete && P.flete_incluido === 'SI') {
     const cap = capacidadViajes(lineas, P.num_viajes);
     P._capExcede = cap.excede;
     const pct = Math.round(cap.fraccion * 100);
@@ -4087,7 +4099,7 @@ transportista_flete: STATE.pedido.transportista_flete || '',
 flete_negociado: !!STATE.pedido.flete_negociado,
 flete_incorporado: !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked),
 flete_contra_entrega: !!(document.getElementById('fleteContraEntregaCheck') && document.getElementById('fleteContraEntregaCheck').checked),
-numero_viajes: STATE.pedido.flete_incluido === 'SI' ? STATE.pedido.num_viajes : '',
+numero_viajes: STATE.pedido.flete_incluido === 'SI' ? STATE.pedido.num_viajes : (STATE.pedido.flete_incluido === 'NO' && STATE.pedido._viajesNecesarios ? STATE.pedido._viajesNecesarios : ''),
 lleva_estiba: STATE.pedido.lleva_estiba || '',
 flete_gravado: (STATE.pedido._totales && STATE.pedido.flete_valor > 0) ? (STATE.pedido._totales.flete_gravado ? 'SI' : 'NO') : '',
 fecha_entrega: STATE.pedido.fecha_entrega || '',
