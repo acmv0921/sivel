@@ -486,6 +486,8 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <button class="btn btn-primary btn-sm" onclick="abrirModalPrecio()">➕ Nuevo precio</button>
       <button class="btn btn-sm" style="background:var(--naranja);color:#fff;margin-left:.4rem;" onclick="abrirNuevoProducto()">🆕 Nuevo producto</button>
       <button class="btn btn-sm" style="background:#fff;color:var(--rojo);border:1.5px solid var(--rojo);margin-left:.4rem;" onclick="abrirElimProducto()">🗑️ Eliminar producto</button>
+      <button class="btn btn-sm" id="btnListaPrecios" style="background:var(--verde);color:#fff;margin-left:.4rem;margin-top:.4rem;" onclick="abrirListaPrecios()">📤 Subir lista de precios</button>
+      <input id="buscarPrecios" class="form-control" style="margin-top:.6rem;" placeholder="🔍 Buscar por código o nombre..." oninput="renderPrecios()">
     </div>
     <div id="listaPrecios"><div class="loading"><div class="spinner"></div></div></div>
   </div>
@@ -580,7 +582,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="modalNuevoProd" class="modal-overlay">
   <div class="modal-box" style="max-width:560px;">
     <button class="modal-close" onclick="cerrarModal('modalNuevoProd')">✕</button>
-    <div class="modal-title">🆕 Nuevo producto</div>
+    <div class="modal-title" id="npTitulo">🆕 Nuevo producto</div>
     <p style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Se registra en el catálogo y en la tabla de precios. Todas las aplicaciones (Comercial, Despacho, Suministros) lo verán de inmediato.</p>
 
     <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.4rem 0;">1. Identificación</div>
@@ -588,9 +590,9 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="form-group"><label class="form-label">Nombre del producto * (ej. BLOQUE AV 20X10X8 BEIGE OSCURO BIC)</label><input id="npNombre" class="form-control" type="text" placeholder="TIPO MEDIDAS COLOR LÍNEA" oninput="npCalc()"><div id="npParecidos" style="font-size:.66rem;color:#666;margin-top:.2rem;"></div></div>
     <div class="form-group"><label class="form-label">Unidad de medida *</label><select id="npUnd" class="form-control" onchange="npCalc()"><option value="UND">UND (unidad)</option><option value="ML">ML (metro lineal)</option><option value="UNDS">UNDS</option></select></div>
     <div class="form-group"><label class="form-label">¿Lo fabrica POSTECSA o es de terceros (reventa)? *</label><select id="npTercero" class="form-control" onchange="npCalc()"><option value="no">Fabricado por POSTECSA</option><option value="si">De terceros (reventa)</option></select></div>
-    <div class="form-group"><label class="form-label">Existencia inicial</label><input id="npStock" class="form-control" type="number" min="0" value="0"></div>
+    <div class="form-group npSoloNuevo"><label class="form-label">Existencia inicial</label><input id="npStock" class="form-control" type="number" min="0" value="0"></div>
     <div class="form-group"><label class="form-label">Stock mínimo (opcional)</label><input id="npStockMin" class="form-control" type="number" min="0" placeholder="vacío si no aplica"></div>
-    <div class="form-group"><label style="font-size:.8rem;"><input id="npSegunda" type="checkbox"> También se maneja en calidad SEGUNDA (crea una segunda fila en el catálogo)</label></div>
+    <div class="form-group npSoloNuevo"><label style="font-size:.8rem;"><input id="npSegunda" type="checkbox"> También se maneja en calidad SEGUNDA (crea una segunda fila en el catálogo)</label></div>
 
     <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.8rem 0 .4rem;">2. Precio e impuestos</div>
     <div class="form-group"><label class="form-label">Precio base por unidad, sin IVA ($) *</label><input id="npPrecio" class="form-control" type="number" min="0" oninput="npCalc()"></div>
@@ -617,7 +619,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div style="font-weight:800;color:var(--azul,#1a3a5c);font-size:.8rem;margin:.8rem 0 .3rem;">Vista previa (lo que se va a guardar)</div>
     <div id="npPreview" style="background:#f6f8fb;border-radius:10px;padding:.7rem;font-size:.74rem;line-height:1.5;"></div>
     <div id="npAlertas" style="font-size:.72rem;color:#b45309;margin-top:.5rem;"></div>
-    <button class="btn btn-primary" id="npBtn" style="margin-top:.8rem;" onclick="guardarNuevoProducto()">💾 Revisar y guardar producto</button>
+    <button class="btn btn-primary" id="npBtn" style="margin-top:.8rem;" onclick="(NP_EDIT ? guardarEdicionProducto() : guardarNuevoProducto())">💾 Revisar y guardar producto</button>
     <div id="npErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
   </div>
 </div>
@@ -635,6 +637,26 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="form-group" id="epConfWrap" style="display:none;"><label class="form-label">Para confirmar, escribe de nuevo el código</label><input id="epConfirma" class="form-control" type="number" inputmode="numeric" oninput="epBuscar()"></div>
     <button class="btn" id="epBtn" style="background:var(--rojo);color:#fff;" disabled onclick="eliminarProductoGerencia()">🗑️ Eliminar definitivamente</button>
     <div id="epErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
+  </div>
+</div>
+
+<!-- MODAL: SUBIR LISTA DE PRECIOS -->
+<div id="modalListaPrecios" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;">
+    <button class="modal-close" onclick="cerrarModal('modalListaPrecios')">✕</button>
+    <div class="modal-title">📤 Subir lista de precios</div>
+    <p style="font-size:.72rem;color:#666;margin-bottom:.6rem;">Actualiza de una vez los precios de muchos productos. Todas las aplicaciones (Comercial, Despacho) los verán de inmediato. Se guarda el historial de cada cambio de precio.</p>
+    <div style="background:#f6f8fb;border-radius:10px;padding:.7rem;font-size:.74rem;line-height:1.5;margin-bottom:.7rem;">
+      <b>1.</b> Descargue la plantilla con los precios actuales.<br>
+      <b>2.</b> Cambie los valores de la columna <b>precio_base</b> (y descuento o fletes si lo necesita). No cambie el código.<br>
+      <b>3.</b> Suba el archivo: verá una vista previa con cada cambio antes de aplicarlo.
+      <div style="margin-top:.5rem;"><button class="btn btn-outline btn-sm" onclick="lpPlantilla()">⬇️ Descargar plantilla (Excel)</button></div>
+    </div>
+    <div class="form-group"><label class="form-label">Archivo con la lista (Excel o CSV)</label><input id="lpArchivo" class="form-control" type="file" accept=".xlsx,.xls,.csv" onchange="lpLeer(this)"></div>
+    <div id="lpResumen" style="font-size:.76rem;margin:.5rem 0;"></div>
+    <div id="lpTabla" style="max-height:38vh;overflow:auto;font-size:.72rem;"></div>
+    <button class="btn btn-primary" id="lpBtn" style="margin-top:.8rem;display:none;" onclick="lpAplicar()">✅ Aplicar cambios</button>
+    <div id="lpMsg" style="font-size:.75rem;margin-top:.5rem;"></div>
   </div>
 </div>
 
@@ -2020,12 +2042,29 @@ function poblarSelectProductos() {
 
 function renderPrecios() {
   const cont = document.getElementById('listaPrecios');
-  if (!G.precios.length) {
+  const q = String(document.getElementById('buscarPrecios')?.value || '').trim().toLowerCase();
+  const hoy = new Date();
+  const conPrecio = new Set(G.precios.map(x => String(x.tmcode)));
+  const sinPrecio = (G.productos || []).filter(p => String(p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA' && !conPrecio.has(String(p.tmcode)));
+  const coincide = (cod, nom) => !q || String(cod).includes(q) || String(nom).toLowerCase().includes(q);
+  if (!G.precios.length && !sinPrecio.length) {
     cont.innerHTML='<div class="card" style="text-align:center;color:#888;">Sin políticas de precio</div>';
     return;
   }
-  const hoy = new Date();
-  cont.innerHTML = G.precios.map(p => {
+  const tarjetasSin = sinPrecio.filter(p => coincide(p.tmcode, p.tmdescrip)).map(p => `
+    <div class="card" style="margin-bottom:.5rem;padding:1rem;border-left:4px solid var(--naranja);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="min-width:0;"><div style="font-size:.68rem;color:#888;font-weight:700;">COD ${p.tmcode}</div>
+          <div style="font-weight:700;font-size:.85rem;">${p.tmdescrip}</div>
+          <div style="font-size:.7rem;color:#b45309;">⚠️ Sin precio asignado — use Editar para asignarlo</div></div>
+        <button class="btn btn-outline btn-sm" onclick="abrirEditarProducto('${p.tmcode}')">✏️ Editar</button>
+      </div></div>`).join('');
+  const filtrados = G.precios.filter(p => {
+    const prod = G.productos.find(x=>String(x.tmcode)===String(p.tmcode));
+    return coincide(p.tmcode, prod ? prod.tmdescrip : (p.tmdescrip || ''));
+  });
+  if (!filtrados.length && !tarjetasSin) { cont.innerHTML='<div class="card" style="text-align:center;color:#888;">Sin resultados</div>'; return; }
+  cont.innerHTML = tarjetasSin + filtrados.map(p => {
     const prod   = G.productos.find(x=>String(x.tmcode)===String(p.tmcode));
     const nombre = prod?prod.tmdescrip:`Código ${p.tmcode}`;
     const fHasta = parseFecha(p.fecha_vigencia_fin);
@@ -2041,7 +2080,7 @@ function renderPrecios() {
             Desc. max: <strong>${(parseFloat(p.descuento_max_vendedor)||0)*100}%</strong>
           </div>
           <div style="font-size:.7rem;color:#888;">
-            Flete A: ${fmt(p.costo_flete_unidad_zonaA)} · B: ${fmt(p.costo_flete_unidad_zonaB)}${(parseFloat(p.precio_m2)||0) > 0 ? ' · m²: ' + fmt(p.precio_m2) : ''}
+            Flete A: ${fmt(p.costo_flete_zonaA)} · B: ${fmt(p.costo_flete_zonaB)}${(parseFloat(p.precio_m2)||0) > 0 ? ' · m²: ' + fmt(p.precio_m2) : ''}
           </div>
           <div style="font-size:.68rem;color:#888;margin-top:2px;">
             Vigente hasta: ${fHasta ? fmtFecha(fHasta) : 'Sin límite'}
@@ -2049,7 +2088,7 @@ function renderPrecios() {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
           <span class="sem ${vigente?'sem-verde':'sem-rojo'}">${vigente?'✅ Vigente':'⛔ Vencida'}</span>
-          <button class="btn btn-outline btn-sm" onclick="abrirEditPrecio(${JSON.stringify(p).replace(/"/g,"'")})">✏️ Editar</button>
+          <button class="btn btn-outline btn-sm" onclick="abrirEditarProducto('${p.tmcode}')">✏️ Editar</button>
         </div>
       </div>
     </div>`;
@@ -2099,6 +2138,10 @@ async function guardarPrecio() {
 // NUEVO PRODUCTO — alta completa (PRODUCTOS_MAESTRO + PRECIOS_GERENCIA)
 // =============================================================================
 function abrirNuevoProducto() {
+  NP_EDIT = null; NP_ORIG = null;
+  document.getElementById('npTitulo').textContent = '🆕 Nuevo producto'; document.getElementById('npCodigo').readOnly = false;
+  document.querySelectorAll('#modalNuevoProd .npSoloNuevo').forEach(function (e) { e.style.display = ''; });
+  document.getElementById('npBtn').textContent = '💾 Revisar y guardar producto';
   ['npCodigo','npNombre','npStockMin','npPrecio','npPeso','npUm2','npUEst','npVEst','npUViaje','npFleteV','npFA','npFB'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('npStock').value = '0';
   document.getElementById('npUnd').value = 'UND'; document.getElementById('npTercero').value = 'no'; document.getElementById('npIva').value = 'E';
@@ -2137,7 +2180,7 @@ function npCalc() {
   var d = npDatos(), fab = !d.es_tercero, f = function (n) { return n === '' ? '<span style="color:#aaa">—</span>' : Number(n).toLocaleString('es-CO'); };
   document.getElementById('npBloqueFab').style.display = fab ? '' : 'none';
   var ex = (G.productos || []).find(function (p) { return String(p.tmcode) === d.tmcode; });
-  document.getElementById('npCodAviso').innerHTML = !d.tmcode ? '' : ex ? '<span style="color:#b91c1c">⛔ Ese código ya existe: ' + ex.tmdescrip + '</span>' : '<span style="color:#15803d">✓ Código disponible</span>';
+  if (!NP_EDIT) document.getElementById('npCodAviso').innerHTML = !d.tmcode ? '' : ex ? '<span style="color:#b91c1c">⛔ Ese código ya existe: ' + ex.tmdescrip + '</span>' : '<span style="color:#15803d">✓ Código disponible</span>';
   var pal = d.tmdescrip.split(' ').slice(0, 2).join(' ');
   var par = pal.length > 3 ? (G.productos || []).filter(function (p) { return String(p.tmdescrip).toUpperCase().indexOf(pal) === 0 && String(p.calidad || 'PRIMERA') === 'PRIMERA'; }).slice(0, 3) : [];
   document.getElementById('npParecidos').innerHTML = par.length ? 'Parecidos en el catálogo: ' + par.map(function (p) { return p.tmcode + ' ' + p.tmdescrip + ' ($' + Number(p.precio_base || 0).toLocaleString('es-CO') + ')'; }).join(' · ') : '';
@@ -2222,6 +2265,185 @@ async function eliminarProductoGerencia() {
     else if (_SANDBOX) { cerrarModal('modalElimProd'); }
     else { err.style.color = ''; err.textContent = (res && /Acci[oó]n desconocida/i.test(res.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel.' : ((res && res.error) || 'No se pudo eliminar. Intenta de nuevo.'); epBuscar(); }
   } finally { _eliminandoProd = false; }
+}
+
+
+// =============================================================================
+// EDITAR PRODUCTO COMPLETO (mismas características que al crearlo)
+// =============================================================================
+var NP_EDIT = null, NP_ORIG = null;
+function _iso(v) { var d = parseFecha(v); return d ? d.getFullYear() + '-' + _p2(d.getMonth() + 1) + '-' + _p2(d.getDate()) : ''; }
+function _setNP(id, v) { var e = document.getElementById(id); if (e) e.value = (v === null || v === undefined) ? '' : v; }
+function abrirEditarProducto(cod) {
+  cod = String(cod);
+  var filas = (G.productos || []).filter(function (x) { return String(x.tmcode) === cod; });
+  var pr = filas.filter(function (x) { return String(x.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA'; })[0] || filas[0];
+  if (!pr) { toast('No se encontró el producto ' + cod); return; }
+  var pre = (G.precios || []).filter(function (x) { return String(x.tmcode) === cod; })[0] || {};
+  abrirNuevoProducto();
+  NP_EDIT = cod;
+  document.getElementById('npTitulo').textContent = '✏️ Editar producto ' + cod;
+  document.querySelectorAll('#modalNuevoProd .npSoloNuevo').forEach(function (e) { e.style.display = 'none'; });
+  document.getElementById('npCodigo').readOnly = true;
+  document.getElementById('npBtn').textContent = '💾 Revisar y guardar cambios';
+  var n = function (v) { var x = parseFloat(v); return isNaN(x) ? '' : x; };
+  var uest = n(pr.unidades_por_estiba), ve = n(pr.valor_estiba_unidad);
+  var tercero = String(pr.es_tercero).toLowerCase() === 'true' || /TERCERO/i.test(String(pr.observacion || ''));
+  _setNP('npCodigo', cod); _setNP('npNombre', pr.tmdescrip); _setNP('npUnd', String(pr.tmund || 'UND').toUpperCase());
+  _setNP('npTercero', tercero ? 'si' : 'no'); _setNP('npStockMin', n(pr.stock_minimo));
+  _setNP('npPrecio', n(pre.precio_base_planta) !== '' ? n(pre.precio_base_planta) : n(pr.precio_base));
+  _setNP('npIva', String(pr.tipo_iva || 'E').toUpperCase() === 'G' ? 'G' : 'E');
+  _setNP('npDescM', n(pr.descuento_max) !== '' ? Math.round(n(pr.descuento_max) * 1000) / 10 : 5);
+  _setNP('npDescV', n(pre.descuento_max_vendedor) !== '' ? Math.round(n(pre.descuento_max_vendedor) * 1000) / 10 : 3);
+  _setNP('npDesde', _iso(pre.fecha_vigencia_inicio) || new Date().toISOString().split('T')[0]); _setNP('npHasta', _iso(pre.fecha_vigencia_fin) || '2099-12-31');
+  _setNP('npPeso', n(pr.peso_kg_unitario)); _setNP('npUm2', n(pr.unidades_por_m2)); _setNP('npUEst', uest);
+  _setNP('npVEst', (uest && ve) ? Math.round(ve * uest) : ''); _setNP('npUViaje', n(pr.unidades_por_viaje)); _setNP('npFleteV', n(pr.flete_total_viaje_cali));
+  _setNP('npFA', n(pre.costo_flete_zonaA)); _setNP('npFB', n(pre.costo_flete_zonaB));
+  npCalc(); NP_ORIG = npDatos();
+  document.getElementById('npCodAviso').innerHTML = '<span style="color:#2563a8">✏️ Está editando este producto (el código no se puede cambiar)</span>';
+}
+var NP_ETIQ = { tmdescrip: 'Nombre', tmund: 'Unidad', es_tercero: 'Fabricado/terceros', stock_minimo: 'Stock mínimo', precio_base: 'Precio base', tipo_iva: 'IVA', descuento_max: 'Desc. catálogo', descuento_max_vendedor: 'Desc. vendedor', fecha_vigencia_inicio: 'Vigencia desde', fecha_vigencia_fin: 'Vigencia hasta', peso_kg_unitario: 'Peso (kg)', unidades_por_m2: 'Unid. por m²', unidades_por_estiba: 'Unid. por estiba', valor_estiba_unidad: 'Estiba por unidad', unidades_por_viaje: 'Unid. por viaje', flete_total_viaje_cali: 'Tarifa viaje', costo_flete_zonaA: 'Flete zona A', costo_flete_zonaB: 'Flete zona B' };
+function npCambios(d) {
+  var out = [];
+  Object.keys(NP_ETIQ).forEach(function (k) {
+    var a = NP_ORIG[k], b = d[k]; if (a === undefined) a = ''; if (b === undefined) b = '';
+    if (typeof a === 'number' && typeof b === 'number') { if (Math.abs(a - b) < 1e-9) return; } else if (String(a) === String(b)) return;
+    var f = function (v) { return v === '' ? '—' : (typeof v === 'number' ? v.toLocaleString('es-CO') : String(v)); };
+    out.push(NP_ETIQ[k] + ': ' + f(a) + ' → ' + f(b));
+  });
+  return out;
+}
+async function guardarEdicionProducto() {
+  if (_guardandoProd) return;
+  var d = npDatos(), err = document.getElementById('npErr'); err.textContent = ''; err.style.color = '';
+  if (d.tmdescrip.length < 5) { err.textContent = 'Escribe el nombre completo del producto.'; return; }
+  if (!(d.precio_base > 0)) { err.textContent = 'El precio base es obligatorio.'; return; }
+  var cambios = npCambios(d);
+  if (!cambios.length) { err.textContent = 'No hay cambios para guardar.'; return; }
+  if (!confirm('Se actualizará ' + d.tmcode + ' — ' + d.tmdescrip + '\n\n' + cambios.join('\n') + '\n\nEl cambio lo verán todas las aplicaciones. ¿Guardar?')) return;
+  // no se envían los datos calculados que no se pueden calcular (se conserva lo que ya tiene el producto)
+  ['valor_estiba_unidad', 'peso_total_viaje_kg', 'flete_cali', 'precio_m2', 'flete_m2', 'estibas_por_viaje'].forEach(function (k) { if (d[k] === '') delete d[k]; });
+  delete d.tmcant; delete d.segunda; delete d.observacion;
+  if (d.es_tercero) d.observacion = 'PRODUCTO DE TERCEROS - compra a proveedor externo para reventa';
+  else if (NP_ORIG.es_tercero) d.observacion = '';
+  _guardandoProd = true; var btn = document.getElementById('npBtn'); btn.disabled = true; err.style.color = '#555'; err.textContent = 'Guardando...';
+  try {
+    var r = await escribirGAS({ accion: 'actualizarProductoCompleto', producto: d, usuario: (G.usuario && G.usuario.nombre_completo) || (typeof G.usuario === 'string' ? G.usuario : '') });
+    if (r && r.ok) {
+      cerrarModal('modalNuevoProd'); toast('✅ Producto ' + d.tmcode + ' actualizado en todas las apps' + ((r.omitidas_por_formula || []).length ? ' (algunos campos calculados por fórmula no se tocaron)' : ''), 5000); await cargarDatos();
+    } else if (_SANDBOX) { cerrarModal('modalNuevoProd'); }
+    else { err.style.color = ''; err.textContent = (r && /Acci[oó]n desconocida/i.test(r.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel para activarla.' : ((r && r.error) || 'No se pudo guardar.'); }
+  } finally { _guardandoProd = false; btn.disabled = false; }
+}
+
+// =============================================================================
+// SUBIR LISTA DE PRECIOS (Excel/CSV) con vista previa
+// =============================================================================
+var LP = { items: [], nombre: '' };
+function abrirListaPrecios() {
+  LP = { items: [], nombre: '' };
+  document.getElementById('lpArchivo').value = ''; document.getElementById('lpResumen').innerHTML = ''; document.getElementById('lpTabla').innerHTML = '';
+  document.getElementById('lpMsg').textContent = ''; document.getElementById('lpBtn').style.display = 'none';
+  document.getElementById('modalListaPrecios').classList.add('show');
+}
+function lpPlantilla() {
+  if (typeof XLSX === 'undefined') { toast('No se cargó la librería de Excel (¿sin conexión?)'); return; }
+  var filas = (G.precios || []).map(function (x) {
+    var pr = (G.productos || []).filter(function (p) { return String(p.tmcode) === String(x.tmcode); })[0] || {};
+    return { codigo: Number(x.tmcode), producto: pr.tmdescrip || x.tmdescrip || '', unidad: pr.tmund || x.tmund || '', precio_base: Number(x.precio_base_planta) || 0, 'desc_vendedor_%': Math.round((Number(x.descuento_max_vendedor) || 0) * 1000) / 10, flete_zona_A: Number(x.costo_flete_zonaA) || 0, flete_zona_B: Number(x.costo_flete_zonaB) || 0 };
+  });
+  var ws = XLSX.utils.json_to_sheet(filas); ws['!cols'] = [{ wch: 8 }, { wch: 46 }, { wch: 7 }, { wch: 13 }, { wch: 15 }, { wch: 13 }, { wch: 13 }];
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Precios');
+  XLSX.writeFile(wb, 'SIVIL_Lista_de_precios_' + new Date().toISOString().split('T')[0] + '.xlsx');
+}
+function _lpNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9%]/g, ''); }
+function _lpNum(v) {
+  if (v === null || v === undefined || v === '') return NaN;
+  if (typeof v === 'number') return v;
+  var t = String(v).replace(/[$\s]/g, '');
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
+  else t = t.replace(',', '.');
+  var x = parseFloat(t); return isNaN(x) ? NaN : x;
+}
+function lpLeer(inp) {
+  var f = inp.files && inp.files[0]; if (!f) return;
+  if (typeof XLSX === 'undefined') { toast('No se cargó la librería de Excel (¿sin conexión?)'); return; }
+  LP.nombre = f.name;
+  var rd = new FileReader();
+  rd.onload = function (e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      var filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: true });
+      lpProcesar(filas);
+    } catch (er) { document.getElementById('lpResumen').innerHTML = '<span style="color:#b91c1c">❌ No se pudo leer el archivo: ' + er.message + '</span>'; }
+  };
+  rd.readAsArrayBuffer(f);
+}
+function lpProcesar(filas) {
+  var H = -1, col = {};
+  var alias = { codigo: ['codigo', 'cod', 'tmcode', 'code', 'cdigo'], precio: ['preciobase', 'precio', 'preciobaseplanta', 'preciounitario', 'valor', 'precionuevo', 'preciobase'], desc: ['descvendedor%', 'descuentovendedor%', 'descuentomaxvendedor', 'descuentomaxvendedor%', 'descvendedor', 'descuento', 'descuentovendedor', 'desc%'], fa: ['fletezonaa', 'fletea', 'costofletezonaa'], fb: ['fletezonab', 'fleteb', 'costofletezonab'] };
+  for (var i = 0; i < Math.min(filas.length, 15) && H < 0; i++) {
+    var m = {}; filas[i].forEach(function (c, j) { var k = _lpNorm(c); Object.keys(alias).forEach(function (a) { if (m[a] === undefined && alias[a].indexOf(k) >= 0) m[a] = j; }); });
+    if (m.codigo !== undefined && m.precio !== undefined) { H = i; col = m; col.descPct = m.desc !== undefined && /%/.test(String(filas[i][m.desc])); }
+  }
+  var res = document.getElementById('lpResumen'), tabla = document.getElementById('lpTabla'), btn = document.getElementById('lpBtn');
+  btn.style.display = 'none'; tabla.innerHTML = '';
+  if (H < 0) { res.innerHTML = '<span style="color:#b91c1c">❌ No encontré las columnas <b>codigo</b> y <b>precio_base</b>. Use la plantilla (botón "Descargar plantilla").</span>'; return; }
+  var cat = {}; (G.productos || []).forEach(function (p) { if (String(p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA') cat[String(p.tmcode)] = p; });
+  var pre = {}; (G.precios || []).forEach(function (x) { pre[String(x.tmcode)] = x; });
+  var cambios = [], iguales = 0, noExiste = [], malos = [], vistos = {};
+  for (var r = H + 1; r < filas.length; r++) {
+    var fila = filas[r]; var cod = String(fila[col.codigo] === undefined ? '' : fila[col.codigo]).trim().replace(/\.0$/, '');
+    if (!cod && fila.every(function (c) { return c === ''; })) continue;
+    var precio = _lpNum(fila[col.precio]);
+    if (!/^\d+$/.test(cod)) { malos.push((cod || '(sin código)') + ' fila ' + (r + 1)); continue; }
+    if (vistos[cod]) { malos.push(cod + ' repetido'); continue; } vistos[cod] = 1;
+    if (!(precio > 0)) { malos.push(cod + ' sin precio válido'); continue; }
+    if (!cat[cod]) { noExiste.push(cod); continue; }
+    var x = pre[cod] || {}, ant = Number(x.precio_base_planta) || Number(cat[cod].precio_base) || 0;
+    var it = { tmcode: cod, nombre: cat[cod].tmdescrip, ant: ant, precio_base: precio, sinPrecio: !pre[cod] };
+    var cambia = ant !== precio;
+    if (col.desc !== undefined) { var dv = _lpNum(fila[col.desc]); if (!isNaN(dv)) { dv = (col.descPct || dv > 1) ? dv / 100 : dv; if (dv >= 0 && dv <= 0.5) { it.descuento_max_vendedor = Math.round(dv * 10000) / 10000; if (Math.abs((Number(x.descuento_max_vendedor) || 0) - it.descuento_max_vendedor) > 1e-9) cambia = true; } } }
+    if (col.fa !== undefined) { var a = _lpNum(fila[col.fa]); if (!isNaN(a) && a >= 0) { it.costo_flete_zonaA = a; if ((Number(x.costo_flete_zonaA) || 0) !== a) cambia = true; } }
+    if (col.fb !== undefined) { var b = _lpNum(fila[col.fb]); if (!isNaN(b) && b >= 0) { it.costo_flete_zonaB = b; if ((Number(x.costo_flete_zonaB) || 0) !== b) cambia = true; } }
+    it.pct = ant ? (precio - ant) / ant * 100 : null;
+    if (cambia) cambios.push(it); else iguales++;
+  }
+  LP.items = cambios;
+  var fuertes = cambios.filter(function (c) { return c.pct !== null && Math.abs(c.pct) > 30; }).length;
+  res.innerHTML = '<b>' + cambios.length + '</b> producto(s) con cambios · ' + iguales + ' sin cambio' + (noExiste.length ? ' · <span style="color:#b45309">' + noExiste.length + ' código(s) que no existen: ' + noExiste.slice(0, 8).join(', ') + (noExiste.length > 8 ? '…' : '') + ' (se omiten)</span>' : '') + (malos.length ? '<br><span style="color:#b91c1c">' + malos.length + ' fila(s) inválidas (se omiten): ' + malos.slice(0, 5).join('; ') + (malos.length > 5 ? '…' : '') + '</span>' : '') + (fuertes ? '<br><span style="color:#b45309">⚠️ ' + fuertes + ' cambio(s) de más de 30 %: revíselos antes de aplicar.</span>' : '');
+  if (!cambios.length) { tabla.innerHTML = '<div style="color:#666;padding:.5rem;">No hay precios distintos a los actuales.</div>'; return; }
+  tabla.innerHTML = '<table style="width:100%;border-collapse:collapse;"><tr style="background:#eef1f5;text-align:left;"><th style="padding:4px;">Código</th><th>Producto</th><th style="text-align:right;">Antes</th><th style="text-align:right;">Nuevo</th><th style="text-align:right;">%</th></tr>' +
+    cambios.slice(0, 300).map(function (c) {
+      var alerta = c.pct !== null && Math.abs(c.pct) > 30;
+      return '<tr style="border-bottom:1px solid #eee;' + (alerta ? 'background:#fff7ed;' : '') + '"><td style="padding:4px;">' + c.tmcode + '</td><td>' + c.nombre + (c.sinPrecio ? ' <span style="color:#b45309">(sin precio previo)</span>' : '') + '</td><td style="text-align:right;">' + (c.ant ? c.ant.toLocaleString('es-CO') : '—') + '</td><td style="text-align:right;font-weight:700;">' + c.precio_base.toLocaleString('es-CO') + '</td><td style="text-align:right;' + (alerta ? 'color:#b45309;font-weight:700;' : '') + '">' + (c.pct === null ? '—' : (c.pct > 0 ? '+' : '') + c.pct.toFixed(1) + '%') + '</td></tr>';
+    }).join('') + '</table>' + (cambios.length > 300 ? '<div style="padding:.4rem;color:#666;">…y ' + (cambios.length - 300) + ' más (se aplicarán todos).</div>' : '');
+  btn.textContent = '✅ Aplicar ' + cambios.length + ' cambio(s)'; btn.style.display = '';
+}
+var _lpAplicando = false;
+async function lpAplicar() {
+  if (_lpAplicando || !LP.items.length) return;
+  if (!confirm('Se actualizarán los precios de ' + LP.items.length + ' producto(s).\n\nLos verán todos los vendedores y Despacho. Cada cambio queda en el historial de precios.\n\n¿Aplicar?')) return;
+  _lpAplicando = true; var btn = document.getElementById('lpBtn'), msg = document.getElementById('lpMsg'); btn.disabled = true; msg.style.color = '#555';
+  var tot = { actualizados: 0, sin_cambio: 0, no_encontrados: [], invalidos: [], omitidas: {} }, fallo = '';
+  try {
+    for (var i = 0; i < LP.items.length; i += 150) {
+      var trozo = LP.items.slice(i, i + 150).map(function (c) { var o = { tmcode: c.tmcode, precio_base: c.precio_base }; ['descuento_max_vendedor', 'costo_flete_zonaA', 'costo_flete_zonaB'].forEach(function (k) { if (c[k] !== undefined) o[k] = c[k]; }); return o; });
+      msg.textContent = 'Aplicando ' + Math.min(i + 150, LP.items.length) + ' de ' + LP.items.length + '…';
+      var r = await escribirGAS({ accion: 'actualizarPreciosMasivo', items: trozo, usuario: (G.usuario && G.usuario.nombre_completo) || (typeof G.usuario === 'string' ? G.usuario : ''), origen: 'lista de precios (' + LP.nombre + ')' });
+      if (_SANDBOX) { break; }
+      if (!r || !r.ok) { fallo = (r && /Acci[oó]n desconocida/i.test(r.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel para activarla.' : ((r && r.error) || 'No se pudo guardar.'); break; }
+      tot.actualizados += r.actualizados || 0; tot.sin_cambio += r.sin_cambio || 0;
+      tot.no_encontrados = tot.no_encontrados.concat(r.no_encontrados || []); tot.invalidos = tot.invalidos.concat(r.invalidos || []);
+      (r.omitidas_por_formula || []).forEach(function (k) { tot.omitidas[k] = 1; });
+    }
+    if (fallo) { msg.style.color = '#b91c1c'; msg.textContent = '❌ ' + fallo + (tot.actualizados ? ' (ya se habían aplicado ' + tot.actualizados + ' antes del error)' : ''); }
+    else {
+      msg.style.color = '#15803d'; msg.innerHTML = '✅ Listo: ' + tot.actualizados + ' producto(s) actualizado(s).' + (tot.no_encontrados.length ? '<br>No encontrados: ' + tot.no_encontrados.join(', ') : '') + (Object.keys(tot.omitidas).length ? '<br><span style="color:#b45309">Columnas con fórmula que no se tocaron: ' + Object.keys(tot.omitidas).join(', ') + '</span>' : '');
+      btn.style.display = 'none'; LP.items = []; toast('✅ Lista de precios aplicada en todas las apps', 4500); await cargarDatos();
+    }
+  } finally { _lpAplicando = false; btn.disabled = false; }
 }
 
 function abrirEditPrecio(p) {

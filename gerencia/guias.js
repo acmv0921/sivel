@@ -25,6 +25,36 @@ window.GUIAS_GERENCIA = [
     ]
   },
   {
+    id: 'editar-producto', icono: '✏️', titulo: 'Editar un producto',
+    resumen: 'Cambiar cualquier característica: nombre, precio, peso, estibas, viajes, fletes...',
+    pasos: [
+      { titulo: 'Ubique el producto', ir: 'screenPrecios', boton: 'Ir a Precios', resaltar: '#buscarPrecios',
+        texto: 'En <b>Precios</b> use el buscador (código o nombre). Los productos sin precio aparecen primero con una marca naranja.' },
+      { titulo: 'Pulse ✏️ Editar',
+        texto: 'Se abre el <b>mismo formulario</b> de "Nuevo producto", con los datos actuales. El <b>código no se puede cambiar</b> y las existencias no se tocan (se manejan en inventario).' },
+      { titulo: 'Cambie lo que necesite', resaltar: '#npPrecio',
+        texto: 'Puede cambiar nombre, unidad, IVA, precio, descuentos, vigencia, peso, unidades por m² y por estiba, valor de la estiba, unidades por viaje, tarifa del viaje y fletes por zona. Los valores calculados (precio por m², flete por unidad, peso del viaje) se recalculan solos.' },
+      { titulo: 'Revise y guarde', resaltar: '#npBtn',
+        texto: 'Pulse <b>💾 Revisar y guardar cambios</b>. El sistema le muestra <b>solo lo que cambió</b> (ej. "Precio base: 1.720 → 1.800") y pide confirmación. Comercial y Despacho muestran un aviso con el cambio a sus usuarios.' }
+    ]
+  },
+  {
+    id: 'lista-precios', icono: '📤', titulo: 'Subir una lista de precios',
+    resumen: 'Actualizar muchos precios a la vez desde Excel, con vista previa.',
+    pasos: [
+      { titulo: 'Abra "Subir lista de precios"', ir: 'screenPrecios', abrir: 'abrirListaPrecios', boton: 'Abrir "Subir lista de precios"',
+        texto: 'Está en <b>Precios → 📤 Subir lista de precios</b>.' },
+      { titulo: 'Descargue la plantilla',
+        texto: 'Pulse <b>⬇️ Descargar plantilla (Excel)</b>. Trae todos los productos con su precio actual: <b>codigo, producto, unidad, precio_base, desc_vendedor_%, flete_zona_A, flete_zona_B</b>.' },
+      { titulo: 'Edite el Excel',
+        texto: 'Cambie la columna <b>precio_base</b> de los productos que suben o bajan (y descuento o fletes si lo necesita). <b>No cambie el código.</b> Puede dejar los demás como están: solo se aplican los que cambian.' },
+      { titulo: 'Suba el archivo', resaltar: '#lpArchivo',
+        texto: 'Elija el archivo. Verá la <b>vista previa</b>: cuántos productos cambian, cada precio anterior y nuevo con su porcentaje, y los códigos que no existen. Los cambios de <b>más de 30 %</b> se marcan en naranja: revíselos, puede ser un error de digitación.' },
+      { titulo: 'Aplique los cambios', resaltar: '#lpBtn',
+        texto: 'Pulse <b>✅ Aplicar</b> y confirme. Los precios nuevos los ven de inmediato Comercial y Despacho (con un aviso) y cada cambio queda en la hoja <b>HISTORIAL_PRECIOS</b> con fecha y usuario.' }
+    ]
+  },
+  {
     id: 'eliminar-producto', icono: '🗑️', titulo: 'Eliminar un producto',
     resumen: 'Borrado seguro con confirmación y copia de respaldo.',
     pasos: [

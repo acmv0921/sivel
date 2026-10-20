@@ -3879,6 +3879,8 @@ function mostrarAvisoActualizacion(reg) {
 </script>
 <script src="../assets/offline.js"></script>
 <script>OfflineSIVIL.init({app:"despacho",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return"});</script>
+<script src="../assets/catalogo.js"></script>
+<script>CatalogoSIVIL.init({app:"despacho",leer:"leerGVIZ",listo:function(){var e=document.getElementById("appMain");return !!e&&e.style.display!=="none";}});</script>
 <script src="../assets/guia.js"></script>
 <script src="guias.js"></script>
 <script>

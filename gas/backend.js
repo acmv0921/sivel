@@ -128,6 +128,8 @@ case "anularAPPrueba": resultado = anularOBorrarAPPrueba(body); break;
       case "crearPrecio": resultado = crearPrecio(body); break;
       case "actualizarPrecio": resultado = actualizarPrecio(body); break;
       case "crearProductoCompleto": resultado = crearProductoCompleto(body); break;
+      case "actualizarProductoCompleto": resultado = actualizarProductoCompleto(body); break;
+      case "actualizarPreciosMasivo": resultado = actualizarPreciosMasivo(body); break;
       case "eliminarProducto": resultado = eliminarProducto(body); break;
     case "registrarSuministro": resultado = registrarSuministro(body); break;
     case "guardarReceta": resultado = guardarReceta(body); break;
@@ -2190,4 +2192,163 @@ function guardarTextosCotizador(body) {
   h.getRange(2, 1, filas.length, 4).setValues(filas);
   h.setFrozenRows(1);
   return { ok: true, filas: filas.length };
+}
+
+
+// =============================================================================
+// EDICIÓN COMPLETA DE PRODUCTO y CARGA MASIVA DE PRECIOS (20 oct 2026) — SIVIL Gerencia.
+// - actualizarProductoCompleto: edita TODAS las características que se piden al crear un producto
+//   (nombre, unidad, IVA, peso, estibas, viajes, fletes, descuentos, vigencia, precio...).
+//   Escribe PRODUCTOS_MAESTRO (todas las filas del código; la fila SEGUNDA solo nombre/unidad/IVA)
+//   y PRECIOS_GERENCIA. NO toca existencias. Nunca pisa una celda que tenga fórmula.
+// - actualizarPreciosMasivo: lista de precios nueva (items:[{tmcode, precio_base, ...}]).
+//   Guarda cada cambio de precio en la hoja HISTORIAL_PRECIOS (fecha, usuario, anterior, nuevo).
+// =============================================================================
+function _noFormula(hoja, fila, col) { return String(hoja.getRange(fila, col).getFormula() || "") === ""; }
+function _numONada(v) { return (v === "" || v === null || v === undefined || isNaN(Number(v))) ? "" : Number(v); }
+function actualizarProductoCompleto(body) {
+  const p = (body && body.producto) || {};
+  const tmcode = String(p.tmcode || "").trim();
+  if (!/^\d+$/.test(tmcode)) return { ok: false, error: "El código debe ser numérico" };
+  if (p.tmdescrip !== undefined && String(p.tmdescrip).trim().length < 5) return { ok: false, error: "Falta el nombre del producto" };
+  if (p.precio_base !== undefined && !(Number(p.precio_base) > 0)) return { ok: false, error: "El precio base debe ser mayor que cero" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const hojaProd = getHoja(HOJAS.PRODUCTOS), hojaPre = getHoja(HOJAS.PRECIOS);
+    const dProd = hojaProd.getDataRange().getValues(), hP = dProd[0].map(h => String(h).trim());
+    const iCod = hP.indexOf("tmcode"), iCal = hP.indexOf("calidad");
+    if (iCod === -1) return { ok: false, error: "PRODUCTOS_MAESTRO no tiene la columna tmcode" };
+    const filas = []; for (let i = 1; i < dProd.length; i++) if (String(dProd[i][iCod]).trim() === tmcode) filas.push(i);
+    if (!filas.length) return { ok: false, error: "El código " + tmcode + " no existe en el catálogo" };
+    const nombre = p.tmdescrip !== undefined ? String(p.tmdescrip).trim().replace(/\s+/g, " ").toUpperCase() : undefined;
+    const valores = {
+      tmdescrip: nombre, tmund: p.tmund !== undefined ? String(p.tmund).toUpperCase() : undefined,
+      precio_base: p.precio_base !== undefined ? Number(p.precio_base) : undefined,
+      flete_cali: p.flete_cali !== undefined ? _numONada(p.flete_cali) : undefined,
+      precio_m2: p.precio_m2 !== undefined ? _numONada(p.precio_m2) : undefined,
+      flete_m2: p.flete_m2 !== undefined ? _numONada(p.flete_m2) : undefined,
+      descuento_max: p.descuento_max !== undefined ? _numONada(p.descuento_max) : undefined,
+      observacion: p.observacion !== undefined ? String(p.observacion) : undefined,
+      tipo_iva: p.tipo_iva !== undefined ? (p.tipo_iva === "G" ? "G" : "E") : undefined,
+      stock_minimo: p.stock_minimo !== undefined ? _numONada(p.stock_minimo) : undefined,
+      es_tercero: p.es_tercero !== undefined ? !!p.es_tercero : undefined,
+      peso_kg_unitario: p.peso_kg_unitario !== undefined ? _numONada(p.peso_kg_unitario) : undefined,
+      unidades_por_m2: p.unidades_por_m2 !== undefined ? _numONada(p.unidades_por_m2) : undefined,
+      unidades_por_estiba: p.unidades_por_estiba !== undefined ? _numONada(p.unidades_por_estiba) : undefined,
+      valor_estiba_unidad: p.valor_estiba_unidad !== undefined ? _numONada(p.valor_estiba_unidad) : undefined,
+      estibas_por_viaje: p.estibas_por_viaje !== undefined ? String(p.estibas_por_viaje) : undefined,
+      unidades_por_viaje: p.unidades_por_viaje !== undefined ? _numONada(p.unidades_por_viaje) : undefined,
+      peso_total_viaje_kg: p.peso_total_viaje_kg !== undefined ? _numONada(p.peso_total_viaje_kg) : undefined,
+      flete_total_viaje_cali: p.flete_total_viaje_cali !== undefined ? _numONada(p.flete_total_viaje_cali) : undefined
+    };
+    const COMUNES = ["tmdescrip", "tmund", "tipo_iva"];
+    let escritas = 0; const omitidas = {};
+    filas.forEach(i => {
+      const esSegunda = iCal > -1 && String(dProd[i][iCal]).trim().toUpperCase() === "SEGUNDA";
+      Object.keys(valores).forEach(campo => {
+        if (valores[campo] === undefined) return;
+        if (esSegunda && COMUNES.indexOf(campo) === -1) return;
+        const c = hP.indexOf(campo); if (c === -1) return;
+        if (_noFormula(hojaProd, i + 1, c + 1)) { hojaProd.getRange(i + 1, c + 1).setValue(valores[campo]); escritas++; } else omitidas[campo] = true;
+      });
+    });
+    // PRECIOS_GERENCIA
+    const dPre = hojaPre.getDataRange().getValues(), hR = dPre[0].map(h => String(h).trim()), iCodPre = hR.indexOf("tmcode");
+    let filaPre = -1; for (let i = 1; i < dPre.length; i++) if (String(dPre[i][iCodPre]).trim() === tmcode) { filaPre = i; break; }
+    const pre = {
+      precio_base_planta: valores.precio_base,
+      descuento_max_vendedor: p.descuento_max_vendedor !== undefined ? _numONada(p.descuento_max_vendedor) : undefined,
+      costo_flete_zonaA: p.costo_flete_zonaA !== undefined ? (_numONada(p.costo_flete_zonaA) || 0) : undefined,
+      costo_flete_zonaB: p.costo_flete_zonaB !== undefined ? (_numONada(p.costo_flete_zonaB) || 0) : undefined,
+      fecha_vigencia_inicio: p.fecha_vigencia_inicio ? _fechaISO(p.fecha_vigencia_inicio, undefined) : undefined,
+      fecha_vigencia_fin: p.fecha_vigencia_fin ? _fechaISO(p.fecha_vigencia_fin, undefined) : undefined,
+      precio_m2: valores.precio_m2 === undefined ? undefined : (valores.precio_m2 === "" ? 0 : valores.precio_m2),
+      tmdescrip: nombre, tmund: valores.tmund
+    };
+    let precioAnterior = "", creoPrecio = false;
+    if (filaPre === -1) {
+      if (valores.precio_base === undefined) return { ok: false, error: "El producto no tiene política de precio; indica el precio base." };
+      const idPrecio = siguienteId(hojaPre, 0);
+      const nuevo = Object.assign({ id_precio: idPrecio, tmcode: Number(tmcode), descuento_max_vendedor: 0.03, costo_flete_zonaA: 0, costo_flete_zonaB: 0, fecha_vigencia_inicio: new Date(), fecha_vigencia_fin: new Date(2099, 11, 31), precio_m2: 0 },
+        Object.keys(pre).reduce((o, k) => { if (pre[k] !== undefined) o[k] = pre[k]; return o; }, {}));
+      hojaPre.getRange(hojaPre.getLastRow() + 1, 1, 1, hR.length).setValues([hR.map(h => (h in nuevo) ? nuevo[h] : "")]);
+      creoPrecio = true;
+    } else {
+      precioAnterior = dPre[filaPre][hR.indexOf("precio_base_planta")];
+      Object.keys(pre).forEach(campo => {
+        if (pre[campo] === undefined) return;
+        const c = hR.indexOf(campo); if (c === -1) return;
+        if (_noFormula(hojaPre, filaPre + 1, c + 1)) { hojaPre.getRange(filaPre + 1, c + 1).setValue(pre[campo]); escritas++; } else omitidas["PRECIOS." + campo] = true;
+      });
+    }
+    if (valores.precio_base !== undefined && Number(precioAnterior) !== valores.precio_base) _historialPrecios([[new Date(), String(body.usuario || ""), tmcode, precioAnterior, valores.precio_base, "edición de producto"]]);
+    SpreadsheetApp.flush();
+    return { ok: true, mensaje: "Producto " + tmcode + " actualizado", celdas_escritas: escritas, omitidas_por_formula: Object.keys(omitidas), creo_precio: creoPrecio };
+  } finally { lock.releaseLock(); }
+}
+function _historialPrecios(filas) {
+  if (!filas || !filas.length) return;
+  const ss = getHoja(HOJAS.PRECIOS).getParent();
+  let h = ss.getSheetByName("HISTORIAL_PRECIOS");
+  if (!h) { h = ss.insertSheet("HISTORIAL_PRECIOS"); h.getRange(1, 1, 1, 6).setValues([["fecha", "usuario", "tmcode", "precio_anterior", "precio_nuevo", "origen"]]); h.setFrozenRows(1); }
+  h.getRange(h.getLastRow() + 1, 1, filas.length, 6).setValues(filas);
+}
+function actualizarPreciosMasivo(body) {
+  const items = (body && body.items) || [];
+  if (!items.length) return { ok: false, error: "No hay precios para actualizar" };
+  if (items.length > 400) return { ok: false, error: "Máximo 400 productos por envío" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const hojaProd = getHoja(HOJAS.PRODUCTOS), hojaPre = getHoja(HOJAS.PRECIOS);
+    const dProd = hojaProd.getDataRange().getValues(), hP = dProd[0].map(h => String(h).trim());
+    const dPre = hojaPre.getDataRange().getValues(), hR = dPre[0].map(h => String(h).trim());
+    const iCodP = hP.indexOf("tmcode"), iCalP = hP.indexOf("calidad"), iU2 = hP.indexOf("unidades_por_m2");
+    const iCodR = hR.indexOf("tmcode");
+    const colsR = { precio_base_planta: hR.indexOf("precio_base_planta"), descuento_max_vendedor: hR.indexOf("descuento_max_vendedor"), costo_flete_zonaA: hR.indexOf("costo_flete_zonaA"), costo_flete_zonaB: hR.indexOf("costo_flete_zonaB"), precio_m2: hR.indexOf("precio_m2") };
+    const colsP = { precio_base: hP.indexOf("precio_base"), precio_m2: hP.indexOf("precio_m2") };
+    const filaR = {}; for (let i = 1; i < dPre.length; i++) filaR[String(dPre[i][iCodR]).trim()] = i;
+    const filaP = {}; for (let i = 1; i < dProd.length; i++) { const c = String(dProd[i][iCodP]).trim(); const seg = iCalP > -1 && String(dProd[i][iCalP]).trim().toUpperCase() === "SEGUNDA"; if (!seg) filaP[c] = i; }
+    const cambiosR = {}, cambiosP = {}; // col -> {fila: valor}
+    const poner = (mapa, col, fila, v) => { (mapa[col] = mapa[col] || {})[fila] = v; };
+    const noEncontrados = [], hist = [], inval = []; let actualizados = 0, sinCambio = 0;
+    items.forEach(it => {
+      const cod = String(it.tmcode || "").trim();
+      const precio = Number(it.precio_base);
+      if (!/^\d+$/.test(cod) || !(precio > 0)) { inval.push(cod || "?"); return; }
+      const fr = filaR[cod], fp = filaP[cod];
+      if (fr === undefined && fp === undefined) { noEncontrados.push(cod); return; }
+      const antes = fr !== undefined ? Number(dPre[fr][colsR.precio_base_planta]) : Number(dProd[fp][colsP.precio_base]);
+      let cambio = antes !== precio;
+      if (fr !== undefined) {
+        poner(cambiosR, colsR.precio_base_planta, fr, precio);
+        ["descuento_max_vendedor", "costo_flete_zonaA", "costo_flete_zonaB"].forEach(k => { const v = _numONada(it[k]); if (v !== "" && colsR[k] > -1) { poner(cambiosR, colsR[k], fr, v); if (Number(dPre[fr][colsR[k]]) !== v) cambio = true; } });
+      }
+      const u2 = fp !== undefined && iU2 > -1 ? Number(dProd[fp][iU2]) : 0;
+      let m2 = _numONada(it.precio_m2);
+      if (m2 === "" && u2 > 0 && fr !== undefined && Number(dPre[fr][colsR.precio_m2]) > 0) m2 = Math.round(precio * u2);
+      if (m2 !== "") { if (fr !== undefined && colsR.precio_m2 > -1) poner(cambiosR, colsR.precio_m2, fr, m2); if (fp !== undefined && colsP.precio_m2 > -1) poner(cambiosP, colsP.precio_m2, fp, m2); }
+      if (fp !== undefined && colsP.precio_base > -1) poner(cambiosP, colsP.precio_base, fp, precio);
+      if (cambio) { actualizados++; if (antes !== precio) hist.push([new Date(), String(body.usuario || ""), cod, antes, precio, String(body.origen || "lista de precios")]); } else sinCambio++;
+    });
+    const omitidas = {};
+    const aplicar = (hoja, datos, cambios, hdrs, nombreHoja) => {
+      Object.keys(cambios).forEach(colStr => {
+        const col = Number(colStr), n = datos.length - 1; if (col < 0 || n < 1) return;
+        const rg = hoja.getRange(2, col + 1, n, 1), vals = rg.getValues(), fx = rg.getFormulas();
+        const salida = vals.map((v, k) => {
+          const fila = k + 1, nuevo = cambios[col][fila];
+          if (fx[k][0]) { if (nuevo !== undefined) omitidas[nombreHoja + "." + hdrs[col]] = true; return [fx[k][0]]; }
+          return [nuevo !== undefined ? nuevo : v[0]];
+        });
+        rg.setValues(salida);
+      });
+    };
+    aplicar(hojaPre, dPre, cambiosR, hR, "PRECIOS_GERENCIA");
+    aplicar(hojaProd, dProd, cambiosP, hP, "PRODUCTOS_MAESTRO");
+    _historialPrecios(hist);
+    SpreadsheetApp.flush();
+    return { ok: true, actualizados: actualizados, sin_cambio: sinCambio, no_encontrados: noEncontrados, invalidos: inval, omitidas_por_formula: Object.keys(omitidas) };
+  } finally { lock.releaseLock(); }
 }
