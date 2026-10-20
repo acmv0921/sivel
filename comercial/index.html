@@ -2927,6 +2927,7 @@ calcularTotales();
 initFotosPedido();
 const checkApoyo = document.getElementById('checkVentaApoyo');
 if (checkApoyo) { checkApoyo.checked = false; toggleVentaApoyo(); }
+{ const _ai = document.getElementById('inputApId'); if (_ai) _ai.value = ''; }
 
 borrarBorradorPedido();
 }
@@ -5506,6 +5507,7 @@ async function czAAP() {
     var _te = q.entrega_libre || (q.entrega ? CZ_TEXTOS.entrega[q.entrega - 1] : '');
     if (_te) set('obsEntrega', _te);
     renderLineasAP(); calcularTotales();
+    actualizarVisibilidadVentaApoyo();
     apModo(true);
     var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; }); if (_ex.length) setTimeout(function () { toast('⚠️ La cotización tiene ' + _ex.length + ' flete(s) adicional(es) (' + fmt(_ex.reduce(function (a, f) { return a + Number(f.valor); }, 0)) + '): inclúyelos en el flete de la AP.', 8000); }, 7500);
     toast('📦 Pedido pre-llenado desde ' + q.numero + (hayFlete ? ' · flete cotizado ' + fmt(q.flete) + (_avisoDestino ? ' (verifica el destino de entrega)' : '') : '') + '. Completa fecha y entrega y guarda.', 7000);
@@ -5602,12 +5604,19 @@ function czTextoWA() {
   return t;
 }
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
-function czImg(url) { return fetch(url).then(function (r) { return r.blob(); }).then(function (b) { return new Promise(function (ok) { var f = new FileReader(); f.onload = function () { ok(f.result); }; f.readAsDataURL(b); }); }).catch(function () { return null; }); }
+function czImg(url, respaldo) {
+  var ok = function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); };
+  var leer = function (b) { if (!/^image\//.test(b.type)) throw new Error('no es imagen'); return new Promise(function (res) { var f = new FileReader(); f.onload = function () { res(f.result); }; f.readAsDataURL(b); }); };
+  var alt = url.replace('../assets/', '/sivel/assets/');
+  return fetch(url).then(ok).then(leer)
+    .catch(function () { return fetch(alt).then(ok).then(leer); })
+    .catch(function () { return respaldo || null; });
+}
 async function czPDF(opts) {
   opts = opts || {};
   if (!opts.backup && !(await czGuardar(undefined, false, true))) return;
   var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = STATE.vendedor || {};
-  var logo1 = await czImg('../assets/logo_postecsa.jpg'), logo2 = await czImg('../assets/logo_postec.jpg');
+  var logo1 = await czImg('../assets/logo_postecsa.jpg', (typeof _LOGO_SRC !== 'undefined' ? _LOGO_SRC : null)), logo2 = await czImg('../assets/logo_postec.jpg');
   var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 10, R = W - M, y;
   var txt = function (s, x, yy, o) { doc.text(Array.isArray(s) ? s : String(s == null ? '' : s), x, yy, o || {}); };
   var box = function (x, yy, w, h) { doc.rect(x, yy, w, h); };
