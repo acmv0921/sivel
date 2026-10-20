@@ -1454,7 +1454,7 @@ function mostrarBienvenidaApp(nombre, rol, color, appNombre, appDesc) {
 // prefijo "gerencia" para no chocar con el aviso de Comercial o Despacho.
 // Si se sube una nueva compilación, cambiar BUILD_ACTUAL para que el aviso
 // vuelva a mostrarse una vez con sus novedades.
-const BUILD_ACTUAL = 6;
+const BUILD_ACTUAL = 7;
 function mostrarNovedadesBuild() {
   const clave = 'sivil_gerencia_update_visto_build' + BUILD_ACTUAL;
   try { if (localStorage.getItem(clave)) return; } catch(e) {}
@@ -1463,10 +1463,10 @@ function mostrarNovedadesBuild() {
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <div style="font-size:1.6rem;margin-bottom:.4rem;">🎉</div>
     <div style="font-weight:800;font-size:1.05rem;color:#14532d;margin-bottom:.3rem;">App actualizada — Compilación ${BUILD_ACTUAL}</div>
-    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">16 oct 2026</div>
+    <div style="font-size:.78rem;color:#888;margin-bottom:.9rem;">20 oct 2026</div>
     <ul style="font-size:.82rem;color:#333;line-height:1.6;padding-left:1.1rem;margin:0 0 1.1rem;">
-      <li>🔐 <b>Ingreso más seguro:</b> tu PIN ahora se verifica en el servidor y ya no se descarga al teléfono. Entras igual, con tu correo y tu PIN</li>
-      <li>⏳ Después de <b>5 intentos fallidos</b> con un correo, hay que esperar 15 minutos</li>
+      <li>⚠️ <b>Aviso de productos sin precio:</b> en el tablero aparece cuántos productos no tienen precio y un botón para asignarlo (✏️ Editar)</li>
+      <li>💰 <b>Catálogo y precios unificados</b> con la tabla de Comisiones (lista de precios Cicar)</li>
     </ul>
     <button class="btn btn-primary" style="width:100%;" id="btnCerrarAvisoUpdate">Entendido</button>
   </div>`;
@@ -1475,6 +1475,37 @@ function mostrarNovedadesBuild() {
     ov.remove();
     try { localStorage.setItem(clave, '1'); } catch(e) {}
   };
+}
+
+// ===== AVISO: PRODUCTOS SIN PRECIO (20 oct 2026) =====
+// Productos del catálogo (calidad PRIMERA) que no tienen fila en PRECIOS_GERENCIA.
+// Se muestra arriba del tablero; se puede cerrar y vuelve en la siguiente carga.
+function avisoProductosSinPrecio() {
+  const viejo = document.getElementById('avisoSinPrecio');
+  if (viejo) viejo.remove();
+  const conPrecio = new Set((G.precios || []).map(x => String(x.tmcode)));
+  const sin = (G.productos || []).filter(p => String(p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA' && !conPrecio.has(String(p.tmcode)));
+  if (!sin.length) return;
+  const dash = document.getElementById('screenDashboard');
+  if (!dash) return;
+  const b = document.createElement('div');
+  b.id = 'avisoSinPrecio';
+  b.style.cssText = 'background:#fff7ed;border:1.5px solid #f59e0b;border-left:5px solid #f59e0b;border-radius:10px;padding:10px 12px;margin:0 0 .8rem;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.82rem;color:#7c2d12;';
+  b.innerHTML = '<div>⚠️ <b>' + sin.length + ' producto' + (sin.length === 1 ? '' : 's') + ' sin precio asignado.</b> No se pueden cotizar con valor hasta que se les asigne uno.</div>';
+  const ver = document.createElement('button');
+  ver.className = 'btn btn-sm';
+  ver.style.cssText = 'background:#f59e0b;color:#fff;white-space:nowrap;';
+  ver.textContent = 'Ver y asignar';
+  ver.onclick = function () { irA('screenPrecios'); };
+  const x = document.createElement('button');
+  x.textContent = '✕';
+  x.style.cssText = 'background:none;border:none;color:#7c2d12;cursor:pointer;font-size:.9rem;';
+  x.onclick = function () { b.remove(); };
+  const der = document.createElement('div');
+  der.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+  der.appendChild(ver); der.appendChild(x);
+  b.appendChild(der);
+  dash.insertBefore(b, dash.firstChild);
 }
 
 function cerrarSesion() {
@@ -1557,6 +1588,7 @@ async function cargarDatos() {
     renderAlertas();
     renderAprobaciones();
     renderPrecios();
+    avisoProductosSinPrecio();
     renderVendedores();
     renderFlota();
     renderInformeGerencia();
