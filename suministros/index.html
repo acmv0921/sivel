@@ -1195,5 +1195,10 @@ document.getElementById('modalReceta').addEventListener('click', function(e) {
   if (e.target === this) cerrarModalReceta();
 });
 </script>
+<script src="../assets/guia.js"></script>
+<script src="guias.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded",function(){ if(window.GuiaSIVIL&&window.GUIAS_SUMINISTROS) GuiaSIVIL.init({app:"suministros",guias:window.GUIAS_SUMINISTROS}); });
+</script>
 </body>
 </html>

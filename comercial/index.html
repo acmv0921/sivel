@@ -5705,6 +5705,11 @@ async function czPDF(opts) {
   if (CZ.estado === 'Borrador') await czCambiarEstado('Enviada');
 }
 </script>
+<script src="../assets/guia.js"></script>
+<script src="guias.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded",function(){ if(window.GuiaSIVIL&&window.GUIAS_COMERCIAL) GuiaSIVIL.init({app:"comercial",guias:window.GUIAS_COMERCIAL}); });
+</script>
 </body>
 </html>
 
