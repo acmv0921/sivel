@@ -395,6 +395,14 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 
   <!-- DASHBOARD -->
   <div id="screenDashboard" class="screen active">
+    <div class="card" style="padding:.7rem 1rem;margin-bottom:.6rem;">
+      <label class="form-label" style="margin-bottom:.2rem;">📅 Estadísticas desde</label>
+      <select id="selPeriodoDash" class="form-control" onchange="cambiarPeriodo(this.value)">
+        <option value="oficial">Inicio oficial de SIVIL (20/10/2026)</option>
+        <option value="todo">Todo el histórico</option>
+      </select>
+      <div id="notaPeriodoDash" style="font-size:.68rem;color:#666;margin-top:.3rem;"></div>
+    </div>
     <div class="kpi-grid">
       <div class="kpi-box"><div class="kpi-val" id="kpiTotalAPs">—</div><div class="kpi-sub">TOTAL APs</div></div>
       <div class="kpi-box naranja"><div class="kpi-val" id="kpiPendientes">—</div><div class="kpi-sub">PENDIENTES</div></div>
@@ -899,6 +907,13 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       Un renglón por producto vendido. El flete mostrado es el de la AP completa (no se reparte por producto).
     </p>
 
+    <div class="form-group">
+      <label class="form-label">📅 Estadísticas desde</label>
+      <select id="selPeriodoInf" class="form-control" onchange="cambiarPeriodo(this.value)">
+        <option value="oficial">Inicio oficial de SIVIL (20/10/2026)</option>
+        <option value="todo">Todo el histórico</option>
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Vendedor</label>
       <select id="infFiltroVendedor" class="form-control" onchange="renderInformeGerencia()">
@@ -1616,7 +1631,7 @@ function calcularVentasKPIs() {
 
   G.detalles.forEach(d=>{
     const ap = apById[String(d.ap_id)];
-    if (!ap || ap.estado_ap === 'Cancelado') return;
+    if (!ap || ap.estado_ap === 'Cancelado' || !enPeriodo(ap)) return;
 
     const prod = prodByCode[String(d.tmcode)];
     const cant       = parseFloat(d.cantidad_solicitada) || 0;
@@ -1654,12 +1669,29 @@ function calcularVentasKPIs() {
   if (elDescProm)    elDescProm.textContent    = num2(descProm) + '%';
 }
 
+// ---- Período de las estadísticas: por defecto desde el inicio oficial de SIVIL (20/10/2026) ----
+var INICIO_OFICIAL = new Date(2026, 9, 20);
+function periodoActual() { try { return localStorage.getItem('sivil_gerencia_periodo') === 'todo' ? 'todo' : 'oficial'; } catch (e) { return 'oficial'; } }
+function _desdePeriodo() { return periodoActual() === 'oficial' ? INICIO_OFICIAL : null; }
+function enPeriodo(ap) { var d = _desdePeriodo(); if (!d) return true; var f = parseFecha(ap && ap.fecha_creacion); return !f || f >= d; }
+function apsStat() { return (G.aps || []).filter(enPeriodo); }
+function cambiarPeriodo(v) {
+  try { localStorage.setItem('sivil_gerencia_periodo', v === 'todo' ? 'todo' : 'oficial'); } catch (e) {}
+  sincronizarPeriodo(); try { renderDashboard(); } catch (e) {} try { renderInformeGerencia(); } catch (e) {}
+}
+function sincronizarPeriodo() {
+  var v = periodoActual();
+  ['selPeriodoDash', 'selPeriodoInf'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = v; });
+  var n = document.getElementById('notaPeriodoDash');
+  if (n) n.textContent = v === 'oficial' ? 'Total de APs, ventas, vendedores y estados cuentan desde el 20/10/2026. Los pendientes de despacho incluyen todos, también los anteriores.' : 'Se cuentan todas las APs, incluidas las anteriores al inicio oficial.';
+}
 function renderDashboard() {
+  sincronizarPeriodo();
   const pend    = G.aps.filter(a=>["Pendiente","Despachado Parcial"].includes(a.estado_ap));
   const alertas = _inventario.filter(p=>p.disponible<=0);
   const aprobPend = G.aprobaciones.filter(a=>a.estado==='pendiente');
 
-  document.getElementById('kpiTotalAPs').textContent    = G.aps.length;
+  document.getElementById('kpiTotalAPs').textContent    = apsStat().length;
   document.getElementById('kpiPendientes').textContent  = pend.length;
   document.getElementById('kpiAlertas').textContent     = alertas.length;
   document.getElementById('kpiAprobaciones').textContent= aprobPend.length;
@@ -1683,8 +1715,8 @@ function renderDashboard() {
   vendedoresSoloVNT.forEach(v=>{
     vByVend[String(v.id_vendedor)] = { count:0, id:String(v.id_vendedor), nombre:v.nombre_vendedor };
   });
-  // Contar APs por vendedor
-  G.aps.forEach(ap=>{
+  // Contar APs por vendedor (según el período elegido)
+  apsStat().forEach(ap=>{
     const id = String(ap.vendedor_id||ap.vendedor_nombre||'');
     if(vByVend[id]) {
       vByVend[id].count++;
@@ -1718,8 +1750,8 @@ function renderDashboard() {
 
   // Chart estados
   const porEstado={};
-  G.aps.forEach(a=>{porEstado[a.estado_ap]=(porEstado[a.estado_ap]||0)+1;});
-  const total=G.aps.length||1;
+  apsStat().forEach(a=>{porEstado[a.estado_ap]=(porEstado[a.estado_ap]||0)+1;});
+  const total=apsStat().length||1;
   const colores={'Pendiente':'#856404','Despachado Parcial':'#e05c1a','Despachado Total':'#1a7a4a','Modificado':'#6d28d9','Cancelado':'#b91c1c'};
   document.getElementById('chartEstados').innerHTML=Object.entries(porEstado).map(([est,cnt])=>`
     <div class="bar-item">
@@ -2573,8 +2605,10 @@ function _filasInformeFiltradas() {
   const hasta = document.getElementById('infFiltroHasta')?.value || '';
   const texto = (document.getElementById('infFiltroTexto')?.value || '').toLowerCase().trim();
 
+  const piso = _desdePeriodo();
   return filas.filter(f => {
     if (filtroVend && f.vendedor_nombre !== filtroVend) return false;
+    if (piso) { const ff = f.fecha_creacion ? parseFecha(f.fecha_creacion) : null; if (ff && ff < piso) return false; }
     if (desde || hasta) {
       const fechaFila = f.fecha_creacion ? parseFecha(f.fecha_creacion) : null;
       if (fechaFila) {
@@ -2593,7 +2627,7 @@ function _filasInformeFiltradas() {
 }
 
 function renderInformeGerencia() {
-  poblarFiltroVendedorInforme();
+  poblarFiltroVendedorInforme(); sincronizarPeriodo();
   const filas = _filasInformeFiltradas();
   const tbody = document.getElementById('infTablaBody');
   if (!tbody) return;
@@ -2613,7 +2647,7 @@ function renderInformeGerencia() {
   const totalValor = filas.reduce((s,f)=>s+f.valor_total, 0);
   const apsUnicas = new Set(filas.map(f=>f.ap_id)).size;
   const resumen = document.getElementById('infResumen');
-  if (resumen) resumen.textContent = `${filas.length} línea(s) de producto · ${apsUnicas} AP(s) · Total: $${fmtNInf(totalValor)}`;
+  if (resumen) resumen.textContent = `${filas.length} línea(s) de producto · ${apsUnicas} AP(s) · Total: $${fmtNInf(totalValor)}` + (periodoActual()==='oficial' ? ' · desde el 20/10/2026' : ' · todo el histórico');
 }
 
 function limpiarFiltrosInforme() {
