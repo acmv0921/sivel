@@ -484,6 +484,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="card">
       <div class="card-title">💰 Tabla de Precios Gerencia</div>
       <button class="btn btn-primary btn-sm" onclick="abrirModalPrecio()">➕ Nuevo precio</button>
+      <button class="btn btn-sm" style="background:var(--naranja);color:#fff;margin-left:.4rem;" onclick="abrirNuevoProducto()">🆕 Nuevo producto</button>
     </div>
     <div id="listaPrecios"><div class="loading"><div class="spinner"></div></div></div>
   </div>
@@ -570,6 +571,53 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     </div>
     <button class="btn btn-primary" onclick="guardarPrecio()">💾 Guardar Política</button>
     <div id="precioErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
+  </div>
+</div>
+
+
+<!-- MODAL: NUEVO PRODUCTO (alta completa en PRODUCTOS_MAESTRO + PRECIOS_GERENCIA) -->
+<div id="modalNuevoProd" class="modal-overlay">
+  <div class="modal-box" style="max-width:560px;">
+    <button class="modal-close" onclick="cerrarModal('modalNuevoProd')">✕</button>
+    <div class="modal-title">🆕 Nuevo producto</div>
+    <p style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Se registra en el catálogo y en la tabla de precios. Todas las aplicaciones (Comercial, Despacho, Suministros) lo verán de inmediato.</p>
+
+    <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.4rem 0;">1. Identificación</div>
+    <div class="form-group"><label class="form-label">Código asignado *</label><input id="npCodigo" class="form-control" type="number" inputmode="numeric" placeholder="3302" oninput="npCalc()"><div id="npCodAviso" style="font-size:.68rem;margin-top:.2rem;"></div></div>
+    <div class="form-group"><label class="form-label">Nombre del producto * (ej. BLOQUE AV 20X10X8 BEIGE OSCURO BIC)</label><input id="npNombre" class="form-control" type="text" placeholder="TIPO MEDIDAS COLOR LÍNEA" oninput="npCalc()"><div id="npParecidos" style="font-size:.66rem;color:#666;margin-top:.2rem;"></div></div>
+    <div class="form-group"><label class="form-label">Unidad de medida *</label><select id="npUnd" class="form-control" onchange="npCalc()"><option value="UND">UND (unidad)</option><option value="ML">ML (metro lineal)</option><option value="UNDS">UNDS</option></select></div>
+    <div class="form-group"><label class="form-label">¿Lo fabrica POSTECSA o es de terceros (reventa)? *</label><select id="npTercero" class="form-control" onchange="npCalc()"><option value="no">Fabricado por POSTECSA</option><option value="si">De terceros (reventa)</option></select></div>
+    <div class="form-group"><label class="form-label">Existencia inicial</label><input id="npStock" class="form-control" type="number" min="0" value="0"></div>
+    <div class="form-group"><label class="form-label">Stock mínimo (opcional)</label><input id="npStockMin" class="form-control" type="number" min="0" placeholder="vacío si no aplica"></div>
+    <div class="form-group"><label style="font-size:.8rem;"><input id="npSegunda" type="checkbox"> También se maneja en calidad SEGUNDA (crea una segunda fila en el catálogo)</label></div>
+
+    <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.8rem 0 .4rem;">2. Precio e impuestos</div>
+    <div class="form-group"><label class="form-label">Precio base por unidad, sin IVA ($) *</label><input id="npPrecio" class="form-control" type="number" min="0" oninput="npCalc()"></div>
+    <div class="form-group"><label class="form-label">IVA *</label><select id="npIva" class="form-control" onchange="npCalc()"><option value="E">E — Excluido de IVA</option><option value="G">G — Gravado con IVA 19 %</option></select></div>
+    <div class="form-group"><label class="form-label">Descuento máximo en catálogo (%)</label><input id="npDescM" class="form-control" type="number" min="0" max="50" step="0.5" value="5"></div>
+    <div class="form-group"><label class="form-label">Descuento máximo del vendedor (%)</label><input id="npDescV" class="form-control" type="number" min="0" max="50" step="0.5" value="3"></div>
+    <div class="form-group"><label class="form-label">Vigencia desde</label><input id="npDesde" class="form-control" type="date"></div>
+    <div class="form-group"><label class="form-label">Vigencia hasta</label><input id="npHasta" class="form-control" type="date" value="2099-12-31"></div>
+
+    <div id="npBloqueFab">
+      <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.8rem 0 .4rem;">3. Datos físicos</div>
+      <div class="form-group"><label class="form-label">Peso por unidad (kg)</label><input id="npPeso" class="form-control" type="number" min="0" step="0.01" oninput="npCalc()"></div>
+      <div class="form-group"><label class="form-label">Unidades por m² (solo si se vende por m²)</label><input id="npUm2" class="form-control" type="number" min="0" step="0.01" oninput="npCalc()"></div>
+      <div class="form-group"><label class="form-label">Unidades por estiba</label><input id="npUEst" class="form-control" type="number" min="0" oninput="npCalc()"></div>
+      <div class="form-group"><label class="form-label">Valor de la estiba ($)</label><input id="npVEst" class="form-control" type="number" min="0" oninput="npCalc()"></div>
+
+      <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.8rem 0 .4rem;">4. Transporte</div>
+      <div class="form-group"><label class="form-label">Unidades por viaje (cupo del camión)</label><input id="npUViaje" class="form-control" type="number" min="0" oninput="npCalc()"></div>
+      <div class="form-group"><label class="form-label">Tarifa del viaje a Cali ($, tabla de Gerencia)</label><input id="npFleteV" class="form-control" type="number" min="0" oninput="npCalc()"></div>
+      <div class="form-group"><label class="form-label">Flete zona A / zona B por unidad (opcional; vacío = 0)</label>
+        <div style="display:flex;gap:.4rem;"><input id="npFA" class="form-control" type="number" min="0" placeholder="Zona A"><input id="npFB" class="form-control" type="number" min="0" placeholder="Zona B"></div></div>
+    </div>
+
+    <div style="font-weight:800;color:var(--azul,#1a3a5c);font-size:.8rem;margin:.8rem 0 .3rem;">Vista previa (lo que se va a guardar)</div>
+    <div id="npPreview" style="background:#f6f8fb;border-radius:10px;padding:.7rem;font-size:.74rem;line-height:1.5;"></div>
+    <div id="npAlertas" style="font-size:.72rem;color:#b45309;margin-top:.5rem;"></div>
+    <button class="btn btn-primary" id="npBtn" style="margin-top:.8rem;" onclick="guardarNuevoProducto()">💾 Revisar y guardar producto</button>
+    <div id="npErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
   </div>
 </div>
 
@@ -2027,6 +2075,87 @@ async function guardarPrecio() {
   } finally {
     _guardandoPrecio = false;
   }
+}
+
+
+// =============================================================================
+// NUEVO PRODUCTO — alta completa (PRODUCTOS_MAESTRO + PRECIOS_GERENCIA)
+// =============================================================================
+function abrirNuevoProducto() {
+  ['npCodigo','npNombre','npStockMin','npPrecio','npPeso','npUm2','npUEst','npVEst','npUViaje','npFleteV','npFA','npFB'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('npStock').value = '0';
+  document.getElementById('npUnd').value = 'UND'; document.getElementById('npTercero').value = 'no'; document.getElementById('npIva').value = 'E';
+  document.getElementById('npDescM').value = '5'; document.getElementById('npDescV').value = '3';
+  document.getElementById('npDesde').value = new Date().toISOString().split('T')[0]; document.getElementById('npHasta').value = '2099-12-31';
+  document.getElementById('npSegunda').checked = false; document.getElementById('npErr').textContent = '';
+  npCalc(); document.getElementById('modalNuevoProd').classList.add('show');
+}
+function _npN(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
+function npDatos() {
+  var fab = document.getElementById('npTercero').value === 'no';
+  var precio = _npN('npPrecio'), peso = _npN('npPeso'), um2 = _npN('npUm2'), uest = _npN('npUEst'), vest = _npN('npVEst'), uv = _npN('npUViaje'), fv = _npN('npFleteV');
+  var d = {
+    tmcode: String(document.getElementById('npCodigo').value || '').trim(),
+    tmdescrip: String(document.getElementById('npNombre').value || '').trim().toUpperCase().replace(/\s+/g, ' '),
+    tmund: document.getElementById('npUnd').value, es_tercero: !fab, tmcant: _npN('npStock'),
+    stock_minimo: document.getElementById('npStockMin').value === '' ? '' : _npN('npStockMin'),
+    segunda: document.getElementById('npSegunda').checked,
+    precio_base: precio, tipo_iva: document.getElementById('npIva').value,
+    descuento_max: _npN('npDescM') / 100, descuento_max_vendedor: _npN('npDescV') / 100,
+    fecha_vigencia_inicio: document.getElementById('npDesde').value, fecha_vigencia_fin: document.getElementById('npHasta').value,
+    peso_kg_unitario: fab ? peso : '', unidades_por_m2: fab && um2 ? um2 : '', unidades_por_estiba: fab && uest ? uest : '',
+    unidades_por_viaje: fab && uv ? uv : '', flete_total_viaje_cali: fab && fv ? fv : '',
+    costo_flete_zonaA: _npN('npFA'), costo_flete_zonaB: _npN('npFB')
+  };
+  d.valor_estiba_unidad = fab && uest && vest ? vest / uest : '';
+  d.peso_total_viaje_kg = fab && peso && uv ? Math.round(peso * uv * 100) / 100 : '';
+  d.flete_cali = fab && uv && fv ? Math.round(fv / uv) : '';
+  d.precio_m2 = fab && um2 && precio ? Math.round(precio * um2) : '';
+  d.flete_m2 = fab && um2 && d.flete_cali !== '' ? Math.round(d.flete_cali * um2) : '';
+  if (fab && uv && uest) { var e = Math.floor(uv / uest), r = uv - e * uest; d.estibas_por_viaje = r > 0 ? (e + ' + ' + r + ' udds') : String(e); } else d.estibas_por_viaje = '';
+  d.observacion = fab ? '' : 'PRODUCTO DE TERCEROS - compra a proveedor externo para reventa';
+  return d;
+}
+function npCalc() {
+  var d = npDatos(), fab = !d.es_tercero, f = function (n) { return n === '' ? '<span style="color:#aaa">—</span>' : Number(n).toLocaleString('es-CO'); };
+  document.getElementById('npBloqueFab').style.display = fab ? '' : 'none';
+  var ex = (G.productos || []).find(function (p) { return String(p.tmcode) === d.tmcode; });
+  document.getElementById('npCodAviso').innerHTML = !d.tmcode ? '' : ex ? '<span style="color:#b91c1c">⛔ Ese código ya existe: ' + ex.tmdescrip + '</span>' : '<span style="color:#15803d">✓ Código disponible</span>';
+  var pal = d.tmdescrip.split(' ').slice(0, 2).join(' ');
+  var par = pal.length > 3 ? (G.productos || []).filter(function (p) { return String(p.tmdescrip).toUpperCase().indexOf(pal) === 0 && String(p.calidad || 'PRIMERA') === 'PRIMERA'; }).slice(0, 3) : [];
+  document.getElementById('npParecidos').innerHTML = par.length ? 'Parecidos en el catálogo: ' + par.map(function (p) { return p.tmcode + ' ' + p.tmdescrip + ' ($' + Number(p.precio_base || 0).toLocaleString('es-CO') + ')'; }).join(' · ') : '';
+  document.getElementById('npPreview').innerHTML =
+    '<b>' + (d.tmcode || '—') + '</b> · ' + (d.tmdescrip || '—') + ' · ' + d.tmund + ' · IVA ' + d.tipo_iva + (d.es_tercero ? ' · TERCEROS' : '') + '<br>' +
+    'Precio base: $' + f(d.precio_base) + ' · Desc. catálogo ' + (d.descuento_max * 100) + ' % · Desc. vendedor ' + (d.descuento_max_vendedor * 100) + ' %<br>' +
+    (fab ? 'Peso/viaje: ' + f(d.peso_total_viaje_kg) + ' kg · Estiba/unidad: $' + f(d.valor_estiba_unidad === '' ? '' : Math.round(d.valor_estiba_unidad * 100) / 100) + ' · Estibas/viaje: ' + (d.estibas_por_viaje || '—') + '<br>' +
+      'Flete Cali/unidad: $' + f(d.flete_cali) + ' · Precio m²: $' + f(d.precio_m2) + ' · Flete m²: $' + f(d.flete_m2) : 'Producto de terceros: sin datos de peso ni transporte');
+  var al = [];
+  if (d.precio_base <= 0) al.push('Falta el precio base.');
+  if (fab && !d.peso_kg_unitario) al.push('Sin peso: Comercial no podrá calcular el peso del pedido.');
+  if (fab && !d.unidades_por_viaje) al.push('Sin cupo por viaje: no se calculará el número de viajes ni el flete.');
+  if (fab && d.unidades_por_viaje && !d.flete_total_viaje_cali) al.push('Sin tarifa del viaje: el flete por unidad quedará vacío.');
+  if (d.descuento_max_vendedor > d.descuento_max) al.push('El descuento del vendedor es mayor que el del catálogo.');
+  document.getElementById('npAlertas').innerHTML = al.length ? '⚠️ ' + al.join('<br>⚠️ ') : '';
+}
+let _guardandoProd = false;
+async function guardarNuevoProducto() {
+  if (_guardandoProd) return;
+  var d = npDatos(), err = document.getElementById('npErr'); err.textContent = '';
+  if (!/^\d+$/.test(d.tmcode)) { err.textContent = 'El código debe ser numérico.'; return; }
+  if ((G.productos || []).some(function (p) { return String(p.tmcode) === d.tmcode; })) { err.textContent = 'Ese código ya existe en el catálogo.'; return; }
+  if (d.tmdescrip.length < 5) { err.textContent = 'Escribe el nombre completo del producto.'; return; }
+  if (!(d.precio_base > 0)) { err.textContent = 'El precio base es obligatorio.'; return; }
+  var avisos = document.getElementById('npAlertas').innerText.trim();
+  var resumen = 'Se registrará:\n\n' + d.tmcode + ' — ' + d.tmdescrip + '\n' + d.tmund + ' · IVA ' + d.tipo_iva + ' · Precio base $' + d.precio_base.toLocaleString('es-CO') + (d.segunda ? '\n(también en calidad SEGUNDA)' : '') + (avisos ? '\n\n' + avisos : '') + '\n\n¿Confirmas?';
+  if (!confirm(resumen)) return;
+  _guardandoProd = true; var btn = document.getElementById('npBtn'); btn.disabled = true; err.style.color = '#555'; err.textContent = 'Guardando...';
+  try {
+    var r = await escribirGAS({ accion: 'crearProductoCompleto', producto: d });
+    if (r && r.ok) {
+      cerrarModal('modalNuevoProd'); toast('✅ Producto ' + d.tmcode + ' creado y disponible en todas las apps', 4500); await cargarDatos();
+    } else if (_SANDBOX) { cerrarModal('modalNuevoProd'); }
+    else { err.style.color = ''; err.textContent = (r && /Acci[oó]n desconocida/i.test(r.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel para activarla.' : ((r && r.error) || 'No se pudo guardar. Intenta de nuevo.'); }
+  } finally { _guardandoProd = false; btn.disabled = false; }
 }
 
 function abrirEditPrecio(p) {

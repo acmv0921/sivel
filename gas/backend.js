@@ -127,6 +127,7 @@ case "anularAPPrueba": resultado = anularOBorrarAPPrueba(body); break;
       case "actualizarStock": resultado = actualizarStock(body); break;
       case "crearPrecio": resultado = crearPrecio(body); break;
       case "actualizarPrecio": resultado = actualizarPrecio(body); break;
+      case "crearProductoCompleto": resultado = crearProductoCompleto(body); break;
     case "registrarSuministro": resultado = registrarSuministro(body); break;
     case "guardarReceta": resultado = guardarReceta(body); break;
       default: resultado = { ok: false, error: `Acción desconocida: ${accion}` };
@@ -1210,6 +1211,78 @@ function actualizarPrecio(body) {
     }
   }
   return { ok: false, error: "Precio no encontrado" };
+}
+
+
+// =============================================================================
+// ALTA COMPLETA DE PRODUCTO (19 oct 2026) — formulario "Nuevo producto" de SIVIL Gerencia.
+// Escribe PRODUCTOS_MAESTRO (una fila PRIMERA y, si se pide, otra SEGUNDA) y PRECIOS_GERENCIA
+// en una sola operación, con candado, ubicando cada dato por el NOMBRE de la columna (no por posición).
+// Si la hoja trae fórmulas en la última fila de datos, esa fórmula se copia a la fila nueva.
+// A diferencia de importarProductosMasivo, guarda también peso, estibas, viajes y fletes.
+// =============================================================================
+function _fechaISO(v, def) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : def;
+}
+function crearProductoCompleto(body) {
+  const p = (body && body.producto) || {};
+  const tmcode = String(p.tmcode || "").trim();
+  if (!/^\d+$/.test(tmcode)) return { ok: false, error: "El código debe ser numérico" };
+  const nombre = String(p.tmdescrip || "").trim().replace(/\s+/g, " ").toUpperCase();
+  if (nombre.length < 5) return { ok: false, error: "Falta el nombre del producto" };
+  const precio = Number(p.precio_base);
+  if (!(precio > 0)) return { ok: false, error: "El precio base es obligatorio" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const hojaProd = getHoja(HOJAS.PRODUCTOS), hojaPre = getHoja(HOJAS.PRECIOS);
+    const dProd = hojaProd.getDataRange().getValues();
+    const hP = dProd[0].map(h => String(h).trim());
+    const iCod = hP.indexOf("tmcode");
+    if (iCod === -1) return { ok: false, error: "PRODUCTOS_MAESTRO no tiene la columna tmcode" };
+    for (let i = 1; i < dProd.length; i++) {
+      if (String(dProd[i][iCod]).trim() === tmcode) return { ok: false, error: "El código " + tmcode + " ya existe en el catálogo" };
+    }
+    const dPre = hojaPre.getDataRange().getValues();
+    const hR = dPre[0].map(h => String(h).trim());
+    const iCodPre = hR.indexOf("tmcode");
+    for (let i = 1; i < dPre.length; i++) {
+      if (iCodPre > -1 && String(dPre[i][iCodPre]).trim() === tmcode) return { ok: false, error: "Ya existe una política de precio con el código " + tmcode };
+    }
+    const num = v => (v === "" || v === null || v === undefined || isNaN(Number(v))) ? "" : Number(v);
+    const esTercero = !!p.es_tercero;
+    const descM = num(p.descuento_max), descV = num(p.descuento_max_vendedor);
+    const base = {
+      tmcode: Number(tmcode), tmdescrip: nombre, tmund: String(p.tmund || "UND").toUpperCase(),
+      tmcant: num(p.tmcant) || 0, precio_base: precio, flete_cali: num(p.flete_cali),
+      precio_m2: num(p.precio_m2), flete_m2: num(p.flete_m2), descuento_max: descM === "" ? 0.05 : descM,
+      observacion: esTercero ? "PRODUCTO DE TERCEROS - compra a proveedor externo para reventa" : "",
+      tipo_iva: p.tipo_iva === "G" ? "G" : "E", stock_minimo: num(p.stock_minimo), calidad: "PRIMERA", es_tercero: esTercero,
+      peso_kg_unitario: num(p.peso_kg_unitario), unidades_por_m2: num(p.unidades_por_m2), unidades_por_estiba: num(p.unidades_por_estiba),
+      valor_estiba_unidad: num(p.valor_estiba_unidad), estibas_por_viaje: String(p.estibas_por_viaje || ""),
+      unidades_por_viaje: num(p.unidades_por_viaje), peso_total_viaje_kg: num(p.peso_total_viaje_kg), flete_total_viaje_cali: num(p.flete_total_viaje_cali)
+    };
+    const filas = [base];
+    if (p.segunda) filas.push(Object.assign({}, base, { calidad: "SEGUNDA", tmcant: 0 }));
+    const filaIni = hojaProd.getLastRow() + 1;
+    // Fórmulas de la última fila de datos (si las hay) para copiarlas a las filas nuevas
+    const fUlt = hojaProd.getLastRow() > 1 ? hojaProd.getRange(hojaProd.getLastRow(), 1, 1, hP.length).getFormulasR1C1()[0] : [];
+    hojaProd.getRange(filaIni, 1, filas.length, hP.length).setValues(filas.map(f => hP.map(h => (h in f) ? f[h] : "")));
+    fUlt.forEach((fx, c) => { if (fx && String(fx).charAt(0) === "=") for (let k = 0; k < filas.length; k++) hojaProd.getRange(filaIni + k, c + 1).setFormulaR1C1(fx); });
+
+    const idPrecio = siguienteId(hojaPre, 0);
+    const pre = {
+      id_precio: idPrecio, tmcode: Number(tmcode), precio_base_planta: precio,
+      descuento_max_vendedor: descV === "" ? 0.03 : descV,
+      costo_flete_zonaA: num(p.costo_flete_zonaA) || 0, costo_flete_zonaB: num(p.costo_flete_zonaB) || 0,
+      fecha_vigencia_inicio: _fechaISO(p.fecha_vigencia_inicio, new Date()), fecha_vigencia_fin: _fechaISO(p.fecha_vigencia_fin, new Date(2099, 11, 31)),
+      precio_m2: num(p.precio_m2) || 0, tmdescrip: nombre, tmund: base.tmund
+    };
+    hojaPre.getRange(hojaPre.getLastRow() + 1, 1, 1, hR.length).setValues([hR.map(h => (h in pre) ? pre[h] : "")]);
+    SpreadsheetApp.flush();
+    return { ok: true, mensaje: "Producto " + tmcode + " creado", tmcode: tmcode, filas_producto: filas.length, id_precio: idPrecio };
+  } finally { lock.releaseLock(); }
 }
 
 function registrarDespacho(body) {
