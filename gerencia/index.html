@@ -3255,5 +3255,10 @@ async function gzGuardarTextos() {
   GZ.textos = T; toast('✅ Textos del cotizador guardados');
 }
 </script>
+<script src="../assets/guia.js"></script>
+<script src="guias.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded",function(){ if(window.GuiaSIVIL&&window.GUIAS_GERENCIA) GuiaSIVIL.init({app:"gerencia",guias:window.GUIAS_GERENCIA}); });
+</script>
 </body>
 </html>
