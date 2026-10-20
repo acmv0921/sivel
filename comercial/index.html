@@ -2612,7 +2612,7 @@ const _filaEstiba = R.estiba > 0 ? '<div class="resumen-row"><span>Estiba</span>
 lineas.forEach((l,i) => {
 const fletePorUnidadAP = R.lineas[i].fleteUnit;
 const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
-const nombre = prod ? prod.tmdescrip : `Código ${l.tmcode}`;
+const nombre = '<span style="color:#64748b;font-weight:700;">' + l.tmcode + '</span> · ' + (prod ? prod.tmdescrip : 'Producto sin nombre');
 const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (prod ? prod.precio_base : 0);
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
@@ -3200,7 +3200,7 @@ function renderLineasAP() {
     return `<div class="linea-item">
       <div class="linea-num">${i+1}</div>
       <div class="linea-info">
-        <div class="linea-prod">${l.tmdescrip} ${calidadBadge}</div>
+        <div class="linea-prod"><span style="color:#64748b;">${l.tmcode}</span> · ${l.tmdescrip} ${calidadBadge}</div>
         <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · ${fmt(l.precio_base)}/u · Desc ${pctTxt(l.descuento_aplicado)}${unitResultante !== null ? ' · Unit. resultante: ' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">

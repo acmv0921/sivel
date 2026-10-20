@@ -2014,7 +2014,7 @@ function renderAprobaciones() {
       return `
       <div class="aprobacion-card" id="aprobCard_${a.id}">
         <div style="font-size:.68rem;color:var(--morado);font-weight:700;">DESCUENTO REQUIERE APROBACIÓN</div>
-        <div style="font-weight:700;font-size:.9rem;margin:4px 0;">${a.producto_nombre}</div>
+        <div style="font-weight:700;font-size:.9rem;margin:4px 0;">${a.tmcode?'<span style="color:#64748b;">'+a.tmcode+'</span> · ':''}${a.producto_nombre}</div>
         <div style="font-size:.78rem;color:#555;">
           Vendedor: <strong>${a.vendedor}</strong><br>
           Cliente: ${a.cliente}<br>
@@ -2035,7 +2035,7 @@ function renderAprobaciones() {
     <div class="aprobacion-card ${a.estado}" style="margin-bottom:.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
-          <div style="font-size:.8rem;font-weight:700;">${a.producto_nombre}</div>
+          <div style="font-size:.8rem;font-weight:700;">${a.tmcode?a.tmcode+' · ':''}${a.producto_nombre}</div>
           <div style="font-size:.72rem;color:#666;">${a.vendedor} · AP #${a.ap_id} · ${(parseFloat(a.descuento)*100).toFixed(1)}%</div>
         </div>
         <span class="badge ${a.estado==='aprobada'?'badge-activo':'badge-inactivo'}">${a.estado==='aprobada'?'✅ Aprobada':'❌ Rechazada'}</span>

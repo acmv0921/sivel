@@ -2288,7 +2288,7 @@ ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#
     const und  = undProducto(l.tmcode);
     html2 += `
     <div class="linea-desp">
-      <div class="linea-desp-title">${nombreProducto(l.tmcode)}</div>
+      <div class="linea-desp-title"><span style="color:#64748b;">${l.tmcode}</span> · ${nombreProducto(l.tmcode)}</div>
       <div class="linea-desp-meta">
         Solicitado: ${sol} ${und} · Despachado: ${desp} · <strong>Pendiente: ${pend} ${und}</strong>
         ${(() => {
@@ -2815,7 +2815,7 @@ function renderCurado() {
           <div class="curado-label">DÍAS</div>
         </div>
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:0.9rem;">${nombreProducto(p.tmcode)} ${badgeCalidad}</div>
+          <div style="font-weight:700;font-size:0.9rem;"><span style="color:#64748b;">${p.tmcode}</span> · ${nombreProducto(p.tmcode)} ${badgeCalidad}</div>
           <div style="font-size:0.75rem;color:#666;margin-top:2px;">${p.cant_en_curado} ${undProducto(p.tmcode)} en curado</div>
           <div style="font-size:0.72rem;color:#888;">Liberación: ${fmtFecha(p.fecha_liberacion_curado)}</div>
         </div>
@@ -2990,7 +2990,7 @@ function renderAverias() {
   cont.innerHTML = filas.map(p => `
     <div style="padding:8px 0;border-bottom:1px solid var(--borde);">
       <div style="font-size:0.7rem;color:#888;">${fmtFecha(p.fecha_registro)}</div>
-      <div style="font-weight:700;font-size:0.85rem;">${nombreProducto(p.tmcode)}</div>
+      <div style="font-weight:700;font-size:0.85rem;"><span style="color:#64748b;">${p.tmcode}</span> · ${nombreProducto(p.tmcode)}</div>
       <div style="font-size:0.75rem;color:${p._color};">⚠️ ${p._etiqueta}: ${p._cant} ${undProducto(p.tmcode)} — AP #${p.ap_id||'N/A'}</div>
     </div>`).join('');
 }
