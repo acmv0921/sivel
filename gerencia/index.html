@@ -585,6 +585,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="modal-title" id="npTitulo">🆕 Nuevo producto</div>
     <p style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Se registra en el catálogo y en la tabla de precios. Todas las aplicaciones (Comercial, Despacho, Suministros) lo verán de inmediato.</p>
 
+    <div id="npBorradorAviso" style="display:none;background:#fff7ed;border:1px solid #f59e0b;border-radius:10px;padding:.5rem .7rem;font-size:.72rem;margin-bottom:.6rem;">📝 Se recuperó el borrador que estaba llenando. <a href="#" onclick="npDescartarBorrador();return false;" style="color:#b91c1c;font-weight:700;">Descartar borrador</a></div>
     <div style="font-weight:800;color:var(--naranja);font-size:.8rem;margin:.4rem 0;">1. Identificación</div>
     <div class="form-group"><label class="form-label">Código asignado *</label><input id="npCodigo" class="form-control" type="number" inputmode="numeric" placeholder="3302" oninput="npCalc()"><div id="npCodAviso" style="font-size:.68rem;margin-top:.2rem;"></div></div>
     <div class="form-group"><label class="form-label">Nombre del producto * (ej. BLOQUE AV 20X10X8 BEIGE OSCURO BIC)</label><input id="npNombre" class="form-control" type="text" placeholder="TIPO MEDIDAS COLOR LÍNEA" oninput="npCalc()"><div id="npParecidos" style="font-size:.66rem;color:#666;margin-top:.2rem;"></div></div>
@@ -2137,7 +2138,7 @@ async function guardarPrecio() {
 // =============================================================================
 // NUEVO PRODUCTO — alta completa (PRODUCTOS_MAESTRO + PRECIOS_GERENCIA)
 // =============================================================================
-function abrirNuevoProducto() {
+function abrirNuevoProducto(sinBorrador) {
   NP_EDIT = null; NP_ORIG = null;
   document.getElementById('npTitulo').textContent = '🆕 Nuevo producto'; document.getElementById('npCodigo').readOnly = false;
   document.querySelectorAll('#modalNuevoProd .npSoloNuevo').forEach(function (e) { e.style.display = ''; });
@@ -2148,8 +2149,38 @@ function abrirNuevoProducto() {
   document.getElementById('npDescM').value = '5'; document.getElementById('npDescV').value = '3';
   document.getElementById('npDesde').value = new Date().toISOString().split('T')[0]; document.getElementById('npHasta').value = '2099-12-31';
   document.getElementById('npSegunda').checked = false; document.getElementById('npErr').textContent = '';
+  document.getElementById('npBorradorAviso').style.display = 'none';
+  if (!sinBorrador) npRestaurar();
   npCalc(); document.getElementById('modalNuevoProd').classList.add('show');
 }
+
+// ---- Borrador del formulario "Nuevo producto" (se conserva en el celular hasta guardar o descartar)
+var NP_CAMPOS = ['npCodigo', 'npNombre', 'npUnd', 'npTercero', 'npStock', 'npStockMin', 'npPrecio', 'npIva', 'npDescM', 'npDescV', 'npDesde', 'npHasta', 'npPeso', 'npUm2', 'npUEst', 'npVEst', 'npUViaje', 'npFleteV', 'npFA', 'npFB'];
+var NP_BORR = 'sivil_gerencia_borrador_producto';
+function npGuardarBorrador() {
+  if (NP_EDIT || !document.getElementById('modalNuevoProd').classList.contains('show')) return;
+  try {
+    var v = {}; NP_CAMPOS.forEach(function (id) { v[id] = document.getElementById(id).value; });
+    v.npSegunda = document.getElementById('npSegunda').checked;
+    if (!v.npCodigo && !v.npNombre && !v.npPrecio) { localStorage.removeItem(NP_BORR); return; }
+    localStorage.setItem(NP_BORR, JSON.stringify({ ts: Date.now(), v: v }));
+  } catch (e) {}
+}
+function npRestaurar() {
+  try {
+    var b = JSON.parse(localStorage.getItem(NP_BORR) || 'null');
+    if (!b || !b.v || Date.now() - b.ts > 7 * 86400000) return;
+    NP_CAMPOS.forEach(function (id) { if (b.v[id] !== undefined) document.getElementById(id).value = b.v[id]; });
+    document.getElementById('npSegunda').checked = !!b.v.npSegunda;
+    document.getElementById('npBorradorAviso').style.display = '';
+  } catch (e) {}
+}
+function npBorrarBorrador() { try { localStorage.removeItem(NP_BORR); } catch (e) {} }
+function npDescartarBorrador() { npBorrarBorrador(); abrirNuevoProducto(true); }
+document.addEventListener('DOMContentLoaded', function () {
+  var m = document.getElementById('modalNuevoProd');
+  if (m) { m.addEventListener('input', npGuardarBorrador); m.addEventListener('change', npGuardarBorrador); }
+});
 function _npN(id) { var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? 0 : v; }
 function npDatos() {
   var fab = document.getElementById('npTercero').value === 'no';
@@ -2212,7 +2243,7 @@ async function guardarNuevoProducto() {
   try {
     var r = await escribirGAS({ accion: 'crearProductoCompleto', producto: d });
     if (r && r.ok) {
-      cerrarModal('modalNuevoProd'); toast('✅ Producto ' + d.tmcode + ' creado y disponible en todas las apps', 4500); await cargarDatos();
+      npBorrarBorrador(); cerrarModal('modalNuevoProd'); toast('✅ Producto ' + d.tmcode + ' creado y disponible en todas las apps', 4500); await cargarDatos();
     } else if (_SANDBOX) { cerrarModal('modalNuevoProd'); }
     else { err.style.color = ''; err.textContent = (r && /Acci[oó]n desconocida/i.test(r.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel para activarla.' : ((r && r.error) || 'No se pudo guardar. Intenta de nuevo.'); }
   } finally { _guardandoProd = false; btn.disabled = false; }
@@ -2280,7 +2311,7 @@ function abrirEditarProducto(cod) {
   var pr = filas.filter(function (x) { return String(x.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA'; })[0] || filas[0];
   if (!pr) { toast('No se encontró el producto ' + cod); return; }
   var pre = (G.precios || []).filter(function (x) { return String(x.tmcode) === cod; })[0] || {};
-  abrirNuevoProducto();
+  abrirNuevoProducto(true);
   NP_EDIT = cod;
   document.getElementById('npTitulo').textContent = '✏️ Editar producto ' + cod;
   document.querySelectorAll('#modalNuevoProd .npSoloNuevo').forEach(function (e) { e.style.display = 'none'; });
