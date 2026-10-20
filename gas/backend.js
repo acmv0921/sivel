@@ -128,6 +128,7 @@ case "anularAPPrueba": resultado = anularOBorrarAPPrueba(body); break;
       case "crearPrecio": resultado = crearPrecio(body); break;
       case "actualizarPrecio": resultado = actualizarPrecio(body); break;
       case "crearProductoCompleto": resultado = crearProductoCompleto(body); break;
+      case "eliminarProducto": resultado = eliminarProducto(body); break;
     case "registrarSuministro": resultado = registrarSuministro(body); break;
     case "guardarReceta": resultado = guardarReceta(body); break;
       default: resultado = { ok: false, error: `Acción desconocida: ${accion}` };
@@ -1282,6 +1283,61 @@ function crearProductoCompleto(body) {
     hojaPre.getRange(hojaPre.getLastRow() + 1, 1, 1, hR.length).setValues([hR.map(h => (h in pre) ? pre[h] : "")]);
     SpreadsheetApp.flush();
     return { ok: true, mensaje: "Producto " + tmcode + " creado", tmcode: tmcode, filas_producto: filas.length, id_precio: idPrecio };
+  } finally { lock.releaseLock(); }
+}
+
+
+// =============================================================================
+// ELIMINAR PRODUCTO (19 oct 2026) — opción "Eliminar producto" de SIVIL Gerencia.
+// Borra las filas del tmcode en PRODUCTOS_MAESTRO (todas las calidades) y PRECIOS_GERENCIA.
+// Protecciones: NO borra si hay existencias, o si el producto aparece en DETALLE_AP,
+// CONTROL_PATIO_Y_LOGISTICA o REGISTRO_ENSAMBLES (se perdería historial).
+// Antes de borrar copia las filas a la hoja PRODUCTOS_ELIMINADOS (respaldo recuperable).
+// =============================================================================
+function _contarTmcode(hoja, tmcode) {
+  if (!hoja) return 0;
+  const d = hoja.getDataRange().getValues();
+  if (d.length < 2) return 0;
+  let c = d[0].map(h => String(h).trim()).indexOf("tmcode");
+  if (c === -1) return 0;
+  let n = 0; for (let i = 1; i < d.length; i++) if (String(d[i][c]).trim() === tmcode) n++;
+  return n;
+}
+function eliminarProducto(body) {
+  const tmcode = String((body && body.tmcode) || "").trim();
+  if (!/^\d+$/.test(tmcode)) return { ok: false, error: "El código debe ser numérico" };
+  if (String(body.confirmar || "").trim() !== tmcode) return { ok: false, error: "Falta la confirmación: escribe el código del producto" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const hojaProd = getHoja(HOJAS.PRODUCTOS), hojaPre = getHoja(HOJAS.PRECIOS);
+    const ss = hojaProd.getParent();
+    const dProd = hojaProd.getDataRange().getValues(), hP = dProd[0].map(h => String(h).trim());
+    const iCod = hP.indexOf("tmcode"), iCant = hP.indexOf("tmcant"), iSeg = hP.indexOf("stock_segunda");
+    if (iCod === -1) return { ok: false, error: "PRODUCTOS_MAESTRO no tiene la columna tmcode" };
+    const filasProd = []; for (let i = 1; i < dProd.length; i++) if (String(dProd[i][iCod]).trim() === tmcode) filasProd.push(i);
+    if (!filasProd.length) return { ok: false, error: "El código " + tmcode + " no existe en el catálogo" };
+    // Protecciones
+    let stock = 0; filasProd.forEach(i => { stock += (Number(dProd[i][iCant]) || 0) + (iSeg > -1 ? (Number(dProd[i][iSeg]) || 0) : 0); });
+    if (stock > 0) return { ok: false, error: "El producto tiene existencias (" + stock + "). Ajusta el inventario a 0 antes de eliminarlo." };
+    const usos = [["DETALLE_AP", _contarTmcode(ss.getSheetByName("DETALLE_AP"), tmcode)], ["CONTROL_PATIO_Y_LOGISTICA", _contarTmcode(ss.getSheetByName("CONTROL_PATIO_Y_LOGISTICA"), tmcode)], ["REGISTRO_ENSAMBLES", _contarTmcode(ss.getSheetByName("REGISTRO_ENSAMBLES"), tmcode)]].filter(u => u[1] > 0);
+    if (usos.length) return { ok: false, error: "No se puede eliminar: el producto tiene historial (" + usos.map(u => u[1] + " en " + u[0]).join(", ") + "). Borrarlo dañaría esos registros." };
+    // Respaldo
+    const dPre = hojaPre.getDataRange().getValues(), hR = dPre[0].map(h => String(h).trim()), iCodPre = hR.indexOf("tmcode");
+    const filasPre = []; for (let i = 1; i < dPre.length; i++) if (iCodPre > -1 && String(dPre[i][iCodPre]).trim() === tmcode) filasPre.push(i);
+    let bak = ss.getSheetByName("PRODUCTOS_ELIMINADOS");
+    if (!bak) { bak = ss.insertSheet("PRODUCTOS_ELIMINADOS"); bak.getRange(1, 1, 1, 4).setValues([["fecha", "eliminado_por", "hoja_origen", "fila_original (columnas de la hoja de origen)"]]); bak.setFrozenRows(1); }
+    const ahora = new Date(), quien = String(body.eliminado_por || "");
+    const res = [];
+    filasProd.forEach(i => res.push([ahora, quien, HOJAS.PRODUCTOS].concat(dProd[i])));
+    filasPre.forEach(i => res.push([ahora, quien, HOJAS.PRECIOS].concat(dPre[i])));
+    const ancho = Math.max.apply(null, res.map(r => r.length));
+    bak.getRange(bak.getLastRow() + 1, 1, res.length, ancho).setValues(res.map(r => r.concat(new Array(ancho - r.length).fill(""))));
+    // Borrado (de abajo hacia arriba para no desplazar filas)
+    filasPre.slice().reverse().forEach(i => hojaPre.deleteRow(i + 1));
+    filasProd.slice().reverse().forEach(i => hojaProd.deleteRow(i + 1));
+    SpreadsheetApp.flush();
+    return { ok: true, mensaje: "Producto " + tmcode + " eliminado (respaldo en PRODUCTOS_ELIMINADOS)", filas_producto: filasProd.length, filas_precio: filasPre.length };
   } finally { lock.releaseLock(); }
 }
 

@@ -485,6 +485,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card-title">💰 Tabla de Precios Gerencia</div>
       <button class="btn btn-primary btn-sm" onclick="abrirModalPrecio()">➕ Nuevo precio</button>
       <button class="btn btn-sm" style="background:var(--naranja);color:#fff;margin-left:.4rem;" onclick="abrirNuevoProducto()">🆕 Nuevo producto</button>
+      <button class="btn btn-sm" style="background:#fff;color:var(--rojo);border:1.5px solid var(--rojo);margin-left:.4rem;" onclick="abrirElimProducto()">🗑️ Eliminar producto</button>
     </div>
     <div id="listaPrecios"><div class="loading"><div class="spinner"></div></div></div>
   </div>
@@ -618,6 +619,22 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="npAlertas" style="font-size:.72rem;color:#b45309;margin-top:.5rem;"></div>
     <button class="btn btn-primary" id="npBtn" style="margin-top:.8rem;" onclick="guardarNuevoProducto()">💾 Revisar y guardar producto</button>
     <div id="npErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
+  </div>
+</div>
+
+
+<!-- MODAL: ELIMINAR PRODUCTO -->
+<div id="modalElimProd" class="modal-overlay">
+  <div class="modal-box" style="max-width:520px;">
+    <button class="modal-close" onclick="cerrarModal('modalElimProd')">✕</button>
+    <div class="modal-title">🗑️ Eliminar producto</div>
+    <p style="font-size:.72rem;color:#666;margin-bottom:.8rem;">Solo se puede eliminar un producto SIN existencias y SIN historial en APs, despachos o ensambles. Antes de borrar, se guarda una copia en la hoja PRODUCTOS_ELIMINADOS.</p>
+    <div class="form-group"><label class="form-label">Código del producto</label>
+      <div style="display:flex;gap:.4rem;"><input id="epCodigo" class="form-control" type="number" inputmode="numeric" oninput="epBuscar()"><button class="btn btn-sm" style="background:#eee;" onclick="epBuscar()">Buscar</button></div></div>
+    <div id="epInfo" style="background:#f6f8fb;border-radius:10px;padding:.7rem;font-size:.76rem;line-height:1.5;margin-bottom:.6rem;">Escribe el código del producto.</div>
+    <div class="form-group" id="epConfWrap" style="display:none;"><label class="form-label">Para confirmar, escribe de nuevo el código</label><input id="epConfirma" class="form-control" type="number" inputmode="numeric" oninput="epBuscar()"></div>
+    <button class="btn" id="epBtn" style="background:var(--rojo);color:#fff;" disabled onclick="eliminarProductoGerencia()">🗑️ Eliminar definitivamente</button>
+    <div id="epErr" style="font-size:.75rem;color:var(--rojo);margin-top:.5rem;"></div>
   </div>
 </div>
 
@@ -2156,6 +2173,55 @@ async function guardarNuevoProducto() {
     } else if (_SANDBOX) { cerrarModal('modalNuevoProd'); }
     else { err.style.color = ''; err.textContent = (r && /Acci[oó]n desconocida/i.test(r.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel para activarla.' : ((r && r.error) || 'No se pudo guardar. Intenta de nuevo.'); }
   } finally { _guardandoProd = false; btn.disabled = false; }
+}
+
+
+// =============================================================================
+// ELIMINAR PRODUCTO (con protecciones: sin existencias y sin historial)
+// =============================================================================
+function abrirElimProducto() {
+  document.getElementById('epCodigo').value = ''; document.getElementById('epConfirma').value = ''; document.getElementById('epErr').textContent = '';
+  epBuscar(); document.getElementById('modalElimProd').classList.add('show');
+}
+function epEstado() {
+  var cod = String(document.getElementById('epCodigo').value || '').trim();
+  var filas = (G.productos || []).filter(function (p) { return String(p.tmcode) === cod; });
+  var r = { cod: cod, filas: filas, bloqueos: [] };
+  if (!cod || !filas.length) return r;
+  var stock = filas.reduce(function (a, p) { return a + (Number(p.tmcant) || 0) + (Number(p.stock_segunda) || 0); }, 0);
+  if (stock > 0) r.bloqueos.push('Tiene existencias (' + stock.toLocaleString('es-CO') + '). Ajusta el inventario a 0 primero.');
+  var nd = (G.detalles || []).filter(function (d) { return String(d.tmcode) === cod; }).length;
+  var np = (G.patio || []).filter(function (d) { return String(d.tmcode) === cod; }).length;
+  if (nd) r.bloqueos.push('Aparece en ' + nd + ' línea(s) de APs.');
+  if (np) r.bloqueos.push('Aparece en ' + np + ' registro(s) de patio/despacho.');
+  r.precios = (G.precios || []).filter(function (x) { return String(x.tmcode) === cod; }).length;
+  return r;
+}
+function epBuscar() {
+  var r = epEstado(), info = document.getElementById('epInfo'), wrap = document.getElementById('epConfWrap'), btn = document.getElementById('epBtn');
+  document.getElementById('epErr').textContent = '';
+  if (!r.cod) { info.textContent = 'Escribe el código del producto.'; wrap.style.display = 'none'; btn.disabled = true; return; }
+  if (!r.filas.length) { info.innerHTML = '<span style="color:#b91c1c">⛔ No existe ningún producto con el código ' + r.cod + '.</span>'; wrap.style.display = 'none'; btn.disabled = true; return; }
+  var p = r.filas[0];
+  info.innerHTML = '<b>' + r.cod + ' — ' + p.tmdescrip + '</b><br>' + r.filas.length + ' fila(s) en el catálogo (' + r.filas.map(function (x) { return x.calidad || 'PRIMERA'; }).join(', ') + ') · ' + r.precios + ' política(s) de precio' +
+    (r.bloqueos.length ? '<br><span style="color:#b91c1c">⛔ No se puede eliminar:<br>• ' + r.bloqueos.join('<br>• ') + '</span>' : '<br><span style="color:#15803d">✓ Sin existencias ni historial: se puede eliminar.</span>');
+  wrap.style.display = r.bloqueos.length ? 'none' : '';
+  btn.disabled = r.bloqueos.length > 0 || String(document.getElementById('epConfirma').value || '').trim() !== r.cod;
+}
+let _eliminandoProd = false;
+async function eliminarProductoGerencia() {
+  if (_eliminandoProd) return;
+  var r = epEstado(), err = document.getElementById('epErr'); err.style.color = '';
+  if (!r.filas.length || r.bloqueos.length) return;
+  if (!confirm('⚠️ ¿Está seguro de borrar este producto?\n\n' + r.cod + ' — ' + r.filas[0].tmdescrip + '\n\nSe quitará del catálogo y de la tabla de precios de todas las aplicaciones. Se guarda una copia en la hoja PRODUCTOS_ELIMINADOS.')) return;
+  _eliminandoProd = true; document.getElementById('epBtn').disabled = true; err.style.color = '#555'; err.textContent = 'Eliminando...';
+  try {
+    var quien = G.usuario || '';
+    var res = await escribirGAS({ accion: 'eliminarProducto', tmcode: r.cod, confirmar: String(document.getElementById('epConfirma').value).trim(), eliminado_por: quien });
+    if (res && res.ok) { cerrarModal('modalElimProd'); toast('🗑️ Producto ' + r.cod + ' eliminado (respaldo en PRODUCTOS_ELIMINADOS)', 4500); await cargarDatos(); }
+    else if (_SANDBOX) { cerrarModal('modalElimProd'); }
+    else { err.style.color = ''; err.textContent = (res && /Acci[oó]n desconocida/i.test(res.error || '')) ? 'El servidor aún no tiene activada esta función. Avisa a Abdiel.' : ((res && res.error) || 'No se pudo eliminar. Intenta de nuevo.'); epBuscar(); }
+  } finally { _eliminandoProd = false; }
 }
 
 function abrirEditPrecio(p) {
