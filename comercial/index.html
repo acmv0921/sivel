@@ -2733,7 +2733,7 @@ async function apPDF(ap_id, modo) {
         try { await navigator.share({ files: [file], title: 'AP ' + ap.ap_id, text: 'Pedido AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.' }); return; } catch (e) { return; }
       }
       toast('Subiendo PDF para compartir…');
-      const d = await _guardarPDFEnDrive('venta', nombre, blob);
+      const d = await escribirGAS({ accion: 'guardarInformePDF', tipo: 'ap', ap_id: ap.ap_id, nombre_archivo: nombre, base64_pdf: await _blobABase64(blob) });
       if (d && d.ok && d.url) { window.open('https://wa.me/?text=' + encodeURIComponent('Pedido AP #' + ap.ap_id + ' — ' + (cli.razon_social || '') + ' — POSTECSA DE COLOMBIA S.A.S.\n' + d.url), '_blank'); return; }
       toast('No se pudo subir a Drive: se descarga el PDF para enviarlo manualmente');
     }
