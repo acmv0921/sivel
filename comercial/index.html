@@ -2661,63 +2661,72 @@ document.getElementById('modalVerAP').classList.add('show');
 
 
 // PDF de UNA AP (desde el detalle de Mis APs): descargar o compartir por WhatsApp.
+// Arma el PDF de una AP a partir de sus datos (ap = fila de PREVENTAS_AP, lineas = filas de DETALLE_AP).
+function _apPDFArmar(ap, lineas) {
+  const cli = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit)) || {};
+  const flete = parseFloat(ap.flete_valor) || 0;
+  const incl = ap.flete_incorporado === true || /^(TRUE|VERDADERO)$/i.test(String(ap.flete_incorporado));
+  const R = calcPedido(lineas.map(function (l) {
+    const pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
+    return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
+      precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
+      tipo_iva: l.tipo_iva || pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
+  }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1 });
+  const { jsPDF } = window.jspdf; const doc = new jsPDF();
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  let y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id);
+  doc.setFontSize(9);
+  const fecha = parseFecha(ap.fecha_creacion) || new Date();
+  const linea = (t) => { String(t).split('\n').forEach(function (x) { doc.splitTextToSize(x, W - 28).forEach(function (z) { doc.text(z, 14, y); y += 4.6; }); }); };
+  const vend = (STATE.vendedores || []).find(v => String(v.id_vendedor) === String(ap.vendedor_id));
+  linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit);
+  linea('Vendedor: ' + ((vend && vend.nombre_vendedor) || (STATE.vendedor || {}).nombre_vendedor || '') + '   ·   Fecha: ' + fmtFechaHora(fecha));
+  linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge cliente)' : 'Con transporte — ' + (ap.destino || '')));
+  if (ap.nombre_obra) linea('Obra: ' + ap.nombre_obra);
+  if (ap.direccion_obra) linea('Dirección: ' + ap.direccion_obra);
+  if (ap.orden_compra_cliente) linea('Orden de compra: ' + ap.orden_compra_cliente);
+  if (ap.cotizacion_ref) linea('Cotización: ' + ap.cotizacion_ref);
+  if (ap.condiciones_pago) linea('Condiciones de pago: ' + ap.condiciones_pago);
+  if (ap.obs_entrega) linea('Observaciones: ' + ap.obs_entrega);
+  y += 3;
+  const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(14, y, W - 28, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(8);
+    doc.text('Código', 16, y + 4.6); doc.text('Producto', 32, y + 4.6); doc.text('Cant.', 118, y + 4.6, { align: 'right' }); doc.text('Desc.', 132, y + 4.6, { align: 'right' }); doc.text('V. unit.', 158, y + 4.6, { align: 'right' }); doc.text('Total', W - 16, y + 4.6, { align: 'right' });
+    doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
+  cab();
+  lineas.forEach(function (l, i) {
+    const r = R.lineas[i], pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
+    const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 78);
+    if (y + nom.length * 4 + 6 > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); cab(); }
+    doc.setFontSize(8);
+    doc.text(String(l.tmcode), 16, y); doc.text(nom, 32, y);
+    doc.text(String(l.cantidad_solicitada) + ' ' + (pr.tmund || ''), 118, y, { align: 'right' });
+    doc.text(pctTxt(parseFloat(l.descuento_aplicado) || 0), 132, y, { align: 'right' });
+    doc.text(fmt(r.precioDesc), 158, y, { align: 'right' });
+    doc.text(fmt(r.neto) + (r.grav ? ' +IVA' : ''), W - 16, y, { align: 'right' });
+    y += nom.length * 4 + 2;
+  });
+  y += 4; if (y > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); }
+  const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 70, y); doc.text(b, W - 16, y, { align: 'right' }); y += 5; };
+  fila('Subtotal', fmt(R.subtotal - R.descuentos + R.estiba + R.postes));
+  fila('Flete' + (incl ? ' (incluido)' : ''), fmt(flete));
+  fila('IVA', fmt(R.iva));
+  fila('TOTAL', fmt(R.total), true);
+  _pdfFooter(doc, W, H);
+  const limpio = String(cli.razon_social || ap.cliente_nit).replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ ]/g, '').trim().slice(0, 40);
+  const dd = ('0' + fecha.getDate()).slice(-2) + '-' + ('0' + (fecha.getMonth() + 1)).slice(-2) + '-' + fecha.getFullYear();
+  return { blob: doc.output('blob'), nombre: 'AP_' + ap.ap_id + '_' + limpio + '_' + dd + '.pdf', cli: cli };
+}
+
+// PDF de UNA AP (desde el detalle de Mis APs): descargar o compartir por WhatsApp.
 async function apPDF(ap_id, modo) {
   try {
-    const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
+    const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id) && !/^cancel/i.test(String(a.estado_ap||''))) || STATE.aps.find(a => String(a.ap_id) === String(ap_id));
     if (!ap) { toast('No se encontró la AP'); return; }
     if (!window.jspdf) { toast('⚠️ El generador de PDF no cargó. Revisa la conexión y recarga la app.'); return; }
     let dets = STATE.detallesAP;
     if (!dets || !dets.some(d => String(d.ap_id) === String(ap_id))) dets = await leerGVIZ('DETALLE_AP');
     const lineas = dets.filter(d => String(d.ap_id) === String(ap_id));
-    const cli = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit)) || {};
-    const flete = parseFloat(ap.flete_valor) || 0;
-    const incl = ap.flete_incorporado === true || /^(TRUE|VERDADERO)$/i.test(String(ap.flete_incorporado));
-    const R = calcPedido(lineas.map(function (l) {
-      const pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
-      return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
-        precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
-        tipo_iva: l.tipo_iva || pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
-    }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1 });
-    const { jsPDF } = window.jspdf; const doc = new jsPDF();
-    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-    let y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id);
-    doc.setFontSize(9);
-    const fecha = parseFecha(ap.fecha_creacion);
-    const linea = (t) => { String(t).split('\n').forEach(function (x) { doc.splitTextToSize(x, W - 28).forEach(function (z) { doc.text(z, 14, y); y += 4.6; }); }); };
-    linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit);
-    linea('Vendedor: ' + ((STATE.vendedor || {}).nombre_vendedor || '') + (fecha ? '   ·   Fecha: ' + fmtFechaHora(fecha) : ''));
-    linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge cliente)' : 'Con transporte — ' + (ap.destino || '')));
-    if (ap.nombre_obra) linea('Obra: ' + ap.nombre_obra);
-    if (ap.direccion_obra) linea('Dirección: ' + ap.direccion_obra);
-    if (ap.orden_compra_cliente) linea('Orden de compra: ' + ap.orden_compra_cliente);
-    if (ap.cotizacion_ref) linea('Cotización: ' + ap.cotizacion_ref);
-    if (ap.condiciones_pago) linea('Condiciones de pago: ' + ap.condiciones_pago);
-    if (ap.obs_entrega) linea('Observaciones: ' + ap.obs_entrega);
-    y += 3;
-    const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(14, y, W - 28, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(8);
-      doc.text('Código', 16, y + 4.6); doc.text('Producto', 32, y + 4.6); doc.text('Cant.', 118, y + 4.6, { align: 'right' }); doc.text('Desc.', 132, y + 4.6, { align: 'right' }); doc.text('V. unit.', 158, y + 4.6, { align: 'right' }); doc.text('Total', W - 16, y + 4.6, { align: 'right' });
-      doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
-    cab();
-    lineas.forEach(function (l, i) {
-      const r = R.lineas[i], pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
-      const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 78);
-      if (y + nom.length * 4 + 6 > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); cab(); }
-      doc.setFontSize(8);
-      doc.text(String(l.tmcode), 16, y); doc.text(nom, 32, y);
-      doc.text(String(l.cantidad_solicitada) + ' ' + (pr.tmund || ''), 118, y, { align: 'right' });
-      doc.text(pctTxt(parseFloat(l.descuento_aplicado) || 0), 132, y, { align: 'right' });
-      doc.text(fmt(r.precioDesc), 158, y, { align: 'right' });
-      doc.text(fmt(r.neto) + (r.grav ? ' +IVA' : ''), W - 16, y, { align: 'right' });
-      y += nom.length * 4 + 2;
-    });
-    y += 4; if (y > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); }
-    const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 70, y); doc.text(b, W - 16, y, { align: 'right' }); y += 5; };
-    fila('Subtotal', fmt(R.subtotal - R.descuentos + R.estiba + R.postes));
-    fila('Flete' + (incl ? ' (incluido)' : ''), fmt(flete));
-    fila('IVA', fmt(R.iva));
-    fila('TOTAL', fmt(R.total), true);
-    _pdfFooter(doc, W, H);
-    const blob = doc.output('blob'), nombre = 'AP_' + ap.ap_id + '.pdf';
+    const r = _apPDFArmar(ap, lineas), blob = r.blob, nombre = r.nombre, cli = r.cli;
     const file = new File([blob], nombre, { type: 'application/pdf' });
     if (modo === 'compartir') {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2730,6 +2739,18 @@ async function apPDF(ap_id, modo) {
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; a.click();
   } catch (e) { console.error(e); toast('⚠️ No se pudo generar el PDF: ' + e.message); }
+}
+
+// Copia automatica de cada AP nueva en el Drive (carpeta "SIVIL - APs" / mes). Nunca bloquea ni rompe el guardado.
+async function apCopiaDrive(ap, lineas) {
+  try {
+    if (!window.jspdf || !ap || !ap.ap_id) return;
+    const r = _apPDFArmar(ap, lineas);
+    const b64 = await _blobABase64(r.blob);
+    const res = await escribirGAS({ accion: 'guardarInformePDF', tipo: 'ap', ap_id: ap.ap_id, nombre_archivo: r.nombre, base64_pdf: b64 });
+    if (!res || !res.ok) console.warn('Copia de la AP en Drive no se guardó:', res && res.error);
+    else toast('📁 Copia de la AP #' + ap.ap_id + ' guardada en Drive', 2500);
+  } catch (e) { console.warn('Copia de la AP en Drive falló:', e); }
 }
 
 async function cancelarAP(ap_id) {
@@ -4230,6 +4251,8 @@ toast("✅ AP guardada correctamente");
 
 registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre, resultado.ap_id);
 await czVincularAP(resultado.ap_id);
+// Copia de la AP en Drive (en segundo plano; usa los datos recien guardados)
+{ const _apC = Object.assign({}, body, { ap_id: resultado.ap_id, fecha_creacion: new Date() }); const _lnC = JSON.parse(JSON.stringify(body.detalle || [])); apCopiaDrive(_apC, _lnC); }
 
 limpiarPedido();
 await cargarMisAPs();

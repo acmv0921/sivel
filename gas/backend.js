@@ -489,14 +489,42 @@ function getCarpetasInformes() {
   return { ok: true, ventas: ventas.getUrl(), despachos: despachos.getUrl() };
 }
 
+
+// Guarda el enlace del PDF en la fila de la AP (columna pdf_url, se crea si no existe). Si hay varias filas con el mismo numero usa la no cancelada.
+function _anotarPdfAP(ap_id, url) {
+  var hoja = getHoja(HOJAS.PREVENTAS);
+  var datos = hoja.getDataRange().getValues();
+  var hdr = datos[0].map(function (h) { return String(h).trim(); });
+  var col = hdr.indexOf('pdf_url');
+  if (col < 0) { col = hdr.length; hoja.getRange(1, col + 1).setValue('pdf_url'); }
+  var cEst = hdr.indexOf('estado_ap'), fila = -1;
+  for (var i = 1; i < datos.length; i++) {
+    if (String(datos[i][0]) === String(ap_id)) {
+      if (fila < 0 || String(datos[i][cEst]).toLowerCase().indexOf('cancel') !== 0) fila = i + 1;
+    }
+  }
+  if (fila > 0) hoja.getRange(fila, col + 1).setValue(url);
+}
+
 function guardarInformePDF(body) {
   try {
-    var nombreCarpeta = (body.tipo === 'despacho') ? 'SIVIL - Informes de Despacho' : 'SIVIL - Informes de Ventas';
-    var folder = _getOrCrearCarpetaInformes(nombreCarpeta);
-    var bytes = Utilities.base64Decode(body.base64_pdf);
+    var folder, nombreCarpeta = (body.tipo === 'despacho') ? 'SIVIL - Informes de Despacho' : 'SIVIL - Informes de Ventas';
     var nombreArchivo = body.nombre_archivo || ('Informe_' + Date.now() + '.pdf');
+    if (body.tipo === 'ap') {
+      // Copia de cada AP: "SIVIL - APs" / aaaa-mm. Si ya existe el nombre se guarda como version nueva (_v2, _v3...), nunca se pisa.
+      var raiz = _getOrCrearCarpetaInformes('SIVIL - APs');
+      var mes = Utilities.formatDate(new Date(), 'America/Bogota', 'yyyy-MM');
+      var it = raiz.getFoldersByName(mes);
+      folder = it.hasNext() ? it.next() : raiz.createFolder(mes);
+      var base = nombreArchivo.replace(/\.pdf$/i, ''), v = 1;
+      while (folder.getFilesByName(nombreArchivo).hasNext()) { v++; nombreArchivo = base + '_v' + v + '.pdf'; }
+    } else {
+      folder = _getOrCrearCarpetaInformes(nombreCarpeta);
+    }
+    var bytes = Utilities.base64Decode(body.base64_pdf);
     var blob = Utilities.newBlob(bytes, 'application/pdf', nombreArchivo);
     var file = folder.createFile(blob);
+    if (body.tipo === 'ap' && body.ap_id) { try { _anotarPdfAP(body.ap_id, file.getUrl()); } catch (eA) {} }
     return { ok: true, fileId: file.getId(), url: file.getUrl() };
   } catch(e) {
     return { ok: false, error: e.message };
