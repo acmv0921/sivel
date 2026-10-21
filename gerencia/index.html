@@ -398,7 +398,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="card" style="padding:.7rem 1rem;margin-bottom:.6rem;">
       <label class="form-label" style="margin-bottom:.2rem;">📅 Estadísticas desde</label>
       <select id="selPeriodoDash" class="form-control" onchange="cambiarPeriodo(this.value)">
-        <option value="oficial">Inicio oficial de SIVIL (20/10/2026)</option>
+        <option value="oficial">Inicio de SIVIL (desde el 19/10/2026)</option>
         <option value="todo">Todo el histórico</option>
       </select>
       <div id="notaPeriodoDash" style="font-size:.68rem;color:#666;margin-top:.3rem;"></div>
@@ -910,7 +910,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="form-group">
       <label class="form-label">📅 Estadísticas desde</label>
       <select id="selPeriodoInf" class="form-control" onchange="cambiarPeriodo(this.value)">
-        <option value="oficial">Inicio oficial de SIVIL (20/10/2026)</option>
+        <option value="oficial">Inicio de SIVIL (desde el 19/10/2026)</option>
         <option value="todo">Todo el histórico</option>
       </select>
     </div>
@@ -1701,8 +1701,8 @@ function calcularVentasKPIs() {
   if (elDescProm)    elDescProm.textContent    = num2(descProm) + '%';
 }
 
-// ---- Período de las estadísticas: por defecto desde el inicio oficial de SIVIL (20/10/2026) ----
-var INICIO_OFICIAL = new Date(2026, 9, 20);
+// ---- Período de las estadísticas: por defecto desde el inicio de SIVIL (19/10/2026) ----
+var INICIO_OFICIAL = new Date(2026, 9, 19);
 function periodoActual() { try { return localStorage.getItem('sivil_gerencia_periodo') === 'todo' ? 'todo' : 'oficial'; } catch (e) { return 'oficial'; } }
 function _desdePeriodo() { return periodoActual() === 'oficial' ? INICIO_OFICIAL : null; }
 function enPeriodo(ap) { var d = _desdePeriodo(); if (!d) return true; var f = parseFecha(ap && ap.fecha_creacion); return !f || f >= d; }
@@ -1715,7 +1715,7 @@ function sincronizarPeriodo() {
   var v = periodoActual();
   ['selPeriodoDash', 'selPeriodoInf'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = v; });
   var n = document.getElementById('notaPeriodoDash');
-  if (n) n.textContent = v === 'oficial' ? 'Total de APs, ventas, vendedores y estados cuentan desde el 20/10/2026. Los pendientes de despacho incluyen todos, también los anteriores.' : 'Se cuentan todas las APs, incluidas las anteriores al inicio oficial.';
+  if (n) n.textContent = v === 'oficial' ? 'Total de APs, ventas, vendedores y estados cuentan desde el 19/10/2026. Los pendientes de despacho incluyen todos, también los anteriores.' : 'Se cuentan todas las APs, incluidas las anteriores al inicio oficial.';
 }
 function renderDashboard() {
   sincronizarPeriodo();
@@ -2679,7 +2679,7 @@ function renderInformeGerencia() {
   const totalValor = filas.reduce((s,f)=>s+f.valor_total, 0);
   const apsUnicas = new Set(filas.map(f=>f.ap_id)).size;
   const resumen = document.getElementById('infResumen');
-  if (resumen) resumen.textContent = `${filas.length} línea(s) de producto · ${apsUnicas} AP(s) · Total: $${fmtNInf(totalValor)}` + (periodoActual()==='oficial' ? ' · desde el 20/10/2026' : ' · todo el histórico');
+  if (resumen) resumen.textContent = `${filas.length} línea(s) de producto · ${apsUnicas} AP(s) · Total: $${fmtNInf(totalValor)}` + (periodoActual()==='oficial' ? ' · desde el 19/10/2026' : ' · todo el histórico');
 }
 
 function limpiarFiltrosInforme() {
