@@ -2647,6 +2647,7 @@ ${_filaEstiba}
 <div class="resumen-row total"><span>TOTAL</span><span>${fmt(R.total)}</span></div>
 </div>`;
 
+html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-primary btn-sm" onclick="apPDF('${ap_id}','descargar')">📄 Descargar PDF</button><button class="btn btn-success btn-sm" onclick="apPDF('${ap_id}','compartir')">📲 Enviar por WhatsApp</button></div>`;
 if (!ap.cotizacion_ref && ap.estado_ap !== "Cancelada" && !(STATE.cotizDeAP || {})[String(ap_id)]) {
 html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-outline btn-sm" onclick="czDesdeAP('${ap_id}')">🧾 Cotización de respaldo de esta AP</button></div>`;
 }
@@ -2656,6 +2657,79 @@ html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-da
 
 document.getElementById('modalVerAPContent').innerHTML = html;
 document.getElementById('modalVerAP').classList.add('show');
+}
+
+
+// PDF de UNA AP (desde el detalle de Mis APs): descargar o compartir por WhatsApp.
+async function apPDF(ap_id, modo) {
+  try {
+    const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
+    if (!ap) { toast('No se encontró la AP'); return; }
+    if (!window.jspdf) { toast('⚠️ El generador de PDF no cargó. Revisa la conexión y recarga la app.'); return; }
+    let dets = STATE.detallesAP;
+    if (!dets || !dets.some(d => String(d.ap_id) === String(ap_id))) dets = await leerGVIZ('DETALLE_AP');
+    const lineas = dets.filter(d => String(d.ap_id) === String(ap_id));
+    const cli = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit)) || {};
+    const flete = parseFloat(ap.flete_valor) || 0;
+    const incl = ap.flete_incorporado === true || /^(TRUE|VERDADERO)$/i.test(String(ap.flete_incorporado));
+    const R = calcPedido(lineas.map(function (l) {
+      const pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
+      return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
+        precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
+        tipo_iva: l.tipo_iva || pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
+    }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1 });
+    const { jsPDF } = window.jspdf; const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    let y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id);
+    doc.setFontSize(9);
+    const fecha = parseFecha(ap.fecha_creacion);
+    const linea = (t) => { String(t).split('\n').forEach(function (x) { doc.splitTextToSize(x, W - 28).forEach(function (z) { doc.text(z, 14, y); y += 4.6; }); }); };
+    linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit);
+    linea('Vendedor: ' + ((STATE.vendedor || {}).nombre_vendedor || '') + (fecha ? '   ·   Fecha: ' + fmtFechaHora(fecha) : ''));
+    linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge cliente)' : 'Con transporte — ' + (ap.destino || '')));
+    if (ap.nombre_obra) linea('Obra: ' + ap.nombre_obra);
+    if (ap.direccion_obra) linea('Dirección: ' + ap.direccion_obra);
+    if (ap.orden_compra_cliente) linea('Orden de compra: ' + ap.orden_compra_cliente);
+    if (ap.cotizacion_ref) linea('Cotización: ' + ap.cotizacion_ref);
+    if (ap.condiciones_pago) linea('Condiciones de pago: ' + ap.condiciones_pago);
+    if (ap.obs_entrega) linea('Observaciones: ' + ap.obs_entrega);
+    y += 3;
+    const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(14, y, W - 28, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(8);
+      doc.text('Código', 16, y + 4.6); doc.text('Producto', 32, y + 4.6); doc.text('Cant.', 118, y + 4.6, { align: 'right' }); doc.text('Desc.', 132, y + 4.6, { align: 'right' }); doc.text('V. unit.', 158, y + 4.6, { align: 'right' }); doc.text('Total', W - 16, y + 4.6, { align: 'right' });
+      doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
+    cab();
+    lineas.forEach(function (l, i) {
+      const r = R.lineas[i], pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
+      const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 78);
+      if (y + nom.length * 4 + 6 > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); cab(); }
+      doc.setFontSize(8);
+      doc.text(String(l.tmcode), 16, y); doc.text(nom, 32, y);
+      doc.text(String(l.cantidad_solicitada) + ' ' + (pr.tmund || ''), 118, y, { align: 'right' });
+      doc.text(pctTxt(parseFloat(l.descuento_aplicado) || 0), 132, y, { align: 'right' });
+      doc.text(fmt(r.precioDesc), 158, y, { align: 'right' });
+      doc.text(fmt(r.neto) + (r.grav ? ' +IVA' : ''), W - 16, y, { align: 'right' });
+      y += nom.length * 4 + 2;
+    });
+    y += 4; if (y > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); }
+    const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 70, y); doc.text(b, W - 16, y, { align: 'right' }); y += 5; };
+    fila('Subtotal', fmt(R.subtotal - R.descuentos + R.estiba + R.postes));
+    fila('Flete' + (incl ? ' (incluido)' : ''), fmt(flete));
+    fila('IVA', fmt(R.iva));
+    fila('TOTAL', fmt(R.total), true);
+    _pdfFooter(doc, W, H);
+    const blob = doc.output('blob'), nombre = 'AP_' + ap.ap_id + '.pdf';
+    const file = new File([blob], nombre, { type: 'application/pdf' });
+    if (modo === 'compartir') {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'AP ' + ap.ap_id, text: 'Pedido AP #' + ap.ap_id + ' — POSTECSA DE COLOMBIA S.A.S.' }); return; } catch (e) { return; }
+      }
+      toast('Subiendo PDF para compartir…');
+      const d = await _guardarPDFEnDrive('venta', nombre, blob);
+      if (d && d.ok && d.url) { window.open('https://wa.me/?text=' + encodeURIComponent('Pedido AP #' + ap.ap_id + ' — ' + (cli.razon_social || '') + ' — POSTECSA DE COLOMBIA S.A.S.\n' + d.url), '_blank'); return; }
+      toast('No se pudo subir a Drive: se descarga el PDF para enviarlo manualmente');
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; a.click();
+  } catch (e) { console.error(e); toast('⚠️ No se pudo generar el PDF: ' + e.message); }
 }
 
 async function cancelarAP(ap_id) {
@@ -3713,6 +3787,7 @@ async function continuarOCerrarCesion(){
   CESION_ACTUAL = [];
   localStorage.removeItem('sivel_cesion_actual');
   irA('screenPedidos');
+  if (ultimo && ultimo.ap_id && confirm('¿Quieres el PDF de la AP #' + ultimo.ap_id + ' para enviarlo por WhatsApp?\n\n(También lo tienes siempre en Mis APs → abrir la AP → Descargar PDF)')) { await apPDF(ultimo.ap_id, 'compartir'); }
 }
 
 function _pdfFooter(doc, pageW, pageH){
