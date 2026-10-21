@@ -2215,7 +2215,8 @@ function renderAPsUrgentes() {
 // MODAL DESPACHO
 // =============================================================================
 function abrirDespacho(ap_id) {
-  const ap      = S.aps.find(a => String(a.ap_id) === String(ap_id));
+  // Si el numero de AP se repite (una cancelada y otra activa), se usa la activa
+  const ap      = S.aps.find(a => String(a.ap_id) === String(ap_id) && !/^cancel/i.test(String(a.estado_ap||''))) || S.aps.find(a => String(a.ap_id) === String(ap_id));
   if (!ap) return;
   const lineas  = S.detalles.filter(d => String(d.ap_id) === String(ap_id));
   S.despachoActual = { ap, lineas, cargas: {} };

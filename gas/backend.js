@@ -1003,6 +1003,34 @@ function getPreventa(ap_id) {
   if (!ap) return { ok: false, error: "AP no encontrada" };
   return { ok: true, data: { ...ap, detalle: getDetalleAP(ap_id).data } };
 }
+
+// Archiva APs canceladas que usan el mismo numero que una AP nueva: cambia el ap_id de la AP cancelada
+// y de sus lineas a "<id>-C1", "<id>-C2"... (se conserva el historial, pero ya no choca con el numero reutilizado).
+function _archivarAPCanceladaDup(ap_id, soloDetalleIds) {
+  const hojaAP = getHoja(HOJAS.PREVENTAS), hojaDet = getHoja("DETALLE_AP");
+  const dAP = hojaAP.getDataRange().getValues(), dDet = hojaDet.getDataRange().getValues();
+  const hDet = dDet[0].map(function (h) { return String(h).trim(); });
+  const cDetAp = hDet.indexOf("ap_id"), cDetId = hDet.indexOf("detalle_id");
+  const hAP = dAP[0].map(function (h) { return String(h).trim(); });
+  const cEstado = hAP.indexOf("estado_ap");
+  let n = 0;
+  for (let i = 1; i < dAP.length; i++) {
+    if (String(dAP[i][0]) === String(ap_id) && String(dAP[i][cEstado]).trim().toLowerCase().indexOf("cancel") === 0) {
+      n++;
+      let nuevo = ap_id + "-C" + n;
+      hojaAP.getRange(i + 1, 1).setNumberFormat("@").setValue(nuevo);
+      for (let j = 1; j < dDet.length; j++) {
+        if (String(dDet[j][cDetAp]) === String(ap_id) && (!soloDetalleIds || soloDetalleIds.indexOf(Number(dDet[j][cDetId])) >= 0)) {
+          hojaDet.getRange(j + 1, cDetAp + 1).setNumberFormat("@").setValue(nuevo);
+        }
+      }
+    }
+  }
+  return n;
+}
+// Reparacion unica (21/10/2026): AP 2451 cancelada (OAR, lineas 159-164) chocaba con la AP 2451 de Linnk (linea 165).
+function repararAP2451() { return _archivarAPCanceladaDup(2451, [159, 160, 161, 162, 163, 164]); }
+
 function crearPreventa(body) {
   const hoja = getHoja(HOJAS.PREVENTAS);
   let ap_id;
@@ -1017,6 +1045,9 @@ function crearPreventa(body) {
         return { ok: false, error: "AP #" + ap_id + " ya existe y esta activa. Verifica el numero." };
       }
     }
+    // Si el numero lo uso antes una AP CANCELADA, se archiva esa AP (y sus lineas) con otro codigo
+    // para que no se mezclen los productos de la AP vieja con los de la nueva.
+    _archivarAPCanceladaDup(ap_id);
   } else {
     ap_id = body.modo_prueba === true ? siguienteConsecutivoPrueba() : siguienteId(hoja, 0);
   }

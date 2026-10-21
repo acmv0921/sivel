@@ -2545,7 +2545,7 @@ function cardAP(ap) {
 }
 
 async function verAP(ap_id) {
-const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id));
+const ap = STATE.aps.find(a => String(a.ap_id) === String(ap_id) && !/^cancel/i.test(String(a.estado_ap||''))) || STATE.aps.find(a => String(a.ap_id) === String(ap_id));
 if (!ap) return;
 const [detalles, patioAP] = await Promise.all([
   leerGVIZ("DETALLE_AP"),
