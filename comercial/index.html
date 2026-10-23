@@ -732,6 +732,8 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="diasCreditoGrp" style="display:none;margin-top:6px;">
 <label class="form-label">📆 Días de crédito</label>
 <input id="diasCredito" class="form-control" type="number" min="1" step="1" placeholder="Ej: 30" oninput="STATE.pedido._condPagoTexto='';calcularTotales()">
+<label class="form-label" style="margin-top:6px;">💵 Anticipo % (opcional, el saldo queda a crédito)</label>
+<input id="anticipoPct" class="form-control" type="number" min="0" max="99" step="1" placeholder="Ej: 50" oninput="STATE.pedido._condPagoTexto='';calcularTotales()">
 </div>
 <input id="condicionesPago" type="hidden">
 </div>
@@ -3011,7 +3013,7 @@ transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','llevaEstiba','conFlete','fleteIncluidoSel']
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','anticipoPct','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 { const _ow = document.getElementById('obsInternasWrap'); if (_ow) _ow.style.display = 'none'; }
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
@@ -3364,7 +3366,8 @@ P.transportista_flete = val('transportistaFleteInput');
 P.forma_pago = val('formaPago');
 P.dias_credito = val('diasCredito');
 if (g('diasCreditoGrp')) g('diasCreditoGrp').style.display = P.forma_pago === 'CREDITO' ? 'block' : 'none';
-P.condiciones_pago = P._condPagoTexto ? P._condPagoTexto : P.forma_pago === 'CREDITO' ? ('Crédito ' + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
+const _antc = parseInt(val('anticipoPct')) || 0;
+P.condiciones_pago = P._condPagoTexto ? P._condPagoTexto : P.forma_pago === 'CREDITO' ? ((_antc > 0 && _antc < 100 ? ('Anticipo ' + _antc + ' % + saldo a crédito ') : 'Crédito ') + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
 if (g('condicionesPago')) g('condicionesPago').value = P.condiciones_pago;
 P.lleva_estiba = val('llevaEstiba');
 P.flete_incluido = val('fleteIncluidoSel');
@@ -3624,7 +3627,7 @@ setVal('celContactoObra', p.cel_contacto);
 setVal('ordenCompraCliente', p.orden_compra_cliente);
 setVal('cotizacionRef', p.cotizacion_ref);
 setVal('condicionesPago', p.condiciones_pago); setVal('obsInternasAP', p.obs_internas); { const _ow = document.getElementById('obsInternasWrap'); if (_ow && p.obs_internas) _ow.style.display = ''; }
-setVal('formaPago', p.forma_pago); setVal('diasCredito', p.dias_credito); setVal('llevaEstiba', p.lleva_estiba);
+setVal('formaPago', p.forma_pago); setVal('diasCredito', p.dias_credito); { const _m = /Anticipo\s+(\d+)/i.exec(p.condiciones_pago || ''); setVal('anticipoPct', _m ? _m[1] : ''); } setVal('llevaEstiba', p.lleva_estiba);
 setVal('conFlete', p.con_flete || (((p.destino || p.tipo_entrega || 'PLANTA') === 'PLANTA') ? 'NO' : 'SI'));
 setVal('fleteIncluidoSel', p.flete_incluido); setVal('numViajes', p.num_viajes || 1);
 setVal('nombreObra', p.nombre_obra);
