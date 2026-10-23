@@ -535,6 +535,11 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-title" style="margin:0;">🧾 Cotización · <span id="czEstadoTxt"></span></div><button class="btn btn-outline btn-sm" onclick="czVolver()">← Volver</button></div>
         <div class="form-group"><label>Número de cotización (automático)</label><input id="czNumero" class="form-control" placeholder="Se asigna solo al guardar: iniciales + consecutivo general" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
+        <div id="czApoyoBloque" class="form-group" style="display:none;background:#eff6ff;border:1px solid #3b82f6;border-radius:8px;padding:.5rem .7rem;">
+          <label style="font-weight:700;color:#1a3a5c;">🤝 Cotización a nombre del vendedor (apoyo)</label>
+          <select id="czVendApoyo" class="form-control" onchange="czSetVendApoyo(this.value)"><option value="">Mía (sin apoyo)</option></select>
+          <div style="font-size:.7rem;color:#1a3a5c;margin-top:3px;">El número, la firma y el pie del PDF saldrán con el nombre de este vendedor. Solo se puede elegir antes del primer guardado.</div>
+        </div>
         <div style="font-size:.78rem;margin-bottom:6px;">Fecha: <b id="czFecha"></b></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><div class="form-group"><label>Vigencia de precios</label><select id="czVigModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 15 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czVig" class="form-control" type="date" style="margin-top:4px;"></div><div class="form-group"><label>Despachos hasta</label><select id="czDespModo" class="form-control" onchange="czModoFechas()"><option value="auto">Automática: fecha de cotización + 30 días</option><option value="manual">Manual (elegir fecha)</option></select><input id="czDesp" class="form-control" type="date" style="margin-top:4px;"></div></div>
       </div>
@@ -2016,7 +2021,8 @@ async function cargarVendedoresParaApoyo() {
 
     STATE.vendedoresParaApoyo = vendedoresReales.map(u => ({
       id_vendedor: u.id_vendedor || u.cedula || '',
-      nombre: u.nombre_vendedor || u.nombre_completo || u.nombre || ''
+      nombre: u.nombre_vendedor || u.nombre_completo || u.nombre || '',
+      datos: u
     })).filter(v => v.id_vendedor && v.nombre);
 
     const sel = document.getElementById('vendedorApoyadoSelect');
@@ -2242,6 +2248,25 @@ function poblarFiltroVendedorClientes() {
   sel.innerHTML = '<option value="">Todos los vendedores</option>' +
     vendedores.map(v => `<option value="${v.id_vendedor}">${v.nombre}</option>`).join('');
   sel.value = actual;
+}
+
+// Datos del vendedor que debe FIGURAR en los documentos (AP, cotización, informe, firma).
+// Si la venta es de apoyo, es el vendedor apoyado; nunca quien la digitó.
+function _vendedorDoc(idVendedor) {
+  const yo = STATE.vendedor || {};
+  const id = String(idVendedor == null ? '' : idVendedor);
+  if (!id || id === String(yo.id_vendedor || '')) return yo;
+  const ap = (STATE.vendedoresParaApoyo || []).find(x => String(x.id_vendedor) === id);
+  if (ap) return Object.assign({}, ap.datos || {}, { id_vendedor: ap.id_vendedor, nombre_vendedor: (ap.datos && ap.datos.nombre_vendedor) || ap.nombre });
+  const u = (STATE.todosUsuariosActivos || []).find(x => String(x.id_vendedor) === id);
+  if (u) return { id_vendedor: u.id_vendedor, nombre_vendedor: u.nombre };
+  return yo;
+}
+// Id del vendedor apoyado si la casilla de venta de apoyo está marcada (si no, '').
+function _vendApoyoSel() {
+  const c = document.getElementById('checkVentaApoyo');
+  if (!STATE.puedeApoyar || !c || !c.checked) return '';
+  return (document.getElementById('vendedorApoyadoSelect') || {}).value || '';
 }
 
 function _nombreVendedorCliente(idVendedor) {
@@ -2683,7 +2708,7 @@ function _apPDFArmar(ap, lineas) {
   doc.setFontSize(9);
   const fecha = parseFecha(ap.fecha_creacion) || new Date();
   const linea = (t) => { String(t).split('\n').forEach(function (x) { doc.splitTextToSize(x, W - 28).forEach(function (z) { doc.text(z, 14, y); y += 4.6; }); }); };
-  const vend = (STATE.vendedores || []).find(v => String(v.id_vendedor) === String(ap.vendedor_id));
+  const vend = _vendedorDoc(ap.vendedor_id);
   linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit);
   linea('Vendedor: ' + ((vend && vend.nombre_vendedor) || (STATE.vendedor || {}).nombre_vendedor || '') + '   ·   Fecha: ' + fmtFechaHora(fecha));
   linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge cliente)' : 'Con transporte — ' + (ap.destino || '')));
@@ -3849,7 +3874,8 @@ async function cerrarCesionYGenerarInforme(){
     let y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial');
     doc.setFontSize(9);
     const _hayApoyoPDF = CESION_ACTUAL.some(it => it.es_apoyo);
-    doc.text((_hayApoyoPDF ? 'Gestionado por: ' : 'Vendedor: ') + (STATE.vendedor?.nombre_vendedor||'') + (_hayApoyoPDF ? ' (apoyo a vendedor)' : ''), 14, y);
+    const _nomsVend = _hayApoyoPDF ? Array.from(new Set(CESION_ACTUAL.map(it => it.vendedor_nombre).filter(Boolean))) : [];
+    doc.text('Vendedor: ' + (_hayApoyoPDF && _nomsVend.length ? _nomsVend.join(', ') : (STATE.vendedor?.nombre_vendedor||'')), 14, y);
     doc.text('Fecha: ' + fmtFechaHora(new Date()), pageW - 14, y, {align:'right'});
     y += 4;
     doc.text('Pedido(s) en esta visita: ' + CESION_ACTUAL.length, 14, y);
@@ -3873,7 +3899,7 @@ async function cerrarCesionYGenerarInforme(){
 
       doc.setFontSize(9);
       doc.text('Cliente: ' + (it.cliente_nombre||'') + '   ·   NIT: ' + (it.cliente_nit||''), 14, y); y += 5;
-      if (it.es_apoyo) { doc.text('Vendedor: ' + (it.vendedor_nombre||'') + '   ·   Gestionada por: ' + (it.apoyo_por||'') + ' (apoyo)', 14, y); y += 5; }
+      if (it.es_apoyo) { doc.text('Vendedor: ' + (it.vendedor_nombre||''), 14, y); y += 5; }
       const entrega = (it.tipo_entrega==='PLANTA') ? 'Venta en planta (recoge cliente)' : ('Con transporte — ' + (it.destino||''));
       doc.text('Entrega: ' + entrega, 14, y); y += 5;
       if (it.direccion_obra) { doc.text('Dirección de entrega: ' + it.direccion_obra, 14, y); y += 5; }
@@ -5259,7 +5285,7 @@ function czRenderLista() {
   var yo = String(STATE.vendedor && STATE.vendedor.id_vendedor || '');
   var rol = String((STATE.vendedor && (STATE.vendedor.rol || '')) || '').toUpperCase();
   var ver = CZ_LISTA.filter(function (c) {
-    if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo) return false;
+    if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo && !(function () { try { return String((JSON.parse(c.payload) || {}).apoyo_por_id || '') === yo; } catch (e) { return false; } })()) return false;
     if (CZ_FILTRO !== 'todas' && c.estado !== CZ_FILTRO) return false;
     var fc = parseFecha(c.fecha), d1 = (document.getElementById('czDesde') || {}).value || '', d2 = (document.getElementById('czHasta') || {}).value || '';
     var unAnio = document.getElementById('czUnAnio') ? document.getElementById('czUnAnio').checked : true;
@@ -5297,8 +5323,24 @@ function czAbrir(uid) {
   CZ.ap_id = c.ap_id || '';
   CZ.uid = c.uid; CZ.estado = c.estado; if (c.numero) CZ.numero = String(c.numero); czMostrarForm();
 }
+function czPoblarApoyo() {
+  var b = document.getElementById('czApoyoBloque'); if (!b) return;
+  b.style.display = STATE.puedeApoyar ? 'block' : 'none'; if (!STATE.puedeApoyar) return;
+  var sel = document.getElementById('czVendApoyo'); if (!sel) return;
+  var yo = String((STATE.vendedor || {}).id_vendedor || '');
+  sel.innerHTML = '<option value="">Mía (sin apoyo)</option>' + (STATE.vendedoresParaApoyo || []).map(function (x) { return '<option value="' + x.id_vendedor + '">' + czH(x.nombre) + '</option>'; }).join('');
+  sel.value = (CZ && CZ.vendedor_id && String(CZ.vendedor_id) !== yo) ? String(CZ.vendedor_id) : '';
+  sel.disabled = !!(CZ && CZ.uid);
+}
+function czSetVendApoyo(id) {
+  var yo = STATE.vendedor || {};
+  if (!id || String(id) === String(yo.id_vendedor)) { CZ.vendedor_id = yo.id_vendedor || ''; delete CZ.vendedor_nombre; delete CZ.apoyo_por; delete CZ.apoyo_por_id; return; }
+  var v = _vendedorDoc(id);
+  CZ.vendedor_id = String(id); CZ.vendedor_nombre = v.nombre_vendedor || ''; CZ.apoyo_por = yo.nombre_vendedor || ''; CZ.apoyo_por_id = yo.id_vendedor || '';
+}
 function czMostrarForm() {
   czArmarClientesDL();
+  czPoblarApoyo();
   (function () { var e = document.getElementById('czNumero'); if (!e) return; var rol = String((STATE.vendedor && STATE.vendedor.rol) || '').toUpperCase(); e.readOnly = !/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol); })();
   setTimeout(czRenderHistorico, 0);
   document.getElementById('czListaWrap').style.display = 'none';
@@ -5645,7 +5687,7 @@ async function czAbrirDesde(origen) {
   var c = origen.cliente; CZ.cliente.nit = String(c.cliente_nit); CZ.cliente.nombre = c.razon_social;
   CZ.lineas = origen.lineas; CZ.estiba = origen.estiba; CZ.fleteModo = origen.fleteModo; CZ.flete = origen.flete; CZ.cliente.obra = origen.obra || ''; CZ.cliente.dir_despacho = origen.dir || 'CLIENTE RECOGE';
   CZ.cliente.atn = origen.atn || ''; CZ.cliente.cel = origen.cel || ''; CZ.numero = origen.numero || ''; CZ.pago = origen.pago || 8;
-  if (origen.vendedor_id) CZ.vendedor_id = origen.vendedor_id;
+  if (origen.vendedor_id) { CZ.vendedor_id = origen.vendedor_id; if (STATE.puedeApoyar && String(origen.vendedor_id) !== String((STATE.vendedor || {}).id_vendedor)) czSetVendApoyo(origen.vendedor_id); }
   if (origen.desdePedido) CZ._desdePedido = true; if (origen.respaldoAP) CZ._respaldoAP = origen.respaldoAP;
   czMostrarForm();
   var set = function (id, v) { var e = document.getElementById(id); if (e && v != null) e.value = v; };
@@ -5659,7 +5701,7 @@ async function czDesdePedido() {
   var hayFlete = P.con_flete === 'SI' && P.flete_valor > 0;
   await czAbrirDesde({ desdePedido: true, cliente: P.cliente, lineas: P.lineas.map(function (l) { return czLineaDe(l); }), estiba: P.lleva_estiba === 'SI' ? 'SI' : 'NO',
     fleteModo: hayFlete ? (P.flete_incluido === 'SI' ? 'INCLUIDO' : 'APARTE') : 'NO', flete: hayFlete ? P.flete_valor : 0, obra: P.nombre_obra, dir: P.direccion_obra, atn: P.contacto_obra, cel: P.cel_contacto,
-    numero: P.cotizacion_ref || '', pago: P.forma_pago === 'CONTADO' ? 8 : 0 });
+    numero: P.cotizacion_ref || '', pago: P.forma_pago === 'CONTADO' ? 8 : 0, vendedor_id: _vendApoyoSel() });
   if (CZ && !CZ.pago) CZ.pago = 8;
   toast('🧾 Cotización pre-llenada desde el pedido: pon el número, elige pago, entrega y plazo, y sácala en PDF.', 6000);
 }
@@ -5719,7 +5761,7 @@ function czImg(url, respaldo) {
 async function czPDF(opts) {
   opts = opts || {};
   if (!opts.backup && !(await czGuardar(undefined, false, true))) return;
-  var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = STATE.vendedor || {};
+  var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = _vendedorDoc(CZ.vendedor_id);
   var logo1 = await czImg('../assets/logo_postecsa.jpg', (typeof _LOGO_SRC !== 'undefined' ? _LOGO_SRC : null)), logo2 = await czImg('../assets/logo_postec.jpg');
   var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 10, R = W - M, y;
   var txt = function (s, x, yy, o) { doc.text(Array.isArray(s) ? s : String(s == null ? '' : s), x, yy, o || {}); };
