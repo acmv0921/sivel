@@ -2307,7 +2307,10 @@ async function cargarMisAPs() {
     const hoy = new Date(); const limite = new Date(hoy.getTime() - 365 * 86400000);
     const dI = d1 ? new Date(d1 + 'T00:00:00') : null, dF = d2 ? new Date(d2 + 'T23:59:59') : null;
     STATE.aps   = todas.filter(a => {
-      if (String(a.vendedor_id) !== id || (fil && a.estado_ap !== fil)) return false;
+      // También aparecen las AP que este usuario creó como apoyo de otro vendedor.
+      const _miNombre = String(STATE.vendedor?.nombre_vendedor || '').trim().toLowerCase();
+      const _creoApoyo = _miNombre && String(a.creado_por_apoyo || '').trim().toLowerCase() === _miNombre;
+      if ((String(a.vendedor_id) !== id && !_creoApoyo) || (fil && a.estado_ap !== fil)) return false;
       const f = parseFecha(a.fecha_creacion);
       if (f) { if (unAnio && f < limite) return false; if (dI && f < dI) return false; if (dF && f > dF) return false; }
       if (q) {
