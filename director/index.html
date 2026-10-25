@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#14532d">
+<title>SIVIL · Director Comercial</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--verde:#1a7a4a;--verde2:#14532d;--borde:#e2e8f0;--texto:#1e2b3a;--gris:#f4f6f9;--rojo:#b91c1c;--amb:#b45309;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--gris);color:var(--texto);font-size:14px;}
+.header{background:var(--verde2);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.header h1{font-size:1.05rem;} .header small{opacity:.8;display:block;font-size:.72rem;font-weight:400;}
+.tabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--borde);background:#fff;flex-wrap:wrap;}
+.tab{border:none;background:none;padding:9px 16px;cursor:pointer;font-size:.9rem;font-weight:600;color:#555;border-bottom:3px solid transparent;}
+.tab.on{color:var(--verde2);border-bottom-color:var(--verde);}
+.wrap{padding:16px 20px;max-width:1500px;margin:0 auto;}
+.card{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+.filtros label{font-size:.72rem;color:#666;display:block;margin-bottom:2px;}
+input,select{padding:7px 9px;border:1.5px solid var(--borde);border-radius:7px;font-size:.85rem;background:#fff;}
+button.btn{background:var(--verde);color:#fff;border:none;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:.85rem;}
+button.btn.sec{background:#fff;color:var(--verde2);border:1.5px solid var(--verde);}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+.kpi{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:10px 12px;}
+.kpi small{color:#666;font-size:.7rem;display:block;} .kpi b{font-size:1.1rem;}
+table{width:100%;border-collapse:collapse;font-size:.82rem;background:#fff;}
+th{background:#f1f5f9;text-align:left;padding:8px;border-bottom:2px solid var(--borde);position:sticky;top:0;white-space:nowrap;}
+td{padding:7px 8px;border-bottom:1px solid var(--borde);vertical-align:top;}
+tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
+.num{text-align:right;white-space:nowrap;}
+.pill{display:inline-block;border-radius:10px;padding:1px 9px;font-size:.7rem;font-weight:700;color:#fff;white-space:nowrap;}
+.tablewrap{overflow:auto;max-height:70vh;border:1px solid var(--borde);border-radius:8px;}
+.bar{background:#e5e7eb;border-radius:5px;height:7px;min-width:70px;} .bar i{display:block;height:7px;border-radius:5px;}
+#login{max-width:380px;margin:12vh auto;} #login input{width:100%;margin-bottom:10px;}
+.err{color:var(--rojo);font-size:.8rem;min-height:1.2em;margin-bottom:6px;}
+.muted{color:#777;font-size:.78rem;}
+</style>
+</head>
+<body>
+<div id="login" class="card">
+  <h2 style="margin-bottom:4px;">SIVIL · Director Comercial</h2>
+  <div class="muted" style="margin-bottom:12px;">POSTECSA — consulta y seguimiento comercial (solo lectura)</div>
+  <input id="lCorreo" type="email" placeholder="Correo">
+  <input id="lPin" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()">
+  <div class="err" id="lErr"></div>
+  <button class="btn" style="width:100%;" onclick="entrar()">Ingresar</button>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="header"><h1>SIVIL · Director Comercial<small id="quien"></small></h1><div><button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
+  <div class="tabs">
+    <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
+    <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
+    <button class="tab" id="tVen" onclick="verTab('Ven')">📈 Ventas por vendedor</button>
+  </div>
+  <div class="wrap">
+    <div id="pCot">
+      <div class="filtros">
+        <div><label>Período</label><select id="cDias" onchange="renderCot()"><option value="8">Últimos 8 días</option><option value="15">Últimos 15 días</option><option value="30">Últimos 30 días</option><option value="mes">Este mes</option><option value="todo">Todo</option></select></div>
+        <div><label>Vendedor</label><select id="cVend" onchange="renderCot()"></select></div>
+        <div><label>Estado</label><select id="cEst" onchange="renderCot()"><option value="">Todos (sin anuladas)</option><option>Aceptada</option><option>Enviada</option><option>Borrador</option><option>Perdida</option><option>Anulada</option></select></div>
+        <div><label>Buscar</label><input id="cQ" placeholder="Cliente, número u obra" oninput="renderCot()"></div>
+        <button class="btn" onclick="exportar('cot')">⬇ Excel</button>
+      </div>
+      <div class="kpis" id="cKpi"></div>
+      <div class="tablewrap"><table id="cTabla"></table></div>
+      <div class="muted" style="margin-top:6px;">"Enviada" = el cliente aún no ha respondido. Con 7 días o más sin respuesta se marca en naranja. Las aceptadas muestran el avance de su AP.</div>
+    </div>
+    <div id="pAp" style="display:none;">
+      <div class="filtros">
+        <div><label>Estado de la AP</label><select id="aEst" onchange="renderAp()"><option value="abiertas">En curso (Pendiente + Parcial)</option><option>Pendiente</option><option>Despachado Parcial</option><option>Despachado Total</option><option value="todas">Todas</option></select></div>
+        <div><label>Vendedor</label><select id="aVend" onchange="renderAp()"></select></div>
+        <div><label>Buscar</label><input id="aQ" placeholder="AP, cliente u obra" oninput="renderAp()"></div>
+        <button class="btn" onclick="exportar('ap')">⬇ Excel</button>
+      </div>
+      <div class="kpis" id="aKpi"></div>
+      <div class="tablewrap"><table id="aTabla"></table></div>
+      <div class="muted" style="margin-top:6px;">Valor = precio con descuento × cantidad (sin flete). El total de la AP es el guardado en la AP; si no lo tiene, se calcula. Los pagos los registra Contabilidad.</div>
+    </div>
+    <div id="pVen" style="display:none;">
+      <div class="filtros"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
+      <div class="tablewrap"><table id="vTabla"></table></div>
+      <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Las APs anteriores al 19/10/2026 eran pruebas en parte; el acumulado oficial arranca con la AP 2438.</div>
+    </div>
+  </div>
+</div>
+<script>
+const GAS_URL="https://script.google.com/macros/s/AKfycbyokqX6vLzefzVVOhnETZa6zPHo8DJj6-0mJuMZ1JjPsFNACib_WFeLqgg2Cs_ibp2gzQ/exec";
+const SHEET_ID="1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
+const GVIZ="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:json&sheet=";
+const ROLES_OK=["JEFE_VENTAS","DIRECTOR_COMERCIAL","GERENTE","ADMIN"];
+const D={cot:[],aps:[],det:[],pagos:[],vend:[],cli:[],usr:null};
+let EXP={cot:[],ap:[],ven:[]};
+const H=x=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+function money(n){n=Math.round(Number(n)||0);return (n<0?'-':'')+'$'+String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
+function pf(v){if(!v&&v!==0)return null;if(v instanceof Date)return v;const s=String(v);let m=s.match(/^Date\((\d+),(\d+),(\d+)/);if(m)return new Date(+m[1],+m[2],+m[3]);m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);const d=new Date(s);return isNaN(d)?null:d;}
+const p2=n=>String(n).padStart(2,'0');
+const fd=d=>d?p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear():'';
+const iso=d=>d?d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()):'';
+const hoy0=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate());};
+async function leer(hoja){
+  const r=await fetch(GVIZ+encodeURIComponent(hoja)+(/^COTIZ/.test(hoja)?'&headers=1':'')+'&_='+Date.now(),{cache:'no-store'});
+  const t=await r.text();const j=JSON.parse(t.replace(/^[^(]+\(/,'').replace(/\);?\s*$/,''));
+  const cols=j.table.cols.map(c=>c.label||c.id);
+  return (j.table.rows||[]).map(row=>{const o={};cols.forEach((c,i)=>{const x=row.c[i];o[c]=x&&x.v!=null?x.v:'';});return o;});
+}
+async function entrar(){
+  const correo=$('lCorreo').value.trim().toLowerCase(),pin=$('lPin').value.trim(),err=$('lErr');
+  if(!correo||!pin){err.textContent='Completa correo y PIN';return;}
+  err.textContent='Verificando...';
+  try{
+    let us=[];try{us=await leer('USUARIOS_MAESTRO');}catch(e){}
+    const u=us.find(x=>String(x.correo||'').toLowerCase().trim()===correo);
+    if(!u){err.textContent='❌ Correo no registrado';return;}
+    if(!/^activo$/i.test(String(u.estado||'').trim())){err.textContent='❌ Usuario inactivo';return;}
+    const rol=String(u.rol||u.cargo||'').trim();
+    const sup=["acmv0921@gmail.com","gerencia@postecsa.com"].includes(correo);
+    if(!sup&&!ROLES_OK.includes(rol)){err.textContent='❌ Sin acceso a esta app ('+rol+')';return;}
+    const ctl=new AbortController();setTimeout(()=>ctl.abort(),25000);
+    const resp=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({accion:'login',correo:correo,pin:pin}),signal:ctl.signal});
+    const r=await resp.json();
+    if(!r||!r.ok){err.textContent='❌ '+((r&&r.error)||'PIN incorrecto');return;}
+    D.usr={correo:correo,nombre:u.nombre_completo||correo,rol:rol};
+    try{sessionStorage.setItem('dir_usr',JSON.stringify(D.usr));}catch(e){}
+    $('login').style.display='none';$('app').style.display='block';
+    $('quien').textContent=D.usr.nombre+' · '+rol+' · solo lectura';
+    cargarTodo();
+  }catch(e){err.textContent='❌ '+e.message;}
+}
+function salir(){try{sessionStorage.removeItem('dir_usr');}catch(e){}location.reload();}
+async function cargarTodo(forzar){
+  const [cot,aps,det,pag,ven,cli]=await Promise.all([leer('COTIZACIONES'),leer('PREVENTAS_AP'),leer('DETALLE_AP'),leer('PAGOS_AP').catch(()=>[]),leer('VENDEDORES').catch(()=>[]),leer('CLIENTES').catch(()=>[])]);
+  D.cot=cot;D.aps=aps;D.det=det;D.pagos=pag;D.vend=ven;D.cli=cli;
+  D.nomV={};ven.forEach(v=>D.nomV[String(v.id_vendedor)]=v.nombre_vendedor);
+  D.nomC={};cli.forEach(c=>D.nomC[String(c.cliente_nit)]=c.razon_social);
+  const vs=[...new Set(cot.map(c=>String(c.vendedor_id)).concat(aps.map(a=>String(a.vendedor_id))).filter(Boolean))];
+  const opt='<option value="">Todos los vendedores</option>'+vs.map(v=>'<option value="'+H(v)+'">'+H(nomV(v))+'</option>').join('');
+  $('cVend').innerHTML=opt;$('aVend').innerHTML=opt;
+  const anios=[...new Set(aps.map(a=>(pf(a.fecha_creacion)||{getFullYear:()=>0}).getFullYear()).filter(Boolean))].sort().reverse();
+  $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
+  calcAp();renderCot();renderAp();renderVen();
+}
+const nomV=id=>D.nomV[String(id)]||id;
+function verTab(t){['Cot','Ap','Ven'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
+// ---- AP (despachado/pagado)
+function calcAp(){
+  const porAp={};D.det.forEach(d=>(porAp[String(d.ap_id)]=porAp[String(d.ap_id)]||[]).push(d));
+  const pag={};D.pagos.forEach(p=>{if(String(p.anulado||'').toUpperCase()==='SI'||!p.ap_id)return;pag[String(p.ap_id)]=(pag[String(p.ap_id)]||0)+(Number(p.valor)||0);});
+  D.apx={};
+  D.aps.forEach(a=>{
+    let sol=0,des=0,vS=0,vD=0;
+    (porAp[String(a.ap_id)]||[]).forEach(d=>{
+      const cs=parseFloat(d.cantidad_solicitada)||0,cd=Math.min(parseFloat(d.cantidad_despachada)||0,cs);
+      let pu=parseFloat(d.precio_con_descuento);if(!(pu>0))pu=(parseFloat(d.precio_base)||0)*(1-(parseFloat(d.descuento_aplicado)||0));
+      let vl=parseFloat(d.total_linea);if(!(vl>0))vl=pu*cs;
+      sol+=cs;des+=cd;vS+=vl;vD+=cs>0?vl*cd/cs:0;});
+    const tot=parseFloat(a.total_ap)>0?parseFloat(a.total_ap):vS;
+    D.apx[String(a.ap_id)]={sol,des,vS,vD,tot,pagado:pag[String(a.ap_id)]||0,pct:sol>0?Math.round(100*des/sol):0};
+  });
+}
+const colEst={Aceptada:'#166534',Enviada:'#2563a8',Borrador:'#6b7280',Perdida:'#b91c1c',Anulada:'#9ca3af'};
+function renderCot(){
+  const dias=$('cDias').value,ve=$('cVend').value,es=$('cEst').value,q=$('cQ').value.toLowerCase().trim(),h0=hoy0();
+  let L=D.cot.filter(c=>{
+    const f=pf(c.fecha);if(!f)return false;
+    if(dias==='mes'){if(f.getMonth()!==h0.getMonth()||f.getFullYear()!==h0.getFullYear())return false;}
+    else if(dias!=='todo'&&(h0-f)/864e5>Number(dias)-1)return false;
+    if(ve&&String(c.vendedor_id)!==ve)return false;
+    if(es?c.estado!==es:c.estado==='Anulada')return false;
+    return !q||(c.numero+' '+c.cliente_nombre+' '+c.obra).toLowerCase().includes(q);
+  }).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||String(b.numero).localeCompare(String(a.numero)));
+  const sum=e=>L.filter(c=>c.estado===e);
+  const tot=a=>a.reduce((t,c)=>t+(Number(c.total)||0),0);
+  const dec=sum('Aceptada').length+sum('Perdida').length;
+  $('cKpi').innerHTML=[['Cotizadas',L.length,money(tot(L))],['Aceptadas (pedido)',sum('Aceptada').length,money(tot(sum('Aceptada')))],['Enviadas sin respuesta',sum('Enviada').length,money(tot(sum('Enviada')))],['Perdidas',sum('Perdida').length,money(tot(sum('Perdida')))],['Tasa de cierre',(dec?Math.round(100*sum('Aceptada').length/(sum('Aceptada').length+sum('Enviada').length+sum('Perdida').length)):0)+' %','aceptadas / cotizadas']]
+    .map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b><div class="muted">'+k[2]+'</div></div>').join('');
+  let html='<tr><th>Fecha</th><th>N.º</th><th>Cliente</th><th>Obra</th><th>Vendedor</th><th class="num">Total</th><th>Estado</th><th>AP y avance</th><th>Nota</th></tr>',ult='';
+  EXP.cot=[];
+  L.forEach(c=>{
+    const f=pf(c.fecha),key=iso(f);
+    if(key!==ult){ult=key;const del=L.filter(x=>iso(pf(x.fecha))===key);html+='<tr class="dia"><td colspan="9">'+fd(f)+' · '+del.length+' cotizaciones · '+money(tot(del))+' · aceptadas '+del.filter(x=>x.estado==='Aceptada').length+' · perdidas '+del.filter(x=>x.estado==='Perdida').length+'</td></tr>';}
+    const dsr=Math.floor((h0-f)/864e5);
+    let ap='';const x=c.ap_id?D.apx[String(c.ap_id)]:null;
+    if(x){const a=D.aps.find(y=>String(y.ap_id)===String(c.ap_id));ap='AP '+H(c.ap_id)+' · '+H(a?a.estado_ap:'')+'<div class="bar"><i style="width:'+Math.min(100,x.pct)+'%;background:#1a7a4a"></i></div>'+x.pct+' % despachado · pagado '+money(x.pagado)+(x.tot>0?' de '+money(x.tot):'');}
+    else if(c.ap_id)ap='AP '+H(c.ap_id);
+    const sinResp=c.estado==='Enviada'&&dsr>=7;
+    html+='<tr><td>'+fd(f)+'</td><td><b>'+H(c.numero)+'</b></td><td>'+H(c.cliente_nombre)+'</td><td>'+H(c.obra)+'</td><td>'+H(nomV(c.vendedor_id))+'</td><td class="num">'+money(c.total)+'</td><td><span class="pill" style="background:'+(sinResp?'#c2410c':colEst[c.estado]||'#777')+'">'+H(c.estado)+'</span>'+(c.estado==='Enviada'?'<div class="muted">'+dsr+' d sin respuesta</div>':'')+'</td><td>'+ap+'</td><td>'+H(c.nota_estado)+'</td></tr>';
+    EXP.cot.push({Fecha:fd(f),Numero:c.numero,Cliente:c.cliente_nombre,Obra:c.obra,Vendedor:nomV(c.vendedor_id),Total:Number(c.total)||0,Estado:c.estado,'Dias sin respuesta':c.estado==='Enviada'?dsr:'',AP:c.ap_id,'% despachado':x?x.pct:'',Pagado:x?x.pagado:'',Nota:c.nota_estado});
+  });
+  $('cTabla').innerHTML=html;
+}
+function renderAp(){
+  const es=$('aEst').value,ve=$('aVend').value,q=$('aQ').value.toLowerCase().trim();
+  const L=D.aps.filter(a=>{
+    if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;
+    if(es==='abiertas'?!(a.estado_ap==='Pendiente'||a.estado_ap==='Despachado Parcial'):es!=='todas'&&a.estado_ap!==es)return false;
+    if(ve&&String(a.vendedor_id)!==ve)return false;
+    const cl=D.nomC[String(a.cliente_nit)]||a.cliente_nit;
+    return !q||(a.ap_id+' '+cl+' '+(a.nombre_obra||'')).toLowerCase().includes(q);
+  }).sort((a,b)=>Number(b.ap_id)-Number(a.ap_id));
+  const t=L.reduce((s,a)=>{const x=D.apx[String(a.ap_id)];s.vS+=x.vS;s.vD+=x.vD;s.pag+=x.pagado;s.tot+=x.tot;return s;},{vS:0,vD:0,pag:0,tot:0});
+  $('aKpi').innerHTML=[['APs',L.length],['Pedido',money(t.vS)],['Despachado',money(t.vD)],['Por despachar',money(t.vS-t.vD)],['Pagado',money(t.pag)],['Saldo por cobrar',money(Math.max(0,t.tot-t.pag))]].map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b></div>').join('');
+  let html='<tr><th>AP</th><th>Fecha</th><th>Cliente</th><th>Obra</th><th>Vendedor</th><th>Estado</th><th>Avance</th><th class="num">Pedido</th><th class="num">Despachado</th><th class="num">Total AP</th><th class="num">Pagado</th><th class="num">Saldo</th></tr>';EXP.ap=[];
+  L.forEach(a=>{const x=D.apx[String(a.ap_id)],cl=D.nomC[String(a.cliente_nit)]||a.cliente_nit,saldo=Math.max(0,x.tot-x.pagado);
+    html+='<tr><td><b>'+H(a.ap_id)+'</b></td><td>'+fd(pf(a.fecha_creacion))+'</td><td>'+H(cl)+'</td><td>'+H(a.nombre_obra)+'</td><td>'+H(nomV(a.vendedor_id))+'</td><td>'+H(a.estado_ap)+'</td><td><div class="bar"><i style="width:'+Math.min(100,x.pct)+'%;background:'+(x.pct>=100?'#166534':'#ca8a04')+'"></i></div>'+x.pct+' %</td><td class="num">'+money(x.vS)+'</td><td class="num">'+money(x.vD)+'</td><td class="num">'+money(x.tot)+'</td><td class="num">'+money(x.pagado)+'</td><td class="num" style="color:'+(saldo>0.5?'#b91c1c':'#166534')+';font-weight:700;">'+(saldo>0.5?money(saldo):'PAGADA')+'</td></tr>';
+    EXP.ap.push({AP:a.ap_id,Fecha:fd(pf(a.fecha_creacion)),Cliente:cl,Obra:a.nombre_obra,Vendedor:nomV(a.vendedor_id),Estado:a.estado_ap,'% despachado':x.pct,Pedido:Math.round(x.vS),Despachado:Math.round(x.vD),'Total AP':Math.round(x.tot),Pagado:x.pagado,Saldo:Math.round(saldo)});});
+  $('aTabla').innerHTML=html;
+}
+function renderVen(){
+  const an=Number($('vAnio').value)||new Date().getFullYear(),M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const m={};
+  D.aps.forEach(a=>{if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return;const f=pf(a.fecha_creacion);if(!f||f.getFullYear()!==an)return;const v=String(a.vendedor_id);(m[v]=m[v]||Array(12).fill(0))[f.getMonth()]+=D.apx[String(a.ap_id)].vS;});
+  const vs=Object.keys(m).sort((a,b)=>m[b].reduce((s,x)=>s+x,0)-m[a].reduce((s,x)=>s+x,0));
+  let html='<tr><th>Vendedor</th>'+M.map(x=>'<th class="num">'+x+'</th>').join('')+'<th class="num">Acumulado '+an+'</th></tr>';EXP.ven=[];const tm=Array(12).fill(0);
+  vs.forEach(v=>{const t=m[v].reduce((s,x)=>s+x,0);m[v].forEach((x,i)=>tm[i]+=x);html+='<tr><td><b>'+H(nomV(v))+'</b></td>'+m[v].map(x=>'<td class="num">'+(x?money(x):'')+'</td>').join('')+'<td class="num"><b>'+money(t)+'</b></td></tr>';const o={Vendedor:nomV(v)};M.forEach((n,i)=>o[n]=Math.round(m[v][i]));o['Acumulado']=Math.round(t);EXP.ven.push(o);});
+  html+='<tr class="dia"><td>Total</td>'+tm.map(x=>'<td class="num">'+(x?money(x):'')+'</td>').join('')+'<td class="num">'+money(tm.reduce((s,x)=>s+x,0))+'</td></tr>';
+  $('vTabla').innerHTML=html;
+}
+function exportar(k){
+  if(typeof XLSX==='undefined'){alert('No se cargó la librería de Excel (¿sin conexión?)');return;}
+  const f=EXP[k];if(!f.length){alert('No hay filas para exportar');return;}
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(f),k==='cot'?'Cotizaciones':k==='ap'?'APs':'Ventas');
+  XLSX.writeFile(wb,'SIVIL_'+{cot:'cotizaciones',ap:'seguimiento_AP',ven:'ventas_vendedor'}[k]+'_'+iso(new Date())+'.xlsx');
+}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+try{const s=sessionStorage.getItem('dir_usr');if(s){D.usr=JSON.parse(s);$('login').style.display='none';$('app').style.display='block';$('quien').textContent=D.usr.nombre+' · '+D.usr.rol+' · solo lectura';cargarTodo();}}catch(e){}
+</script>
+</body>
+</html>
