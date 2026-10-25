@@ -566,6 +566,14 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
         </div>
         <div class="form-group"><label>Valor del flete ($)</label><input id="czFlete" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()"></div>
         <div style="border:1px dashed #94a3b8;border-radius:8px;padding:8px;margin-bottom:8px;">
+          <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">🧾 Flete con y sin IVA (solo si el flete va aparte)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div class="form-group"><label>Viajes con IVA</label><input id="czViajesCon" class="form-control" type="number" inputmode="numeric" min="0" step="1" oninput="czTotales()" placeholder="Ej: 10"></div>
+            <div class="form-group"><label>Viajes sin IVA</label><input id="czViajesSin" class="form-control" type="number" inputmode="numeric" min="0" step="1" oninput="czTotales()" placeholder="Ej: 3"></div>
+          </div>
+          <div style="font-size:.7rem;color:#555;">Déjalos vacíos para que el sistema decida el IVA del flete como siempre. Si pones los viajes sin IVA, el IVA se cobra solo sobre el valor de los viajes con IVA.</div>
+        </div>
+        <div style="border:1px dashed #94a3b8;border-radius:8px;padding:8px;margin-bottom:8px;">
           <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">🚚 Topes de carga y flete sugerido</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
             <div class="form-group"><label>Tope por vehículo (kg)</label><input id="czTope" class="form-control" type="number" inputmode="decimal" step="any" oninput="czTotales()" placeholder="Ej: 2000"></div>
@@ -832,6 +840,14 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <div id="fleteOrigenHint" style="font-size:.68rem;color:#888;margin-top:2px;"></div>
 <label class="form-label" style="margin-top:.5rem;">✏️ Flete a cobrar al cliente (puedes digitar otro valor)</label>
 <input id="fleteValorInput" class="form-control" type="number" min="0" placeholder="0" oninput="this.dataset.autofilled='0'; calcularTotales();">
+<div id="grupoFleteIva" style="display:none;margin-top:.5rem;border:1px dashed #94a3b8;border-radius:8px;padding:8px;">
+<div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">🧾 Flete con y sin IVA (opcional)</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+<div><label class="form-label">Viajes con IVA</label><input id="apViajesCon" class="form-control" type="number" min="0" step="1" placeholder="Ej: 10" oninput="calcularTotales()"></div>
+<div><label class="form-label">Viajes sin IVA</label><input id="apViajesSin" class="form-control" type="number" min="0" step="1" placeholder="Ej: 3" oninput="calcularTotales()"></div>
+</div>
+<div style="font-size:.7rem;color:#555;margin-top:2px;">Solo cuando el flete va aparte y el pedido mezcla productos con y sin IVA. Vacíos = el sistema decide como siempre.</div>
+</div>
 <label class="form-label" style="margin-top:.5rem;">📝 Observaciones del flete (opcional)</label>
 <input id="transportistaFleteInput" class="form-control" placeholder="Ej: descargue por cuenta del cliente..." oninput="calcularTotales();">
 <div class="form-group" style="margin-top:0.5rem;">
@@ -2637,7 +2653,7 @@ const R = calcPedido(lineas.map(function (l) {
   return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
     precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
     tipo_iva: pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
-}), { conFlete: flete > 0, flete: flete, incluido: _incl, llevaEstiba: 'SI', viajes: 1 });
+}), { conFlete: flete > 0, flete: flete, incluido: _incl, llevaEstiba: 'SI', viajes: 1, ivaFleteFijo: ap.iva_flete_ap });
 const _filaEstiba = R.estiba > 0 ? '<div class="resumen-row"><span>Estiba</span><span>' + fmt(R.estiba) + '</span></div>' : '';
 lineas.forEach((l,i) => {
 const fletePorUnidadAP = R.lineas[i].fleteUnit;
@@ -2701,7 +2717,7 @@ function _apPDFArmar(ap, lineas) {
     return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
       precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
       tipo_iva: l.tipo_iva || pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
-  }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1 });
+  }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1, ivaFleteFijo: ap.iva_flete_ap });
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   let y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id);
@@ -3038,7 +3054,7 @@ transportista_flete:'', flete_negociado:false, lineas:[],
 fecha_entrega:'', obs_entrega:'', direccion_obra:'', contacto_obra:'', cel_contacto:'', plan_entregas:'',
 orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' };
 ['fechaEntregaSolicitada','obsEntrega','direccionObra','contactoObra','celContactoObra',
-'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','formaPago','diasCredito','anticipoPct','llevaEstiba','conFlete','fleteIncluidoSel']
+'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','apViajesCon','apViajesSin','formaPago','diasCredito','anticipoPct','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 { const _ow = document.getElementById('obsInternasWrap'); if (_ow) _ow.style.display = 'none'; }
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
@@ -3427,7 +3443,11 @@ if (!lineas.length) {
   return;
 }
 
-const R = calcPedido(lineas, { conFlete: hayFlete, flete: flete, incluido: P.flete_incluido === 'SI', llevaEstiba: P.lleva_estiba, viajes: P.num_viajes });
+if (g('grupoFleteIva')) g('grupoFleteIva').style.display = (hayFlete && P.flete_incluido === 'NO') ? 'block' : 'none';
+const _vCon = parseFloat(val('apViajesCon')) || 0, _vSin = parseFloat(val('apViajesSin')) || 0;
+P.viajes_con_iva = _vCon; P.viajes_sin_iva = _vSin;
+const _pctSin = (hayFlete && P.flete_incluido === 'NO' && _vSin > 0) ? (_vSin / ((_vCon + _vSin) || _vSin)) : 0;
+const R = calcPedido(lineas, { conFlete: hayFlete, flete: flete, incluido: P.flete_incluido === 'SI', llevaEstiba: P.lleva_estiba, viajes: P.num_viajes, fleteSinIvaPct: _pctSin });
 lineas.forEach(function (l, i) {
   const x = R.lineas[i];
   l.valor_estiba = x.estiba;
@@ -3543,11 +3563,23 @@ function calcPedido(lineas, cfg) {
     return { estiba: x.estiba, fleteUnit: fu[i], precioDesc: x.pDesc, base: x.base, netoProd: x.netoProd, neto: x.neto, grav: x.grav, ivaLinea: ivaLinea,
       totalLinea: r2(x.neto + ivaLinea), unitFinal: pUnit(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
   });
-  const ivaFlete = (flete > 0 && fleteGrav) ? ivaEntero(flete * IVA) : 0;
+  let ivaFlete = (flete > 0 && fleteGrav) ? ivaEntero(flete * IVA) : 0;
+  let fleteGravOut = fleteGrav, fleteGravValor = fleteGrav ? flete : 0;
+  // Flete partido (viajes con IVA y viajes sin IVA, caso Mayavial 24/10/2026): el IVA se
+  // cobra solo sobre la parte de los viajes gravados. Aplica cuando el flete va aparte.
+  const pctSin = (flete > 0 && !incl) ? Math.min(Math.max(parseFloat(cfg.fleteSinIvaPct) || 0, 0), 1) : 0;
+  if (pctSin > 0 && netoG > 0) {
+    fleteGravValor = trunc2(flete * (1 - pctSin));
+    ivaFlete = ivaEntero(fleteGravValor * IVA); fleteGravOut = ivaFlete > 0;
+  } else if (flete > 0 && !incl && cfg.ivaFleteFijo != null && cfg.ivaFleteFijo !== '' && netoG > 0) {
+    // AP guardada con IVA de flete parcial: se respeta lo guardado (solo si es parcial).
+    const fijo = parseFloat(cfg.ivaFleteFijo);
+    if (fijo > 0 && fijo < ivaEntero(flete * IVA) - 1) { ivaFlete = fijo; fleteGravOut = true; fleteGravValor = trunc2(fijo / IVA); }
+  }
   const ivaTotal = r2(iva + ivaFlete);
   subtotal = r2(subtotal); descuentos = r2(descuentos); estiba = r2(estiba); postes = r2(postes); iva = r2(iva);
   return { lineas: out, subtotal: subtotal, descuentos: descuentos, estiba: estiba, postes: postes, flete: flete,
-    iva: ivaTotal, ivaProductos: iva, ivaFlete: ivaFlete, fleteGrav: fleteGrav, mixto: mixto, incluido: incl, modo: modo,
+    iva: ivaTotal, ivaProductos: iva, ivaFlete: ivaFlete, fleteGrav: fleteGravOut, fleteGravValor: fleteGravValor, fleteExclValor: r2(flete - fleteGravValor), mixto: mixto, incluido: incl, modo: modo,
     total: r2(subtotal - descuentos + estiba + postes + flete + ivaTotal) };
 }
 
@@ -3662,7 +3694,11 @@ if (selTipo) selTipo.value = p.destino || p.tipo_entrega || 'PLANTA';
 const fleteInput = document.getElementById('fleteValorInput');
 if (fleteInput) { fleteInput.value = p.flete_valor || ''; fleteInput.dataset.autofilled = p.flete_negociado ? '0' : '1'; }
 const transEl = document.getElementById('transportistaFleteInput');
-if (transEl) transEl.value = p.transportista_flete || '';
+{
+  const _tf = String(p.transportista_flete || ''), _m = /Flete:\s*(\d+)\s*viaje\(s\)\s*con IVA y\s*(\d+)\s*sin IVA/i.exec(_tf);
+  if (transEl) transEl.value = _tf.replace(/(\s*\|\s*)?Flete:\s*\d+\s*viaje\(s\)\s*con IVA y\s*\d+\s*sin IVA/i, '').replace(/^\s*\|\s*/, '').trim();
+  setVal('apViajesCon', _m ? _m[1] : ''); setVal('apViajesSin', _m ? _m[2] : '');
+}
 
 if (p.cliente) {
 document.getElementById('clienteSelNombre').textContent = p.cliente.razon_social;
@@ -4235,7 +4271,7 @@ tipo_entrega: STATE.pedido.tipo_entrega,
 destino: STATE.pedido.destino || '',
 flete_valor: STATE.pedido.flete_valor || 0,
 flete_sugerido: STATE.pedido.flete_sugerido || 0,
-transportista_flete: STATE.pedido.transportista_flete || '',
+transportista_flete: [STATE.pedido.transportista_flete || '', (STATE.pedido.viajes_sin_iva > 0 && STATE.pedido.flete_incluido === 'NO') ? ('Flete: ' + (STATE.pedido.viajes_con_iva || 0) + ' viaje(s) con IVA y ' + STATE.pedido.viajes_sin_iva + ' sin IVA') : ''].filter(Boolean).join(' | '),
 flete_negociado: !!STATE.pedido.flete_negociado,
 flete_incorporado: !!(document.getElementById('fleteIncorporadoCheck') && document.getElementById('fleteIncorporadoCheck').checked),
 flete_contra_entrega: !!(document.getElementById('fleteContraEntregaCheck') && document.getElementById('fleteContraEntregaCheck').checked),
@@ -5373,7 +5409,7 @@ function czMostrarForm() {
   document.getElementById('czObs2').innerHTML = sel(T.obs, CZ.obs[1] || 0, true, 'obs');
   czPickers();
   var m = { czNumero: CZ.numero, czVig: CZ.vigencia, czDesp: CZ.despachos_hasta, czCliente: CZ.cliente.nombre ? CZ.cliente.nombre + ' · ' + CZ.cliente.nit : '', czAtn: CZ.cliente.atn, czTel: CZ.cliente.tel, czCel: CZ.cliente.cel,
-    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czObs1Libre: (CZ.obs_libre || [])[0] || '', czObs2Libre: (CZ.obs_libre || [])[1] || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czObsInterna: CZ.obs_interna || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
+    czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czViajesCon: CZ.viajes_con_iva || '', czViajesSin: CZ.viajes_sin_iva || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czObs1Libre: (CZ.obs_libre || [])[0] || '', czObs2Libre: (CZ.obs_libre || [])[1] || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czObsInterna: CZ.obs_interna || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
   document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
@@ -5434,6 +5470,7 @@ function czLeer() {
   if (CZ.vig_modo === 'auto') CZ.vigencia = czSumarDias(CZ.fecha || czHoy(), 15);
   if (CZ.desp_modo === 'auto') CZ.despachos_hasta = czSumarDias(CZ.fecha || czHoy(), 30);
   CZ.cliente.atn = g('czAtn'); CZ.cliente.tel = g('czTel'); CZ.cliente.cel = g('czCel'); CZ.cliente.correo = g('czCorreo'); CZ.cliente.obra = g('czObra'); CZ.cliente.dir_oficina = g('czDirOf'); CZ.cliente.dir_despacho = g('czDirDesp');
+  CZ.viajes_con_iva = parseFloat(g('czViajesCon')) || 0; CZ.viajes_sin_iva = parseFloat(g('czViajesSin')) || 0;
   CZ.estiba = g('czEstiba'); CZ.fleteModo = g('czFleteModo'); CZ.flete = parseFloat(g('czFlete')) || 0; CZ.nota = g('czNota'); CZ.pago_libre = g('czPagoLibre').trim(); CZ.entrega_libre = g('czEntregaLibre').trim(); CZ.obs_libre = [g('czObs1Libre').trim(), g('czObs2Libre').trim()];
   CZ.obs_interna = g('czObsInterna').trim(); CZ.tope_kg = parseFloat(g('czTope')) || 0; CZ.tarifa_viaje = parseFloat(g('czTarifa')) || 0; CZ.flete_motivo = g('czFleteMotivo').trim(); CZ.nota_transp = g('czNotaTransp').trim(); CZ.fletes_extra = CZ.fletes_extra || [];
   var _pg = parseInt(g('czPago')); CZ.pago = isNaN(_pg) ? 8 : _pg; CZ.entrega = parseInt(g('czEntrega')) || 0; CZ.obs = [parseInt(g('czObs1')) || 0, parseInt(g('czObs2')) || 0];
@@ -5489,7 +5526,13 @@ function czEdit(i, campo, val) {
   if (campo === 'cant') l.cantidad_solicitada = val; else if (campo === 'desc') l.descuento_aplicado = Math.min(Math.max(val, 0), 100) / 100; else if (campo === 'plazo') l.plazo = parseInt(val) || 1; else if (campo === 'plazo_libre') l.plazo_libre = String(val || '').trim();
   czTotales();
 }
-function czCfg() { return { llevaEstiba: CZ.estiba, conFlete: CZ.fleteModo !== 'NO' && CZ.flete > 0, flete: CZ.flete, incluido: CZ.fleteModo === 'INCLUIDO' }; }
+function czPctSinIva() {
+  var sin = parseFloat(CZ.viajes_sin_iva) || 0, con = parseFloat(CZ.viajes_con_iva) || 0;
+  if (sin <= 0) return 0;
+  if (con <= 0) { var tv = czTransporte().viajes || 0; con = Math.max(0, tv - sin); }
+  return (con + sin) > 0 ? sin / (con + sin) : 0;
+}
+function czCfg() { return { llevaEstiba: CZ.estiba, conFlete: CZ.fleteModo !== 'NO' && CZ.flete > 0, flete: CZ.flete, incluido: CZ.fleteModo === 'INCLUIDO', fleteSinIvaPct: CZ.fleteModo === 'APARTE' ? czPctSinIva() : 0 }; }
 function czExtras() {
   var sub = 0, iva = 0;
   (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v <= 0) return; sub += v; if (f.grav === 'G') iva += ivaEntero(v * 0.19); });
@@ -5661,6 +5704,7 @@ async function czAAP() {
       set('tipoEntrega', _dest); if (typeof toggleDatosEntrega === 'function') toggleDatosEntrega();
       set('fleteIncluidoSel', q.fleteModo === 'INCLUIDO' ? 'SI' : 'NO');
       set('numViajes', Math.max(1, (function () { var t = CZ_TRANSP_Q(q); return t.viajes; })()));
+      set('apViajesCon', q.viajes_con_iva || ''); set('apViajesSin', q.viajes_sin_iva || '');
       var _fi = document.getElementById('fleteValorInput'); if (_fi) { _fi.value = Math.round(q.flete); _fi.dataset.autofilled = '0'; }
       var _ex = (q.fletes_extra || []).filter(function (f) { return Number(f.valor) > 0; });
       set('transportistaFleteInput', [q.nota_transp || '', _ex.length ? 'Fletes adicionales cotizados: ' + _ex.map(function (f) { return (f.desc || 'flete') + ' ' + fmt(f.valor) + (f.grav === 'G' ? ' (+IVA)' : ' (excl.)'); }).join('; ') : '', q.flete_motivo ? 'Ajuste de flete: ' + q.flete_motivo : ''].filter(Boolean).join(' | '));
@@ -5766,6 +5810,7 @@ function czTextoWA() {
   var t = '*COTIZACIÓN ' + CZ.numero + '* — POSTECSA\nCliente: ' + c.nombre + (c.obra ? '\nObra: ' + c.obra : '') + '\nFecha: ' + fmtFecha(CZ.fecha) + (CZ.vigencia ? ' · Vigencia: ' + fmtFecha(CZ.vigencia) : '') + '\n\n';
   CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
   (CZ.fletes_extra || []).forEach(function (f) { if (Number(f.valor) > 0) t += '• Flete' + (f.desc ? ' ' + f.desc : '') + (f.grav === 'G' ? ' (+ IVA)' : ' (excluido)') + ' = ' + fmt(f.valor) + '\n'; });
+  if (T.fleteExclValor > 0 && T.fleteGravValor > 0) t += '• Flete: ' + fmt(T.fleteGravValor) + ' (+ IVA)' + (CZ.viajes_con_iva ? ' por ' + CZ.viajes_con_iva + ' viaje(s)' : '') + ' y ' + fmt(T.fleteExclValor) + ' (excluido)' + (CZ.viajes_sin_iva ? ' por ' + CZ.viajes_sin_iva + ' viaje(s)' : '') + '\n';
   var _nt = czNotaTransp(); if (_nt) t += '\n' + _nt + '\n';
   t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(czSumas(T).iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + (czTxtPago() ? 'Pago: ' + czTxtPago() : '');
   return t;
@@ -5826,7 +5871,7 @@ async function czPDF(opts) {
     var r = T.lineas[i], vu = pUnit(r.precioDesc + r.estiba + r.fleteUnit), tot = r2(r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
     var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, l.plazo_libre || CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
   });
-  if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); var _tv = czTransporte().viajes, _nv = (_tv > 1 && Math.round(T.flete) % _tv === 0) ? _tv : 1; filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', String(_nv), fmt(T.flete / _nv), fmt(T.flete), ''); }
+  if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); var _tv = czTransporte().viajes, _nv = (_tv > 1 && Math.round(T.flete) % _tv === 0) ? _tv : 1; if (T.fleteExclValor > 0 && T.fleteGravValor > 0) { var _cs = parseFloat(CZ.viajes_sin_iva) || 0, _cc = parseFloat(CZ.viajes_con_iva) || Math.max(0, (czTransporte().viajes || 0) - _cs); filaTabla('', 'G', 'FLETE (transporte)' + (_cc ? ' - ' + _cc + ' viaje(s) con IVA' : ''), '', 'VIAJE', _cc ? String(_cc) : '1', _cc ? fmt(T.fleteGravValor / _cc) : fmt(T.fleteGravValor), fmt(T.fleteGravValor), ''); filaTabla('', 'E', 'FLETE (transporte)' + (_cs ? ' - ' + _cs + ' viaje(s) sin IVA' : ''), '', 'VIAJE', _cs ? String(_cs) : '1', _cs ? fmt(T.fleteExclValor / _cs) : fmt(T.fleteExclValor), fmt(T.fleteExclValor), ''); } else filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', String(_nv), fmt(T.flete / _nv), fmt(T.flete), ''); }
   (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v > 0) { sumLin = r2(sumLin + v); filaTabla('', f.grav === 'G' ? 'G' : 'E', 'FLETE' + (f.desc ? ': ' + f.desc : ' adicional'), '', 'VIAJE', '1', fmt(v), fmt(v), ''); } });
   // Totales y observaciones
   var S = czSumas(T), subt = S.subt, ivaT = S.iva, tot = S.total;
