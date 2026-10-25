@@ -10,15 +10,17 @@
 <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root{--verde:#1a7a4a;--verde2:#14532d;--borde:#e2e8f0;--texto:#1e2b3a;--gris:#f4f6f9;--rojo:#b91c1c;--amb:#b45309;}
+:root{--verde:#0a7a3d;--verde2:#064e2a;--amar:#f6c41c;--amar2:#fff6d0;--naranja:#f26f21;--borde:#e2e8f0;--texto:#1e2b3a;--gris:#f5f7f4;--rojo:#b91c1c;--amb:#b45309;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--gris);color:var(--texto);font-size:14px;}
-.header{background:var(--verde2);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-.header h1{font-size:1.05rem;} .header small{opacity:.8;display:block;font-size:.72rem;font-weight:400;}
+.header{background:#fff;color:var(--verde2);padding:8px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:5px solid var(--verde);box-shadow:0 5px 0 var(--amar);margin-bottom:5px;}
+.header .marca{display:flex;align-items:center;gap:14px;} .header img{height:46px;display:block;}
+.header h1{font-size:1.05rem;color:var(--verde2);} .header small{color:#555;display:block;font-size:.72rem;font-weight:400;}
 .tabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--borde);background:#fff;flex-wrap:wrap;}
 .tab{border:none;background:none;padding:9px 16px;cursor:pointer;font-size:.9rem;font-weight:600;color:#555;border-bottom:3px solid transparent;}
-.tab.on{color:var(--verde2);border-bottom-color:var(--verde);}
+.tab.on{color:var(--verde2);border-bottom-color:var(--amar);background:var(--amar2);}
 .wrap{padding:16px 20px;max-width:1500px;margin:0 auto;}
 .card{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
 .filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
@@ -26,13 +28,18 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:v
 input,select{padding:7px 9px;border:1.5px solid var(--borde);border-radius:7px;font-size:.85rem;background:#fff;}
 button.btn{background:var(--verde);color:#fff;border:none;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:.85rem;}
 button.btn.sec{background:#fff;color:var(--verde2);border:1.5px solid var(--verde);}
+.graf{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:14px;}
+.graf .card{margin:0;} .graf h3{font-size:.85rem;color:var(--verde2);margin-bottom:6px;} .cv{position:relative;height:260px;}
+.tip{border-left:6px solid var(--verde);} .tip h3{font-size:.95rem;color:var(--verde2);} .tip .aut{font-size:.74rem;color:#666;margin-bottom:6px;}
+.tip .dato{background:var(--amar2);border:1px solid var(--amar);border-radius:8px;padding:6px 9px;margin:6px 0;font-size:.82rem;} .tip .acc{font-size:.82rem;}
+.pie{text-align:center;color:#777;font-size:.72rem;padding:14px;}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
 .kpi{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:10px 12px;}
 .kpi small{color:#666;font-size:.7rem;display:block;} .kpi b{font-size:1.1rem;}
 table{width:100%;border-collapse:collapse;font-size:.82rem;background:#fff;}
-th{background:#f1f5f9;text-align:left;padding:8px;border-bottom:2px solid var(--borde);position:sticky;top:0;white-space:nowrap;}
+th{background:#e8f3ec;color:var(--verde2);text-align:left;padding:8px;border-bottom:2px solid var(--borde);position:sticky;top:0;white-space:nowrap;}
 td{padding:7px 8px;border-bottom:1px solid var(--borde);vertical-align:top;}
-tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
+tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
 .num{text-align:right;white-space:nowrap;}
 .pill{display:inline-block;border-radius:10px;padding:1px 9px;font-size:.7rem;font-weight:700;color:#fff;white-space:nowrap;}
 .tablewrap{overflow:auto;max-height:70vh;border:1px solid var(--borde);border-radius:8px;}
@@ -44,7 +51,7 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
 </head>
 <body>
 <div id="login" class="card">
-  <h2 style="margin-bottom:4px;">SIVIL · Director Comercial</h2>
+  <img src="./logo-postecsa.jpg" alt="POSTECSA" style="height:60px;display:block;margin:0 auto 10px;"><h2 style="margin-bottom:4px;text-align:center;color:var(--verde2);">SIVIL · Director Comercial</h2>
   <div class="muted" style="margin-bottom:12px;">POSTECSA — consulta y seguimiento comercial (solo lectura)</div>
   <input id="lCorreo" type="email" placeholder="Correo">
   <input id="lPin" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()">
@@ -53,11 +60,12 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
 </div>
 
 <div id="app" style="display:none;">
-  <div class="header"><h1>SIVIL · Director Comercial<small id="quien"></small></h1><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
+  <div class="header"><div class="marca"><img src="./logo-postecsa.jpg" alt="POSTECSA de Colombia SAS"><h1>SIVIL · Director Comercial<small id="quien"></small></h1></div><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
   <div class="tabs">
     <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
     <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
     <button class="tab" id="tVen" onclick="verTab('Ven')">📈 Ventas por vendedor</button>
+    <button class="tab" id="tTip" onclick="verTab('Tip')">💡 Inteligencia comercial</button>
   </div>
   <div class="wrap">
     <div id="pCot">
@@ -69,6 +77,7 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
         <button class="btn" onclick="exportar('cot')">⬇ Excel</button>
       </div>
       <div class="kpis" id="cKpi"></div>
+      <div class="graf"><div class="card"><h3>Estado de las cotizaciones</h3><div class="cv"><canvas id="gCotEst"></canvas></div></div><div class="card"><h3>Cotizado vs aceptado por vendedor ($)</h3><div class="cv"><canvas id="gCotVend"></canvas></div></div><div class="card"><h3>Cotizaciones por día</h3><div class="cv"><canvas id="gCotDia"></canvas></div></div></div>
       <div class="tablewrap"><table id="cTabla"></table></div>
       <div class="muted" style="margin-top:6px;">"Enviada" = el cliente aún no ha respondido. Con 7 días o más sin respuesta se marca en naranja. Las aceptadas muestran el avance de su AP.</div>
     </div>
@@ -80,15 +89,21 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
         <button class="btn" onclick="exportar('ap')">⬇ Excel</button>
       </div>
       <div class="kpis" id="aKpi"></div>
+      <div class="graf"><div class="card"><h3>Pedido, despachado y pagado por vendedor ($)</h3><div class="cv"><canvas id="gApVend"></canvas></div></div><div class="card"><h3>APs por estado</h3><div class="cv"><canvas id="gApEst"></canvas></div></div></div>
       <div class="tablewrap"><table id="aTabla"></table></div>
       <div class="muted" style="margin-top:6px;">Valor = precio con descuento × cantidad (sin flete). El total de la AP es el guardado en la AP; si no lo tiene, se calcula. Los pagos los registra Contabilidad.</div>
     </div>
     <div id="pVen" style="display:none;">
       <div class="filtros"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
+      <div class="graf"><div class="card"><h3>Ventas por mes y vendedor ($)</h3><div class="cv"><canvas id="gVenMes"></canvas></div></div><div class="card"><h3>Los 10 clientes que más compran (concentración)</h3><div class="cv"><canvas id="gTopCli"></canvas></div></div></div>
       <div class="tablewrap"><table id="vTabla"></table></div>
       <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Por defecto solo cuenta desde la AP 2438 (las anteriores eran pruebas); cámbialo arriba a la derecha.</div>
+    <div id="pTip" style="display:none;">
+      <div class="muted" style="margin-bottom:10px;">Ideas de reconocidos autores de ventas y estrategia, resumidas con palabras propias y conectadas con lo que dicen los datos de POSTECSA hoy. Son guías de trabajo, no recetas.</div>
+      <div id="tipLista"></div>
     </div>
   </div>
+  <div class="pie">POSTECSA de Colombia SAS · SIVIL Director Comercial · solo lectura</div>
 </div>
 <script>
 const GAS_URL="https://script.google.com/macros/s/AKfycbyokqX6vLzefzVVOhnETZa6zPHo8DJj6-0mJuMZ1JjPsFNACib_WFeLqgg2Cs_ibp2gzQ/exec";
@@ -145,12 +160,12 @@ async function cargarTodo(forzar){
   $('cVend').innerHTML=opt;$('aVend').innerHTML=opt;
   const anios=[...new Set(aps.map(a=>(pf(a.fecha_creacion)||{getFullYear:()=>0}).getFullYear()).filter(Boolean))].sort().reverse();
   $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
-  calcAp();renderCot();renderAp();renderVen();
+  calcAp();renderCot();renderAp();renderVen();renderTips();
 }
 const CONOC={'31409227':'Gerencia (Nohra)'};
 const nomV=id=>D.nomV[String(id)]||CONOC[String(id)]||id;
 function apOk(a){if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;return $('gOf').value==='todo'||Number(a.ap_id)>=2438;}
-function verTab(t){['Cot','Ap','Ven'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
+function verTab(t){['Cot','Ap','Ven','Tip'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
 // ---- AP (despachado/pagado)
 function calcAp(){
   const porAp={};D.det.forEach(d=>(porAp[String(d.ap_id)]=porAp[String(d.ap_id)]||[]).push(d));
@@ -196,7 +211,7 @@ function renderCot(){
     html+='<tr><td>'+fd(f)+'</td><td><b>'+H(c.numero)+'</b></td><td>'+H(c.cliente_nombre)+'</td><td>'+H(c.obra)+'</td><td>'+H(nomV(c.vendedor_id))+'</td><td class="num">'+money(c.total)+'</td><td><span class="pill" style="background:'+(sinResp?'#c2410c':colEst[c.estado]||'#777')+'">'+H(c.estado)+'</span>'+(c.estado==='Enviada'?'<div class="muted">'+dsr+' d sin respuesta</div>':'')+'</td><td>'+ap+'</td><td>'+H(c.nota_estado)+'</td></tr>';
     EXP.cot.push({Fecha:fd(f),Numero:c.numero,Cliente:c.cliente_nombre,Obra:c.obra,Vendedor:nomV(c.vendedor_id),Total:Number(c.total)||0,Estado:c.estado,'Dias sin respuesta':c.estado==='Enviada'?dsr:'',AP:c.ap_id,'% despachado':x?x.pct:'',Pagado:x?x.pagado:'',Nota:c.nota_estado});
   });
-  $('cTabla').innerHTML=html;
+  $('cTabla').innerHTML=html;chartsCot(L);
 }
 function renderAp(){
   const es=$('aEst').value,ve=$('aVend').value,q=$('aQ').value.toLowerCase().trim();
@@ -213,7 +228,7 @@ function renderAp(){
   L.forEach(a=>{const x=D.apx[String(a.ap_id)],cl=D.nomC[String(a.cliente_nit)]||a.cliente_nit,saldo=Math.max(0,x.tot-x.pagado);
     html+='<tr><td><b>'+H(a.ap_id)+'</b></td><td>'+fd(pf(a.fecha_creacion))+'</td><td>'+H(cl)+'</td><td>'+H(a.nombre_obra)+'</td><td>'+H(nomV(a.vendedor_id))+'</td><td>'+H(a.estado_ap)+'</td><td><div class="bar"><i style="width:'+Math.min(100,x.pct)+'%;background:'+(x.pct>=100?'#166534':'#ca8a04')+'"></i></div>'+x.pct+' %</td><td class="num">'+money(x.vS)+'</td><td class="num">'+money(x.vD)+'</td><td class="num">'+money(x.tot)+'</td><td class="num">'+money(x.pagado)+'</td><td class="num" style="color:'+(saldo>0.5?'#b91c1c':'#166534')+';font-weight:700;">'+(saldo>0.5?money(saldo):'PAGADA')+'</td></tr>';
     EXP.ap.push({AP:a.ap_id,Fecha:fd(pf(a.fecha_creacion)),Cliente:cl,Obra:a.nombre_obra,Vendedor:nomV(a.vendedor_id),Estado:a.estado_ap,'% despachado':x.pct,Pedido:Math.round(x.vS),Despachado:Math.round(x.vD),'Total AP':Math.round(x.tot),Pagado:x.pagado,Saldo:Math.round(saldo)});});
-  $('aTabla').innerHTML=html;
+  $('aTabla').innerHTML=html;chartsAp(L);
 }
 function renderVen(){
   const an=Number($('vAnio').value)||new Date().getFullYear(),M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -223,7 +238,72 @@ function renderVen(){
   let html='<tr><th>Vendedor</th>'+M.map(x=>'<th class="num">'+x+'</th>').join('')+'<th class="num">Acumulado '+an+'</th></tr>';EXP.ven=[];const tm=Array(12).fill(0);
   vs.forEach(v=>{const t=m[v].reduce((s,x)=>s+x,0);m[v].forEach((x,i)=>tm[i]+=x);html+='<tr><td><b>'+H(nomV(v))+'</b></td>'+m[v].map(x=>'<td class="num">'+(x?money(x):'')+'</td>').join('')+'<td class="num"><b>'+money(t)+'</b></td></tr>';const o={Vendedor:nomV(v)};M.forEach((n,i)=>o[n]=Math.round(m[v][i]));o['Acumulado']=Math.round(t);EXP.ven.push(o);});
   html+='<tr class="dia"><td>Total</td>'+tm.map(x=>'<td class="num">'+(x?money(x):'')+'</td>').join('')+'<td class="num">'+money(tm.reduce((s,x)=>s+x,0))+'</td></tr>';
-  $('vTabla').innerHTML=html;
+  $('vTabla').innerHTML=html;chartsVen(m,vs,an,M);
+}
+
+// ---- Gráficos (colores Berchmans: verde y amarillo; naranja POSTECSA)
+const PAL=['#0a7a3d','#f6c41c','#f26f21','#064e2a','#9ca3af','#2563a8','#b91c1c','#7c9a2c'];
+const CH={};
+function graf(id,cfg){if(typeof Chart==='undefined'||!$(id))return;if(CH[id])CH[id].destroy();cfg.options=Object.assign({responsive:true,maintainAspectRatio:false},cfg.options||{});CH[id]=new Chart($(id),cfg);}
+const fmtM=v=>'$'+(Math.abs(v)>=1e6?(v/1e6).toFixed(1).replace('.',',')+' M':Math.round(v).toLocaleString('es-CO'));
+const ejeM={ticks:{callback:v=>fmtM(v)}};
+const tipM={callbacks:{label:c=>(c.dataset.label?c.dataset.label+': ':'')+money(c.parsed.y!==undefined&&c.chart.config.options.indexAxis!=='y'?c.parsed.y:c.parsed.x)}};
+function chartsCot(L){
+  const est={};L.forEach(c=>est[c.estado]=(est[c.estado]||0)+1);const ks=Object.keys(est);
+  graf('gCotEst',{type:'doughnut',data:{labels:ks,datasets:[{data:ks.map(k=>est[k]),backgroundColor:ks.map(k=>({Aceptada:'#0a7a3d',Enviada:'#f6c41c',Borrador:'#9ca3af',Perdida:'#b91c1c',Anulada:'#d1d5db'}[k]||'#2563a8'))}]},options:{plugins:{legend:{position:'bottom'}}}});
+  const v={};L.forEach(c=>{const n=nomV(c.vendedor_id);v[n]=v[n]||{t:0,a:0};v[n].t+=Number(c.total)||0;if(c.estado==='Aceptada')v[n].a+=Number(c.total)||0;});
+  const vn=Object.keys(v);
+  graf('gCotVend',{type:'bar',data:{labels:vn,datasets:[{label:'Cotizado',data:vn.map(n=>v[n].t),backgroundColor:'#f6c41c'},{label:'Aceptado',data:vn.map(n=>v[n].a),backgroundColor:'#0a7a3d'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipM}}});
+  const d={};L.forEach(c=>{const k=iso(pf(c.fecha));d[k]=(d[k]||0)+1;});const dk=Object.keys(d).sort();
+  graf('gCotDia',{type:'bar',data:{labels:dk.map(k=>k.slice(8)+'/'+k.slice(5,7)),datasets:[{label:'Cotizaciones',data:dk.map(k=>d[k]),backgroundColor:'#0a7a3d'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+function chartsAp(L){
+  const v={},e={};L.forEach(a=>{const x=D.apx[String(a.ap_id)],n=nomV(a.vendedor_id);v[n]=v[n]||{p:0,d:0,g:0};v[n].p+=x.vS;v[n].d+=x.vD;v[n].g+=x.pagado;e[a.estado_ap]=(e[a.estado_ap]||0)+1;});
+  const vn=Object.keys(v);
+  graf('gApVend',{type:'bar',data:{labels:vn,datasets:[{label:'Pedido',data:vn.map(n=>v[n].p),backgroundColor:'#f6c41c'},{label:'Despachado',data:vn.map(n=>v[n].d),backgroundColor:'#0a7a3d'},{label:'Pagado',data:vn.map(n=>v[n].g),backgroundColor:'#f26f21'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipM}}});
+  const ek=Object.keys(e);
+  graf('gApEst',{type:'doughnut',data:{labels:ek,datasets:[{data:ek.map(k=>e[k]),backgroundColor:PAL}]},options:{plugins:{legend:{position:'bottom'}}}});
+}
+function chartsVen(m,vs,an,M){
+  graf('gVenMes',{type:'bar',data:{labels:M,datasets:vs.map((v,i)=>({label:nomV(v),data:m[v],backgroundColor:PAL[i%PAL.length]}))},options:{scales:{x:{stacked:true},y:{stacked:true,...ejeM}},plugins:{tooltip:tipM}}});
+  const c={};D.aps.forEach(a=>{if(!apOk(a))return;const f=pf(a.fecha_creacion);if(!f||f.getFullYear()!==an)return;const n=D.nomC[String(a.cliente_nit)]||a.cliente_nit;c[n]=(c[n]||0)+D.apx[String(a.ap_id)].vS;});
+  const top=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,10);
+  graf('gTopCli',{type:'bar',data:{labels:top.map(n=>String(n).slice(0,28)),datasets:[{label:'Ventas',data:top.map(n=>c[n]),backgroundColor:'#0a7a3d'}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:tipM},scales:{x:ejeM}}});
+}
+// ---- Tips de inteligencia comercial (ideas resumidas; datos en vivo)
+function renderTips(){
+  const h0=hoy0(),ap=D.aps.filter(apOk),xs=ap.map(a=>D.apx[String(a.ap_id)]);
+  const sinR=D.cot.filter(c=>c.estado==='Enviada'&&pf(c.fecha)&&(h0-pf(c.fecha))/864e5>=7&&(h0-pf(c.fecha))/864e5<=60);
+  const valSinR=sinR.reduce((t,c)=>t+(Number(c.total)||0),0);
+  const cc={};ap.forEach(a=>{const n=D.nomC[String(a.cliente_nit)]||a.cliente_nit;cc[n]=(cc[n]||0)+D.apx[String(a.ap_id)].vS;});
+  const ord=Object.values(cc).sort((a,b)=>b-a),tot=ord.reduce((t,x)=>t+x,0),top5=ord.slice(0,5).reduce((t,x)=>t+x,0);
+  const pc=tot?Math.round(100*top5/tot):0;
+  const ids=new Set(ap.map(a=>String(a.ap_id)));let sd=0,sv=0;
+  D.det.forEach(d=>{if(!ids.has(String(d.ap_id)))return;const q=parseFloat(d.cantidad_solicitada)||0,b=(parseFloat(d.precio_base)||0)*q;sv+=b;sd+=b*(parseFloat(d.descuento_aplicado)||0);});
+  const descProm=sv?(100*sd/sv).toFixed(1).replace('.',','):'0';
+  const acp=D.cot.filter(c=>c.estado==='Aceptada').length,per=D.cot.filter(c=>c.estado==='Perdida'),env=D.cot.filter(c=>c.estado==='Enviada').length;
+  const tasa=(acp+env+per.length)?Math.round(100*acp/(acp+env+per.length)):0;
+  const conMot=per.filter(c=>String(c.nota_estado||'').trim()).length;
+  const bor=D.cot.filter(c=>c.estado==='Borrador').length;
+  const porDesp=xs.reduce((t,x)=>t+(x.vS-x.vD),0),saldo=xs.reduce((t,x)=>t+Math.max(0,x.tot-x.pagado),0);
+  const T=[
+   ['Prospectar todos los días, no cuando hay tiempo','Jeb Blount · Fanatical Prospecting','Blount sostiene que el flujo de ventas depende de una rutina diaria de prospección y seguimiento; lo urgente de hoy no debe desplazarla.',
+    sinR.length+' cotizaciones enviadas llevan 7 días o más sin respuesta ('+money(valSinR)+').','Un bloque fijo cada mañana para que cada vendedor llame a sus cotizaciones sin respuesta y anote qué pasó.'],
+   ['Preguntar antes de cotizar','Neil Rackham · SPIN Selling','Rackham, tras estudiar miles de visitas de venta, propone una secuencia de preguntas: Situación, Problema, Implicación y Necesidad de solución. Se vende mejor haciendo que el cliente descubra el costo de su problema.',
+    'Tasa de cierre actual: '+tasa+' % ('+acp+' aceptadas, '+env+' sin respuesta, '+per.length+' perdidas; '+conMot+' de las perdidas tienen motivo registrado).','En cada visita registrar la obra, el plazo y el problema del cliente; y anotar siempre el motivo cuando una cotización se pierde.'],
+   ['Pocos clientes sostienen casi todo','Richard Koch · El principio 80/20','Koch muestra que una minoría de clientes suele generar la mayoría de los resultados. Conviene conocer a esa minoría y cuidar que no sea demasiado pequeña.',
+    'Los 5 clientes principales concentran '+pc+' % de las ventas oficiales del año.','Plan de cuenta para cada cliente grande (visita periódica, condiciones, contacto de contabilidad) y metas para abrir nuevos clientes medianos.'],
+   ['Segmentar, elegir y posicionar','Philip Kotler · Dirección de Marketing','Kotler propone dividir el mercado en segmentos, escoger los más rentables y definir qué nos hace distintos ante cada uno.',
+    'Aún no hay canal asignado a los clientes, por eso no se puede ver cuánto vende cada uno de los 5 canales.','Cargar la clasificación de clientes por canal (constructoras, distribuidores, ingenieros y arquitectos, directos, gobierno) para decidir dónde crecer.'],
+   ['Negociar condiciones antes que precio','Chris Voss · Never Split the Difference','Voss recomienda preguntas calibradas ("¿cómo hacemos para que esto funcione con su presupuesto?") y espejear lo que dice el cliente antes de ceder en precio.',
+    'El descuento promedio ponderado en las APs oficiales es '+descProm+' %.','Antes de bajar el precio, ofrecer alternativas: anticipo, plazo de pago, despachos por porcentajes o volumen.'],
+   ['Hacerlo simple para el cliente ocupado','Jill Konrath · SNAP Selling','Konrath resume que el cliente actual está saturado: valora lo simple, lo que le aporta valor, lo alineado con sus prioridades y lo que se resuelve rápido.',
+    bor+' cotizaciones están en borrador sin enviar.','Cerrar y enviar los borradores el mismo día, con una cotización clara y con vigencia visible.'],
+   ['Conocer al competidor','Michael Porter · Estrategia competitiva','Porter explica que la rentabilidad de un sector depende de la rivalidad, los sustitutos, el poder de clientes y proveedores y la entrada de nuevos competidores.',
+    'Hoy no se registra qué competidor aparece en cada negociación ni a qué precio.','Agregar en la visita: competidor, precio y razón por la que ganó o perdió. Con eso se construye el módulo de competencia.'],
+   ['Cumplir es retener','Peter Drucker · La práctica de la gerencia','Drucker plantea que el propósito de una empresa es crear y conservar clientes; cumplir lo prometido es la forma más barata de conservarlos.',
+    'Hay '+money(porDesp)+' por despachar y '+money(saldo)+' por cobrar en las APs oficiales.','Revisar semanalmente las APs con avance bajo, avisar al cliente de la fecha real y pedir el abono a tiempo.']];
+  $('tipLista').innerHTML='<div class="graf">'+T.map(t=>'<div class="card tip"><h3>'+H(t[0])+'</h3><div class="aut">'+H(t[1])+'</div><div>'+H(t[2])+'</div><div class="dato">📊 <b>Tus datos:</b> '+H(t[3])+'</div><div class="acc">✅ <b>Acción sugerida:</b> '+H(t[4])+'</div></div>').join('')+'</div>';
 }
 function exportar(k){
   if(typeof XLSX==='undefined'){alert('No se cargó la librería de Excel (¿sin conexión?)');return;}
