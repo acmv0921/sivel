@@ -53,7 +53,7 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
 </div>
 
 <div id="app" style="display:none;">
-  <div class="header"><h1>SIVIL · Director Comercial<small id="quien"></small></h1><div><button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
+  <div class="header"><h1>SIVIL · Director Comercial<small id="quien"></small></h1><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
   <div class="tabs">
     <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
     <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
@@ -86,7 +86,7 @@ tr.dia td{background:#ecfdf5;font-weight:700;color:var(--verde2);}
     <div id="pVen" style="display:none;">
       <div class="filtros"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
       <div class="tablewrap"><table id="vTabla"></table></div>
-      <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Las APs anteriores al 19/10/2026 eran pruebas en parte; el acumulado oficial arranca con la AP 2438.</div>
+      <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Por defecto solo cuenta desde la AP 2438 (las anteriores eran pruebas); cámbialo arriba a la derecha.</div>
     </div>
   </div>
 </div>
@@ -147,7 +147,9 @@ async function cargarTodo(forzar){
   $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
   calcAp();renderCot();renderAp();renderVen();
 }
-const nomV=id=>D.nomV[String(id)]||id;
+const CONOC={'31409227':'Gerencia (Nohra)'};
+const nomV=id=>D.nomV[String(id)]||CONOC[String(id)]||id;
+function apOk(a){if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;return $('gOf').value==='todo'||Number(a.ap_id)>=2438;}
 function verTab(t){['Cot','Ap','Ven'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
 // ---- AP (despachado/pagado)
 function calcAp(){
@@ -179,7 +181,7 @@ function renderCot(){
   const sum=e=>L.filter(c=>c.estado===e);
   const tot=a=>a.reduce((t,c)=>t+(Number(c.total)||0),0);
   const dec=sum('Aceptada').length+sum('Perdida').length;
-  $('cKpi').innerHTML=[['Cotizadas',L.length,money(tot(L))],['Aceptadas (pedido)',sum('Aceptada').length,money(tot(sum('Aceptada')))],['Enviadas sin respuesta',sum('Enviada').length,money(tot(sum('Enviada')))],['Perdidas',sum('Perdida').length,money(tot(sum('Perdida')))],['Tasa de cierre',(dec?Math.round(100*sum('Aceptada').length/(sum('Aceptada').length+sum('Enviada').length+sum('Perdida').length)):0)+' %','aceptadas / cotizadas']]
+  $('cKpi').innerHTML=[['Cotizadas',L.length,money(tot(L))],['Aceptadas (pedido)',sum('Aceptada').length,money(tot(sum('Aceptada')))],['Enviadas sin respuesta',sum('Enviada').length,money(tot(sum('Enviada')))],['Perdidas',sum('Perdida').length,money(tot(sum('Perdida')))],['Tasa de cierre (sin borradores)',(dec?Math.round(100*sum('Aceptada').length/(sum('Aceptada').length+sum('Enviada').length+sum('Perdida').length)):0)+' %','aceptadas / cotizadas']]
     .map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b><div class="muted">'+k[2]+'</div></div>').join('');
   let html='<tr><th>Fecha</th><th>N.º</th><th>Cliente</th><th>Obra</th><th>Vendedor</th><th class="num">Total</th><th>Estado</th><th>AP y avance</th><th>Nota</th></tr>',ult='';
   EXP.cot=[];
@@ -199,7 +201,7 @@ function renderCot(){
 function renderAp(){
   const es=$('aEst').value,ve=$('aVend').value,q=$('aQ').value.toLowerCase().trim();
   const L=D.aps.filter(a=>{
-    if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;
+    if(!apOk(a))return false;
     if(es==='abiertas'?!(a.estado_ap==='Pendiente'||a.estado_ap==='Despachado Parcial'):es!=='todas'&&a.estado_ap!==es)return false;
     if(ve&&String(a.vendedor_id)!==ve)return false;
     const cl=D.nomC[String(a.cliente_nit)]||a.cliente_nit;
@@ -216,7 +218,7 @@ function renderAp(){
 function renderVen(){
   const an=Number($('vAnio').value)||new Date().getFullYear(),M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const m={};
-  D.aps.forEach(a=>{if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return;const f=pf(a.fecha_creacion);if(!f||f.getFullYear()!==an)return;const v=String(a.vendedor_id);(m[v]=m[v]||Array(12).fill(0))[f.getMonth()]+=D.apx[String(a.ap_id)].vS;});
+  D.aps.forEach(a=>{if(!apOk(a))return;const f=pf(a.fecha_creacion);if(!f||f.getFullYear()!==an)return;const v=String(a.vendedor_id);(m[v]=m[v]||Array(12).fill(0))[f.getMonth()]+=D.apx[String(a.ap_id)].vS;});
   const vs=Object.keys(m).sort((a,b)=>m[b].reduce((s,x)=>s+x,0)-m[a].reduce((s,x)=>s+x,0));
   let html='<tr><th>Vendedor</th>'+M.map(x=>'<th class="num">'+x+'</th>').join('')+'<th class="num">Acumulado '+an+'</th></tr>';EXP.ven=[];const tm=Array(12).fill(0);
   vs.forEach(v=>{const t=m[v].reduce((s,x)=>s+x,0);m[v].forEach((x,i)=>tm[i]+=x);html+='<tr><td><b>'+H(nomV(v))+'</b></td>'+m[v].map(x=>'<td class="num">'+(x?money(x):'')+'</td>').join('')+'<td class="num"><b>'+money(t)+'</b></td></tr>';const o={Vendedor:nomV(v)};M.forEach((n,i)=>o[n]=Math.round(m[v][i]));o['Acumulado']=Math.round(t);EXP.ven.push(o);});
