@@ -1471,6 +1471,7 @@ async function cargarTodo() {
     ]);
     sincronizarFuncionariosBackend(funcionariosBackend);
     leerGVIZSafe('COTIZACIONES').then(function (c) { S.cotiz = c; try { renderAPs(); } catch (e) {} });
+    leerGVIZSafe('CARTERA_CLIENTES').then(function (c) { S.cartera = {}; (c || []).forEach(function (r) { S.cartera[String(r.cliente_nit)] = r; }); try { renderAPs(); } catch (e) {} });
     cargarMetaActualizacion();
     poblarSelectProductos();
     actualizarKPIs();
@@ -1493,6 +1494,21 @@ function obsInternaDe(ap) {
     for (const c of cs) { const oi = (JSON.parse(c.payload) || {}).obs_interna; if (oi) return String(oi); }
   } catch (e) {}
   return '';
+}
+// Semáforo de cartera/anticipos por cliente (lo registra Contabilidad/Gerencia en SIVIL Gerencia → Cartera).
+// Solo informa: no bloquea el despacho.
+function htmlCartera(ap) {
+  const d = (S.cartera || {})[String(ap.cliente_nit)];
+  if (!d) return '';
+  const ant = Number(d.anticipo_disponible) || 0, ven = Number(d.cartera_vencida) || 0, tot = Number(ap.total_ap) || 0.01;
+  let col, bg, txt;
+  if (ven > 0 && ant < tot) { col = '#b91c1c'; bg = '#fef2f2'; txt = '🔴 Cartera vencida ' + fmt(ven) + (ant > 0 ? ' · anticipo disponible ' + fmt(ant) + ' (no cubre esta AP)' : ' · sin anticipo') + ' — consultar con Contabilidad antes de despachar'; }
+  else if (ant > 0) { col = '#a16207'; bg = '#fefce8'; txt = '🟡 Saldo a favor en anticipos: ' + fmt(ant) + (ven > 0 ? ' (cubre la cartera vencida de ' + fmt(ven) + ')' : ''); }
+  else { col = '#166534'; bg = '#f0fdf4'; txt = '🟢 Sin novedad de cartera'; }
+  const cierre = d.dia_cierre_facturacion ? ' · cierre de facturación: día ' + d.dia_cierre_facturacion : '';
+  const nota = d.nota ? ' · ' + String(d.nota).replace(/</g, '&lt;') : '';
+  const f = d.actualizado ? ' · actualizado ' + fmtFecha(d.actualizado) : '';
+  return `<div style="font-size:0.72rem;color:${col};background:${bg};border:1px solid ${col};border-radius:6px;padding:4px 6px;margin-top:4px;font-weight:700;">${txt}<span style="font-weight:400;color:#555;">${cierre}${nota}${f}</span></div>`;
 }
 function htmlObsInterna(ap) {
   const t = String(ap.obs_internas || '') || obsInternaDe(ap); if (!t) return '';
@@ -2032,7 +2048,7 @@ function renderAPs() {
           ${ap.vendedor_id ? `<div style="font-size:0.70rem;color:#7c3200;margin-top:2px;font-weight:700;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
           ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:3px;">🗓️ Entrega: ${fmtFecha(ap.fecha_entrega)}</div>` : ''}
           ${ap.obs_entrega ? `<div style="font-size:0.70rem;color:#555;margin-top:2px;">💬 ${ap.obs_entrega}</div>` : ''}
-          ${htmlObsInterna(ap)}
+          ${htmlCartera(ap)}${htmlObsInterna(ap)}
           ${ap.direccion_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">📍 ${ap.direccion_obra}</div>` : ''}
           ${ap.contacto_obra ? `<div style="font-size:0.70rem;color:#444;margin-top:2px;">👤 ${ap.contacto_obra} ${ap.cel_contacto ? '· '+ap.cel_contacto : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.70rem;color:#0a5c36;margin-top:2px;">🚚 ${ap.destino}${ap.flete_valor ? ' · Flete: '+fmt(ap.flete_valor) : ''}${(ap.flete_negociado===true||ap.flete_negociado==='TRUE') ? ' ⚡ negociado' : ''}</div>` : ''}
@@ -2232,7 +2248,7 @@ function abrirDespacho(ap_id) {
       ${ap.vendedor_id ? `<div style="font-size:0.72rem;color:#7c3200;font-weight:700;margin-top:4px;">👤 Vendedor: ${nombreVendedor(ap.vendedor_id)}</div>` : ''}
       ${ap.fecha_entrega ? `<div style="font-size:0.72rem;color:#c67c00;font-weight:700;margin-top:4px;">🗓️ Entrega solicitada: <b>${fmtFecha(ap.fecha_entrega)}</b></div>` : ''}
       ${ap.obs_entrega ? `<div style="font-size:0.71rem;color:#555;margin-top:3px;">💬 ${ap.obs_entrega}</div>` : ''}
-      ${htmlObsInterna(ap)}
+      ${htmlCartera(ap)}${htmlObsInterna(ap)}
       ${ap.direccion_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:3px;">📍 Obra: ${ap.direccion_obra}</div>` : ''}
       ${ap.contacto_obra ? `<div style="font-size:0.71rem;color:#333;margin-top:2px;">👤 Contacto: ${ap.contacto_obra}${ap.cel_contacto ? ' — <a href="tel:'+ap.cel_contacto+'" style="color:var(--verde);">'+ap.cel_contacto+'</a>' : ''}</div>` : ''}
 ${ap.destino && ap.destino !== 'PLANTA' ? `<div style="font-size:0.72rem;color:#0a5c36;margin-top:4px;font-weight:700;">🚚 Destino: ${ap.destino}</div>

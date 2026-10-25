@@ -543,6 +543,31 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     </div>
   </div>
 
+  <!-- CARTERA Y ANTICIPOS (Despacho ve el semáforo en cada AP) -->
+  <div id="screenCartera" class="screen">
+    <div class="card">
+      <div class="card-title">💵 Cartera y anticipos por cliente</div>
+      <div style="font-size:.74rem;color:#555;margin-bottom:.6rem;">Aquí Contabilidad o Gerencia registra el anticipo disponible y la cartera vencida de cada cliente. Despacho lo ve como semáforo en cada AP: 🟢 sin problema · 🟡 hay anticipo disponible · 🔴 cartera vencida sin anticipo que cubra la AP.</div>
+      <input class="form-control" id="gcBuscar" placeholder="🔍 Buscar cliente por nombre o NIT" oninput="gcRender()" style="margin-bottom:.5rem;">
+      <label style="font-size:.74rem;display:flex;gap:6px;align-items:center;margin-bottom:.5rem;"><input type="checkbox" id="gcSoloConDatos" onchange="gcRender()"> Solo clientes con datos registrados</label>
+      <div id="gcLista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+  <div id="modalCartera" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="cerrarModal('modalCartera')">✕</button>
+      <div class="modal-title" id="gcTitulo">Cliente</div>
+      <div class="form-group"><label class="form-label">Anticipo disponible ($)</label><input id="gcAnt" class="form-control" type="number" min="0" step="any"></div>
+      <div class="form-group"><label class="form-label">Cartera vencida ($)</label><input id="gcVenc" class="form-control" type="number" min="0" step="any"></div>
+      <div class="form-group"><label class="form-label">Día de cierre de facturación (1–31, opcional)</label><input id="gcDia" class="form-control" type="number" min="1" max="31" step="1"></div>
+      <div class="form-group"><label class="form-label">Contacto contable (nombre)</label><input id="gcCont" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Teléfono contable</label><input id="gcTel" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Correo contable</label><input id="gcMail" class="form-control" type="email"></div>
+      <div class="form-group"><label class="form-label">Nota (opcional)</label><input id="gcNota" class="form-control" placeholder="Ej: pagó 50 % el 24/10"></div>
+      <button class="btn btn-primary" style="width:100%;" id="gcGuardarBtn" onclick="gcGuardar()">💾 Guardar</button>
+    </div>
+  </div>
+
   <!-- USUARIOS -->
   <div id="screenUsuarios" class="screen">
     <div class="card">
@@ -816,6 +841,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <button class="nav-btn" id="navInventDrive" onclick="irA('screenInventDrive')"><span class="icon">📥</span>Inventario</button>
   <button class="nav-btn" id="navInformes" onclick="irA('screenInformes')"><span class="icon">📋</span>Informes</button>
   <button class="nav-btn" id="navCotiz" onclick="irA('screenCotizaciones');gzInit();"><span class="icon">🧾</span>Cotiz.</button>
+  <button class="nav-btn" id="navCartera" onclick="irA('screenCartera');gcInit();"><span class="icon">💵</span>Cartera</button>
   <button class="nav-btn" id="navVisitas" onclick="irA('screenVisitas');cargarVisitas();"><span class="icon">🚶</span>Visitas</button>
 </nav>
 
@@ -2972,7 +2998,7 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
-    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz'};
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz',screenCartera:'navCartera'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInformes') renderInformeGerencia();
   window.scrollTo(0,0);
@@ -3564,6 +3590,61 @@ function gzRenderEmbudo() {
       (c.estado === 'Perdida' && c.nota_estado ? '<div style="font-size:.72rem;color:#b91c1c;margin-top:2px;">Motivo: ' + gzH(c.nota_estado) + '</div>' : '') +
       (c.ap_id ? '<div style="font-size:.72rem;color:#166534;margin-top:2px;">AP: ' + gzH(c.ap_id) + '</div>' : '') + '</div>';
   }).join('');
+}
+// ===== CARTERA Y ANTICIPOS (25 oct 2026) =====
+var GC = { cli: [], cart: {}, nit: null };
+function gcSemaforo(c, apTotal) {
+  if (!c) return { col: '#9ca3af', txt: 'Sin datos' };
+  var ant = Number(c.anticipo_disponible) || 0, ven = Number(c.cartera_vencida) || 0;
+  if (ven > 0 && ant < (apTotal || 0.01)) return { col: '#b91c1c', txt: 'Cartera vencida' };
+  if (ant > 0) return { col: '#ca8a04', txt: 'Anticipo disponible' };
+  return { col: '#166534', txt: 'Sin novedad' };
+}
+async function gcInit() {
+  document.getElementById('gcLista').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    GC.cli = await leerGVIZ('CLIENTES');
+    var cc = []; try { cc = await leerGVIZ('CARTERA_CLIENTES'); } catch (e) {}
+    GC.cart = {}; cc.forEach(function (r) { GC.cart[String(r.cliente_nit)] = r; });
+  } catch (e) { document.getElementById('gcLista').innerHTML = '<div style="text-align:center;color:#b91c1c;padding:1rem;">No se pudieron cargar los clientes</div>'; return; }
+  gcRender();
+}
+function gcRender() {
+  var q = document.getElementById('gcBuscar').value.toLowerCase().trim(), solo = document.getElementById('gcSoloConDatos').checked;
+  var L = GC.cli.filter(function (c) {
+    if (solo && !GC.cart[String(c.cliente_nit)]) return false;
+    return !q || (String(c.razon_social || '') + ' ' + c.cliente_nit).toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 80);
+  var el = document.getElementById('gcLista');
+  if (!L.length) { el.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin clientes con estos filtros</div>'; return; }
+  el.innerHTML = L.map(function (c) {
+    var d = GC.cart[String(c.cliente_nit)], s = gcSemaforo(d, 0);
+    return '<div onclick="gcAbrir(\'' + gzH(c.cliente_nit) + '\')" style="border:1px solid #e5e7eb;border-left:5px solid ' + s.col + ';border-radius:10px;padding:8px 10px;margin-bottom:6px;background:#fff;cursor:pointer;">' +
+      '<div style="display:flex;justify-content:space-between;gap:6px;"><b style="font-size:.82rem;">' + gzH(c.razon_social) + '</b><span style="font-size:.68rem;font-weight:800;color:' + s.col + ';">' + s.txt + '</span></div>' +
+      '<div style="font-size:.72rem;color:#666;">NIT ' + gzH(c.cliente_nit) + (d ? ' · Anticipo ' + fmt(d.anticipo_disponible) + ' · Vencida ' + fmt(d.cartera_vencida) + (d.actualizado ? ' · ' + fmtFecha(d.actualizado) : '') : ' · sin datos registrados') + '</div></div>';
+  }).join('');
+}
+function gcAbrir(nit) {
+  var c = GC.cli.find(function (x) { return String(x.cliente_nit) === String(nit); }); if (!c) return;
+  var d = GC.cart[String(nit)] || {}; GC.nit = nit;
+  document.getElementById('gcTitulo').textContent = c.razon_social + ' · ' + nit;
+  var set = function (id, v) { document.getElementById(id).value = v == null ? '' : v; };
+  set('gcAnt', d.anticipo_disponible || ''); set('gcVenc', d.cartera_vencida || ''); set('gcDia', d.dia_cierre_facturacion || '');
+  set('gcCont', d.contacto_contable); set('gcTel', d.tel_contable); set('gcMail', d.correo_contable); set('gcNota', d.nota);
+  document.getElementById('modalCartera').classList.add('show');
+}
+async function gcGuardar() {
+  var v = function (id) { return document.getElementById(id).value; };
+  var btn = document.getElementById('gcGuardarBtn'); btn.disabled = true;
+  var body = { accion: 'guardarCarteraCliente', cliente_nit: GC.nit, anticipo_disponible: v('gcAnt'), cartera_vencida: v('gcVenc'), dia_cierre_facturacion: v('gcDia'),
+    contacto_contable: v('gcCont'), tel_contable: v('gcTel'), correo_contable: v('gcMail'), nota: v('gcNota'), usuario: G.usuario || '' };
+  try {
+    var r = await escribirGAS(body);
+    if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); btn.disabled = false; return; }
+    GC.cart[String(GC.nit)] = { cliente_nit: GC.nit, anticipo_disponible: Number(v('gcAnt')) || 0, cartera_vencida: Number(v('gcVenc')) || 0, dia_cierre_facturacion: v('gcDia'), contacto_contable: v('gcCont'), tel_contable: v('gcTel'), correo_contable: v('gcMail'), nota: v('gcNota'), actualizado: new Date() };
+    cerrarModal('modalCartera'); gcRender(); toast('✅ Cartera guardada');
+  } catch (e) { toast('❌ ' + (e.message || 'Error al guardar')); }
+  btn.disabled = false;
 }
 // ===== LISTADOS (APs y cotizaciones pendientes) con exportación a Excel — 25 oct 2026 =====
 var GL = { aps: null, cli: null, filas: [], cols: [] };

@@ -94,6 +94,7 @@ function doPost(e) {
       case "guardarCotizacion": resultado = guardarCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
+      case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "respaldarCotizacionDrive": resultado = respaldarCotizacionDrive(body); break;
       case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
       case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
@@ -2234,6 +2235,36 @@ function cambiarEstadoCotizacion(body) {
 // Textos del Cotizador (pago / entrega / plazo / obs). Solo Gerencia los edita.
 // Se reemplaza la hoja completa; el orden define el número que se guarda en cada cotización,
 // por eso Gerencia no borra: solo edita, agrega al final o desactiva (activo = 0).
+
+// =============================================================================
+// CARTERA Y ANTICIPOS POR CLIENTE (25 oct 2026) — reunión SIVIL del 24/10.
+// Contabilidad (Tatiana/Ingrid) o Gerencia registra por cliente: anticipo disponible, cartera
+// vencida, día de cierre de facturación y contacto contable. Despacho lo ve como semáforo en cada AP.
+// Hoja CARTERA_CLIENTES (se crea sola): una fila por NIT.
+// =============================================================================
+function guardarCarteraCliente(body) {
+  const nit = Number(String(body.cliente_nit || "").replace(/\D/g, ""));
+  if (!nit) return { ok: false, error: "Falta el NIT del cliente" };
+  const num = function (v) { const n = Number(String(v === undefined || v === null ? "" : v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; };
+  const dia = Math.round(num(body.dia_cierre_facturacion));
+  if (dia && (dia < 1 || dia > 31)) return { ok: false, error: "El día de cierre debe estar entre 1 y 31" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    const enc = ["cliente_nit", "anticipo_disponible", "cartera_vencida", "dia_cierre_facturacion", "contacto_contable", "tel_contable", "correo_contable", "nota", "actualizado", "actualizado_por"];
+    let h = ss.getSheetByName("CARTERA_CLIENTES");
+    if (!h) { h = ss.insertSheet("CARTERA_CLIENTES"); h.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight("bold"); h.setFrozenRows(1); }
+    const fila = [nit, num(body.anticipo_disponible), num(body.cartera_vencida), dia || "", String(body.contacto_contable || ""), String(body.tel_contable || ""), String(body.correo_contable || ""), String(body.nota || ""), new Date(), String(body.usuario || "")];
+    const ult = h.getLastRow();
+    let r = 0;
+    if (ult >= 2) { const nits = h.getRange(2, 1, ult - 1, 1).getValues(); for (let i = 0; i < nits.length; i++) { if (Number(nits[i][0]) === nit) { r = i + 2; break; } } }
+    if (!r) r = ult + 1;
+    h.getRange(r, 1, 1, enc.length).setValues([fila]);
+    return { ok: true, fila: r };
+  } finally { lock.releaseLock(); }
+}
+
 function guardarTextosCotizador(body) {
   const t = body.textos || {};
   const filas = [];
