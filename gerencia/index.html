@@ -543,6 +543,19 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     </div>
   </div>
 
+  <!-- DESPACHOS POR AP: pedido vs despachado (unidades y pesos) -->
+  <div id="screenDespAP" class="screen">
+    <div class="card">
+      <div class="card-title">🚚 Despachos por AP</div>
+      <div style="font-size:.74rem;color:#555;margin-bottom:.6rem;">Lo que registra Despacho (Valentina) en cada AP: pedido, despachado y por despachar, en unidades y en pesos (productos, sin flete). Valor = precio con descuento × cantidad; el IVA se incluye si la AP lo trae guardado.</div>
+      <div id="gdResumen" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:.6rem;"></div>
+      <input class="form-control" id="gdBuscar" placeholder="🔍 AP, cliente u obra" oninput="gdRender()" style="margin-bottom:.4rem;">
+      <select class="form-control" id="gdEstado" onchange="gdRender()" style="margin-bottom:.5rem;">
+        <option value="abiertas">En curso (Pendiente + Parcial)</option><option value="Pendiente">Pendiente</option><option value="Despachado Parcial">Despachado Parcial</option><option value="Despachado Total">Despachado Total</option><option value="todas">Todas</option>
+      </select>
+      <div id="gdLista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
   <!-- CARTERA Y ANTICIPOS (Despacho ve el semáforo en cada AP) -->
   <div id="screenCartera" class="screen">
     <div class="card">
@@ -842,6 +855,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn" id="navInformes" onclick="irA('screenInformes')"><span class="icon">📋</span>Informes</button>
   <button class="nav-btn" id="navCotiz" onclick="irA('screenCotizaciones');gzInit();"><span class="icon">🧾</span>Cotiz.</button>
   <button class="nav-btn" id="navCartera" onclick="irA('screenCartera');gcInit();"><span class="icon">💵</span>Cartera</button>
+  <button class="nav-btn" id="navDespAP" onclick="irA('screenDespAP');gdInit();"><span class="icon">🚚</span>Despachos AP</button>
   <button class="nav-btn" id="navVisitas" onclick="irA('screenVisitas');cargarVisitas();"><span class="icon">🚶</span>Visitas</button>
 </nav>
 
@@ -2998,7 +3012,7 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
-    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz',screenCartera:'navCartera'};
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz',screenCartera:'navCartera',screenDespAP:'navDespAP'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInformes') renderInformeGerencia();
   window.scrollTo(0,0);
@@ -3645,6 +3659,51 @@ async function gcGuardar() {
     cerrarModal('modalCartera'); gcRender(); toast('✅ Cartera guardada');
   } catch (e) { toast('❌ ' + (e.message || 'Error al guardar')); }
   btn.disabled = false;
+}
+// ===== DESPACHOS POR AP valorizados (25 oct 2026) =====
+var GD = { cli: null, filas: [] };
+function gdCalc() {
+  var porAp = {}; (G.detalles || []).forEach(function (d) { (porAp[String(d.ap_id)] = porAp[String(d.ap_id)] || []).push(d); });
+  var nCli = {}; (GD.cli || []).forEach(function (c) { nCli[String(c.cliente_nit)] = c.razon_social; });
+  var viajes = {}; (G.patio || []).forEach(function (x) { if (x.ap_id !== '' && x.cant_despachada_viaje !== '') viajes[String(x.ap_id)] = (viajes[String(x.ap_id)] || 0) + 1; });
+  GD.filas = (G.aps || []).filter(function (a) { return a.estado_ap !== 'Cancelado' && a.estado_ap !== 'Modificado'; }).map(function (a) {
+    var L = porAp[String(a.ap_id)] || [], sol = 0, des = 0, vSol = 0, vDes = 0;
+    L.forEach(function (d) {
+      var cs = parseFloat(d.cantidad_solicitada) || 0, cd = Math.min(parseFloat(d.cantidad_despachada) || 0, cs);
+      var pu = parseFloat(d.precio_con_descuento); if (!(pu > 0)) pu = (parseFloat(d.precio_base) || 0) * (1 - (parseFloat(d.descuento_aplicado) || 0));
+      var vl = parseFloat(d.total_linea); if (!(vl > 0)) vl = pu * cs;
+      sol += cs; des += cd; vSol += vl; vDes += cs > 0 ? vl * cd / cs : 0;
+    });
+    return { ap: a, cliente: nCli[String(a.cliente_nit)] || a.cliente_nit, obra: a.nombre_obra || '', vend: GZ.nom ? GZ.nom(a.vendedor_id) : a.vendedor_id,
+      sol: sol, des: des, vSol: vSol, vDes: vDes, vPor: Math.max(0, vSol - vDes), pct: sol > 0 ? Math.round(100 * des / sol) : 0, viajes: viajes[String(a.ap_id)] || 0 };
+  }).sort(function (x, y) { return Number(y.ap.ap_id) - Number(x.ap.ap_id); });
+}
+async function gdInit() {
+  if (!GD.cli) { try { GD.cli = await leerGVIZ('CLIENTES'); } catch (e) { GD.cli = []; } }
+  if (!GZ.nom) GZ.nom = function (id) { var v = (G.vendedores || []).find(function (x) { return String(x.id_vendedor) === String(id) || String(x.cedula) === String(id); }); return v ? (v.nombre_vendedor || v.nombre_completo || id) : id; };
+  gdCalc(); gdRender();
+}
+function gdRender() {
+  var q = document.getElementById('gdBuscar').value.toLowerCase().trim(), est = document.getElementById('gdEstado').value;
+  var L = GD.filas.filter(function (f) {
+    var e = f.ap.estado_ap;
+    if (est === 'abiertas' ? !(e === 'Pendiente' || e === 'Despachado Parcial') : est !== 'todas' && e !== est) return false;
+    return !q || (f.ap.ap_id + ' ' + f.cliente + ' ' + f.obra).toLowerCase().indexOf(q) >= 0;
+  });
+  var t = L.reduce(function (a, f) { a.vSol += f.vSol; a.vDes += f.vDes; a.vPor += f.vPor; return a; }, { vSol: 0, vDes: 0, vPor: 0 });
+  var box = function (tit, v, col) { return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:6px 8px;background:#fff;text-align:center;"><div style="font-size:.64rem;color:#666;">' + tit + '</div><b style="font-size:.82rem;color:' + col + ';">' + fmt(v) + '</b></div>'; };
+  document.getElementById('gdResumen').innerHTML = box('Pedido', t.vSol, '#111') + box('Despachado', t.vDes, '#166534') + box('Por despachar', t.vPor, '#b45309');
+  var el = document.getElementById('gdLista');
+  if (!L.length) { el.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">Sin APs con estos filtros</div>'; return; }
+  el.innerHTML = L.slice(0, 150).map(function (f) {
+    var col = f.pct >= 100 ? '#166534' : f.pct > 0 ? '#ca8a04' : '#9ca3af';
+    return '<div style="border:1px solid #e5e7eb;border-left:5px solid ' + col + ';border-radius:10px;padding:8px 10px;margin-bottom:6px;background:#fff;">' +
+      '<div style="display:flex;justify-content:space-between;gap:6px;"><b style="font-size:.84rem;">AP ' + gzH(f.ap.ap_id) + ' · ' + gzH(f.cliente) + '</b><span style="font-size:.68rem;font-weight:800;color:' + col + ';">' + gzH(f.ap.estado_ap) + '</span></div>' +
+      '<div style="font-size:.72rem;color:#666;">' + (f.obra ? gzH(f.obra) + ' · ' : '') + gzH(f.vend) + ' · ' + fmtFecha(f.ap.fecha_creacion) + (f.viajes ? ' · ' + f.viajes + ' viaje(s)' : '') + '</div>' +
+      '<div style="background:#e5e7eb;border-radius:6px;height:7px;margin:5px 0;"><div style="width:' + Math.min(100, f.pct) + '%;background:' + col + ';height:7px;border-radius:6px;"></div></div>' +
+      '<div style="font-size:.74rem;">' + f.des.toLocaleString('es-CO') + ' / ' + f.sol.toLocaleString('es-CO') + ' und (' + f.pct + ' %)</div>' +
+      '<div style="font-size:.74rem;">Pedido <b>' + fmt(f.vSol) + '</b> · Despachado <b style="color:#166534;">' + fmt(f.vDes) + '</b> · Falta <b style="color:#b45309;">' + fmt(f.vPor) + '</b></div></div>';
+  }).join('');
 }
 // ===== LISTADOS (APs y cotizaciones pendientes) con exportación a Excel — 25 oct 2026 =====
 var GL = { aps: null, cli: null, filas: [], cols: [] };
