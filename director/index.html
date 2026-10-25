@@ -66,6 +66,17 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
 @media(max-width:820px){#login{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto;}.port{padding:28px 24px;}.port::before{width:60vw;height:60vw;}.port ul{display:none;}.port h2{font-size:1.6rem;}.fcol{padding:28px 24px;}.fcol::before{width:100%;height:6px;bottom:auto;background:linear-gradient(90deg,var(--verde) 50%,var(--amar) 50%);}}
 .err{color:var(--rojo);font-size:.8rem;min-height:1.2em;margin-bottom:6px;}
 .muted{color:#777;font-size:.78rem;}
+
+.tour-ov{position:fixed;inset:0;z-index:9998;}
+.tour-hl{position:fixed;z-index:9999;border-radius:10px;box-shadow:0 0 0 9999px rgba(6,40,22,.72),0 0 0 4px var(--amar);transition:all .35s ease;pointer-events:none;}
+.tour-box{position:fixed;z-index:10000;width:min(380px,92vw);background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 10px 40px rgba(0,0,0,.35);border-top:6px solid var(--amar);font-size:1rem;line-height:1.45;}
+.tour-box h4{color:var(--verde2);font-size:1.1rem;margin-bottom:6px;}
+.tour-box .pg{font-size:.75rem;color:#777;margin-bottom:4px;}
+.tour-box .bt{display:flex;gap:8px;justify-content:space-between;margin-top:14px;flex-wrap:wrap;}
+.tour-box button{padding:9px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:700;font-size:.9rem;}
+.tour-box .sig{background:var(--verde);color:#fff;} .tour-box .ant{background:#eef2ee;color:var(--verde2);} .tour-box .sal{background:none;color:#777;font-weight:500;text-decoration:underline;}
+.ayuda{background:var(--amar);color:var(--verde2);border:none;border-radius:20px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:.85rem;}
+.cv{cursor:crosshair;} .hint{font-size:.72rem;color:#777;margin:-4px 0 6px;}
 </style>
 </head>
 <body>
@@ -83,12 +94,13 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
     <input id="lPin" type="password" placeholder="PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrar()">
     <div class="err" id="lErr"></div>
     <button class="btn" onclick="entrar()">Ingresar</button>
+    <button class="ayuda" style="margin-top:10px;width:100%" onclick="guiaLogin()">❓ ¿Cómo ingreso? (guía paso a paso)</button>
     <div class="sello">POSTECSA de Colombia SAS · SIVIL</div>
   </div></div>
 </div>
 
 <div id="app" style="display:none;">
-  <div class="header"><div class="marca"><img src="./logo-postecsa.jpg" alt="POSTECSA de Colombia SAS"><h1>SIVIL · Director Comercial<small id="quien"></small></h1></div><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="btn sec" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" onclick="salir()">Salir</button></div></div>
+  <div class="header"><div class="marca"><img src="./logo-postecsa.jpg" alt="POSTECSA de Colombia SAS"><h1>SIVIL · Director Comercial<small id="quien"></small></h1></div><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="ayuda" id="bAyuda" onclick="iniciarGuia()">❓ Guía paso a paso</button> <button class="btn sec" id="bAct" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" id="bSalir" onclick="salir()">Salir</button></div></div>
   <div class="tabs">
     <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
     <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
@@ -97,7 +109,7 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
   </div>
   <div class="wrap">
     <div id="pCot">
-      <div class="filtros">
+      <div class="filtros" id="fCot">
         <div><label>Período</label><select id="cDias" onchange="renderCot()"><option value="8">Últimos 8 días</option><option value="15">Últimos 15 días</option><option value="30">Últimos 30 días</option><option value="mes">Este mes</option><option value="todo">Todo</option></select></div>
         <div><label>Vendedor</label><select id="cVend" onchange="renderCot()"></select></div>
         <div><label>Estado</label><select id="cEst" onchange="renderCot()"><option value="">Todos (sin anuladas)</option><option>Aceptada</option><option>Enviada</option><option>Borrador</option><option>Perdida</option><option>Anulada</option></select></div>
@@ -105,26 +117,26 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
         <button class="btn" onclick="exportar('cot')">⬇ Excel</button>
       </div>
       <div class="kpis" id="cKpi"></div>
-      <div class="graf"><div class="card"><h3>Estado de las cotizaciones</h3><div class="cv"><canvas id="gCotEst"></canvas></div></div><div class="card"><h3>Cotizado vs aceptado por vendedor ($)</h3><div class="cv"><canvas id="gCotVend"></canvas></div></div><div class="card"><h3>Cotizaciones por día</h3><div class="cv"><canvas id="gCotDia"></canvas></div></div></div>
-      <div class="tablewrap"><table id="cTabla"></table></div>
+      <div class="graf" id="grCot"><div class="card"><h3>Estado de las cotizaciones</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotEst"></canvas></div></div><div class="card"><h3>Cotizado vs aceptado por vendedor ($)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotVend"></canvas></div></div><div class="card"><h3>Cotizaciones por día</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotDia"></canvas></div></div></div>
+      <div class="tablewrap" id="twCot"><table id="cTabla"></table></div>
       <div class="muted" style="margin-top:6px;">"Enviada" = el cliente aún no ha respondido. Con 7 días o más sin respuesta se marca en naranja. Las aceptadas muestran el avance de su AP.</div>
     </div>
     <div id="pAp" style="display:none;">
-      <div class="filtros">
+      <div class="filtros" id="fAp">
         <div><label>Estado de la AP</label><select id="aEst" onchange="renderAp()"><option value="abiertas">En curso (Pendiente + Parcial)</option><option>Pendiente</option><option>Despachado Parcial</option><option>Despachado Total</option><option value="todas">Todas</option></select></div>
         <div><label>Vendedor</label><select id="aVend" onchange="renderAp()"></select></div>
         <div><label>Buscar</label><input id="aQ" placeholder="AP, cliente u obra" oninput="renderAp()"></div>
         <button class="btn" onclick="exportar('ap')">⬇ Excel</button>
       </div>
       <div class="kpis" id="aKpi"></div>
-      <div class="graf"><div class="card"><h3>Pedido, despachado y pagado por vendedor ($)</h3><div class="cv"><canvas id="gApVend"></canvas></div></div><div class="card"><h3>APs por estado</h3><div class="cv"><canvas id="gApEst"></canvas></div></div></div>
-      <div class="tablewrap"><table id="aTabla"></table></div>
+      <div class="graf" id="grAp"><div class="card"><h3>Pedido, despachado y pagado por vendedor ($)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gApVend"></canvas></div></div><div class="card"><h3>APs por estado</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gApEst"></canvas></div></div></div>
+      <div class="tablewrap" id="twAp"><table id="aTabla"></table></div>
       <div class="muted" style="margin-top:6px;">Valor = precio con descuento × cantidad (sin flete). El total de la AP es el guardado en la AP; si no lo tiene, se calcula. Los pagos los registra Contabilidad.</div>
     </div>
     <div id="pVen" style="display:none;">
-      <div class="filtros"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
-      <div class="graf"><div class="card"><h3>Ventas por mes y vendedor ($)</h3><div class="cv"><canvas id="gVenMes"></canvas></div></div><div class="card"><h3>Los 10 clientes que más compran (concentración)</h3><div class="cv"><canvas id="gTopCli"></canvas></div></div></div>
-      <div class="tablewrap"><table id="vTabla"></table></div>
+      <div class="filtros" id="fVen"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
+      <div class="graf" id="grVen"><div class="card"><h3>Ventas por mes y vendedor ($)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gVenMes"></canvas></div></div><div class="card"><h3>Los 10 clientes que más compran (concentración)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gTopCli"></canvas></div></div></div>
+      <div class="tablewrap" id="twVen"><table id="vTabla"></table></div>
       <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Por defecto solo cuenta desde la AP 2438 (las anteriores eran pruebas); cámbialo arriba a la derecha.</div>
     <div id="pTip" style="display:none;">
       <div class="muted" style="margin-bottom:10px;">Ideas de reconocidos autores de ventas y estrategia, resumidas con palabras propias y conectadas con lo que dicen los datos de POSTECSA hoy. Son guías de trabajo, no recetas.</div>
@@ -189,6 +201,8 @@ async function cargarTodo(forzar){
   const anios=[...new Set(aps.map(a=>(pf(a.fecha_creacion)||{getFullYear:()=>0}).getFullYear()).filter(Boolean))].sort().reverse();
   $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
   calcAp();renderCot();renderAp();renderVen();renderTips();
+  let vista=false;try{vista=!!localStorage.getItem('dir_guia_vista');}catch(e){}
+  if(!vista&&!TOUR)ofertaGuia();
 }
 const CONOC={'31409227':'Gerencia (Nohra)'};
 const nomV=id=>D.nomV[String(id)]||CONOC[String(id)]||id;
@@ -269,34 +283,116 @@ function renderVen(){
   $('vTabla').innerHTML=html;chartsVen(m,vs,an,M);
 }
 
+
+// ---- Guía interactiva paso a paso
+let TOUR=null;
+function ofertaGuia(){if($('ofGuia'))return;const d=document.createElement('div');d.id='ofGuia';d.className='tour-box';d.style.cssText='right:20px;bottom:20px;left:auto;top:auto;';d.innerHTML='<h4>👋 ¿Te muestro cómo usar la página?</h4><div>Es una guía corta, paso a paso, que explica cada parte.</div><div class="bt"><button class="sal" onclick="cerrarOferta()">Ahora no</button><button class="sig" onclick="cerrarOferta();iniciarGuia()">Sí, guíame</button></div>';document.body.appendChild(d);}
+function cerrarOferta(){const d=$('ofGuia');if(d)d.remove();try{localStorage.setItem('dir_guia_vista','1');}catch(e){}}
+function _el(sel){return typeof sel==='string'?document.querySelector(sel):sel;}
+function correrGuia(pasos,fin){
+  cerrarGuia();TOUR={p:pasos,i:0,fin:fin};
+  const ov=document.createElement('div');ov.className='tour-ov';ov.id='tourOv';
+  const hl=document.createElement('div');hl.className='tour-hl';hl.id='tourHl';
+  const bx=document.createElement('div');bx.className='tour-box';bx.id='tourBx';
+  document.body.append(ov,hl,bx);
+  document.addEventListener('keydown',_tk);window.addEventListener('resize',_tpos);
+  _tpaso();
+}
+function _tk(e){if(!TOUR)return;if(e.key==='ArrowRight'||e.key==='Enter')guiaSig();else if(e.key==='ArrowLeft')guiaAnt();else if(e.key==='Escape')cerrarGuia();}
+function _tpaso(){
+  const p=TOUR.p[TOUR.i];
+  if(p.tab)verTab(p.tab);
+  setTimeout(()=>{
+    const el=p.sel?_el(p.sel):null;
+    if(el&&el.scrollIntoView)el.scrollIntoView({block:'center',behavior:'instant'});
+    const n=TOUR.p.length;
+    $('tourBx').innerHTML='<div class="pg">Paso '+(TOUR.i+1)+' de '+n+'</div><h4>'+H(p.t)+'</h4><div>'+H(p.d)+'</div><div class="bt"><button class="sal" onclick="cerrarGuia()">Salir de la guía</button><span style="display:flex;gap:8px"><button class="ant" onclick="guiaAnt()" '+(TOUR.i?'':'disabled style="opacity:.4"')+'>← Atrás</button><button class="sig" onclick="guiaSig()">'+(TOUR.i===n-1?'Terminar ✔':'Siguiente →')+'</button></span></div>';
+    _tpos();
+  },60);
+}
+function _tpos(){
+  if(!TOUR)return;const p=TOUR.p[TOUR.i],hl=$('tourHl'),bx=$('tourBx');if(!hl||!bx)return;
+  const el=p.sel?_el(p.sel):null,W=innerWidth,Hh=innerHeight;
+  if(el&&el.getBoundingClientRect&&el.offsetParent!==null){
+    const r=el.getBoundingClientRect(),m=6;
+    hl.style.display='block';hl.style.left=(r.left-m)+'px';hl.style.top=(r.top-m)+'px';hl.style.width=(r.width+2*m)+'px';hl.style.height=(r.height+2*m)+'px';
+    const bh=bx.offsetHeight,bw=bx.offsetWidth;let top=r.bottom+16,left=Math.min(Math.max(10,r.left),W-bw-10);
+    if(top+bh>Hh-10){top=r.top-bh-16;}
+    if(top<10){top=Math.min(Hh-bh-10,Math.max(10,r.top+20));left=r.right+16+bw<W?r.right+16:Math.max(10,r.left-bw-16);}
+    bx.style.top=top+'px';bx.style.left=left+'px';
+  }else{hl.style.display='none';bx.style.top=Math.max(10,(Hh-bx.offsetHeight)/2)+'px';bx.style.left=Math.max(10,(W-bx.offsetWidth)/2)+'px';}
+}
+function guiaSig(){if(!TOUR)return;if(TOUR.i>=TOUR.p.length-1){const f=TOUR.fin;cerrarGuia();if(f)f();return;}TOUR.i++;_tpaso();}
+function guiaAnt(){if(TOUR&&TOUR.i>0){TOUR.i--;_tpaso();}}
+function cerrarGuia(){['tourOv','tourHl','tourBx'].forEach(i=>{const e=$(i);if(e)e.remove();});document.removeEventListener('keydown',_tk);window.removeEventListener('resize',_tpos);TOUR=null;try{localStorage.setItem('dir_guia_vista','1');}catch(e){}}
+function guiaLogin(){
+  correrGuia([
+   {t:'Bienvenido',d:'Esta guía te muestra paso a paso cómo ingresar y cómo usar cada parte de la página. Usa el botón «Siguiente» (o la flecha → del teclado). Puedes salir cuando quieras.'},
+   {sel:'#lCorreo',t:'1. Escribe tu correo',d:'Escribe el correo con el que estás registrado en SIVIL, por ejemplo el que usas en las otras aplicaciones de POSTECSA.'},
+   {sel:'#lPin',t:'2. Escribe tu PIN',d:'Es el número secreto que te entregó POSTECSA. Al escribirlo se verán puntos, es normal.'},
+   {sel:'#login .btn',t:'3. Pulsa «Ingresar»',d:'También puedes presionar la tecla Enter. Si algo falla, saldrá un mensaje en rojo explicando qué revisar.'},
+   {t:'Listo',d:'Al ingresar verás un botón amarillo «❓ Guía paso a paso» arriba, que explica cada parte de la aplicación.'}]);
+}
+function iniciarGuia(){
+  const S=[
+   {t:'Bienvenido, esta es tu guía',d:'Vamos a recorrer la página parte por parte. Esta aplicación solo sirve para consultar: no puedes dañar ni cambiar ningún dato. Los números se leen en vivo de SIVIL Comercial, Despacho y Gerencia.',tab:'Cot'},
+   {sel:'.header .marca',t:'Encabezado',d:'Aquí está el logo de POSTECSA y tu nombre. Siempre sabrás con qué usuario estás conectado.'},
+   {sel:'#gOf',t:'¿Qué APs se cuentan?',d:'«APs oficiales» muestra solo desde la AP 2438 en adelante, porque las anteriores fueron pruebas. Si eliges «Todas», se incluyen también las pruebas. Normalmente déjalo en oficiales.'},
+   {sel:'#bAct',t:'Actualizar datos',d:'Pulsa este botón para traer la información más reciente. Úsalo si acabas de cerrarse una cotización o un despacho y no lo ves aún.'},
+   {sel:'#bSalir',t:'Salir',d:'Cierra tu sesión. Úsalo si trabajas en un computador compartido.'},
+   {sel:'.tabs',t:'Las 4 secciones',d:'La página tiene cuatro secciones, como pestañas de un cuaderno: Cotizaciones, Seguimiento por AP, Ventas por vendedor e Inteligencia comercial. Se cambia de una a otra con un clic.'},
+   {tab:'Cot',sel:'#fCot',t:'Cotizaciones: filtros',d:'Elige el período (8, 15 o 30 días, este mes o todo), un vendedor, un estado, o escribe el nombre del cliente, el número o la obra. La tabla y los gráficos se ajustan solos.'},
+   {sel:'#cKpi',t:'Cotizaciones: cifras clave',d:'Son los números más importantes del período: cuántas cotizaciones hay, cuánto dinero representan, cuántas se aceptaron y cuántas siguen sin respuesta.'},
+   {sel:'#grCot',t:'Cotizaciones: gráficos',d:'Pasa el cursor sobre cada barra o sector de color: aparece una ventanita con el valor exacto y una explicación. En los círculos puedes hacer clic en un nombre de la leyenda para ocultar o mostrar ese estado.'},
+   {sel:'#twCot',t:'Cotizaciones: cuadro diario',d:'Cada fila es una cotización. En naranja están las que llevan 7 días o más sin respuesta del cliente: son las que conviene llamar. Si la cotización fue aceptada, verás cuánto va de su AP.'},
+   {sel:'#fCot .btn',t:'Pasar a Excel',d:'Este botón descarga en Excel lo que estás viendo en pantalla (con los filtros que dejaste puestos).'},
+   {tab:'Ap',sel:'#fAp',t:'Seguimiento por AP: filtros',d:'Una AP es un pedido ya aceptado. Aquí filtras por estado (en curso, pendiente, parcial, total), por vendedor o buscas por AP, cliente u obra.'},
+   {sel:'#aKpi',t:'Seguimiento por AP: cifras',d:'Muestran cuánto se pidió, cuánto se ha despachado, cuánto falta por despachar, cuánto ha pagado el cliente y cuánto queda por cobrar.'},
+   {sel:'#grAp',t:'Seguimiento por AP: gráficos',d:'Compara por vendedor lo pedido, lo despachado y lo pagado. Pasa el cursor sobre las barras para ver los valores en pesos. El círculo muestra cuántas APs hay en cada estado.'},
+   {sel:'#twAp',t:'Seguimiento por AP: tabla',d:'Cada fila es una AP con su avance de despacho y su saldo por cobrar. Los pagos los registra Contabilidad, por eso pueden aparecer en cero hasta que ella los cargue.'},
+   {tab:'Ven',sel:'#fVen',t:'Ventas por vendedor',d:'Elige el año que quieres revisar.'},
+   {sel:'#grVen',t:'Ventas: gráficos',d:'A la izquierda, lo vendido mes a mes (cada color es un vendedor). A la derecha, los 10 clientes que más compran: si pocos clientes concentran casi todo, hay riesgo. Pasa el cursor para ver el detalle.'},
+   {sel:'#twVen',t:'Ventas: tabla por mes',d:'Cada fila es un vendedor y cada columna un mes, con el acumulado del año al final.'},
+   {tab:'Tip',sel:'#tipLista',t:'Inteligencia comercial',d:'Ocho ideas de reconocidos expertos en ventas, explicadas en sencillo. Cada tarjeta trae «Tus datos» (lo que está pasando hoy en POSTECSA) y una «Acción sugerida» para esta semana.'},
+   {sel:'#bAyuda',t:'Para volver a ver esta guía',d:'Cuando quieras repetirla, pulsa este botón amarillo. Quedó todo explicado. ¡Éxito en la gestión!'}];
+  correrGuia(S,()=>verTab('Cot'));
+}
+
 // ---- Gráficos (colores Berchmans: verde y amarillo; naranja POSTECSA)
 const PAL=['#0a7a3d','#f6c41c','#f26f21','#064e2a','#9ca3af','#2563a8','#b91c1c','#7c9a2c'];
 const CH={};
-function graf(id,cfg){if(typeof Chart==='undefined'||!$(id))return;if(CH[id])CH[id].destroy();cfg.options=Object.assign({responsive:true,maintainAspectRatio:false},cfg.options||{});CH[id]=new Chart($(id),cfg);}
+Chart.defaults.font.size=13;
+Chart.defaults.interaction={mode:'nearest',intersect:true};
+Chart.defaults.plugins.tooltip=Object.assign(Chart.defaults.plugins.tooltip||{},{backgroundColor:'#064e2a',titleColor:'#f6c41c',bodyColor:'#fff',footerColor:'#fde68a',padding:12,cornerRadius:8,boxPadding:5,titleFont:{size:14,weight:'bold'},bodyFont:{size:13},footerFont:{size:12,weight:'normal'}});
+Chart.defaults.hover={mode:'nearest',intersect:true};
+const _hov={bar:{hoverBackgroundColor:'rgba(0,0,0,.35)'}};
+function tipDonut(unidad){return {callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ' '+c.label+': '+c.parsed+' '+unidad+' ('+(t?Math.round(100*c.parsed/t):0)+' % del total)';},footer:()=>'Haz clic en el nombre del estado (abajo) para ocultarlo o mostrarlo'}};}
+function tipBarM(expl){return {mode:'index',intersect:false,callbacks:{label:c=>' '+c.dataset.label+': '+money(c.parsed.y!==undefined&&c.chart.config.options.indexAxis!=='y'?c.parsed.y:c.parsed.x),footer:it=>{const tot=it.reduce((t,c)=>t+(c.parsed.y!==undefined&&c.chart.config.options.indexAxis!=='y'?c.parsed.y:c.parsed.x),0);return it.length>1?('Suma: '+money(tot)+(expl?'\n'+expl:'')):(expl||'');}}};}
+function graf(id,cfg){if(typeof Chart==='undefined'||!$(id))return;if(CH[id])CH[id].destroy();cfg.options=Object.assign({responsive:true,maintainAspectRatio:false,animation:{duration:600},onHover:(e,a,ch)=>{ch.canvas.style.cursor=a.length?'pointer':'crosshair';}},cfg.options||{});if(cfg.type==='doughnut'){cfg.data.datasets.forEach(d=>{d.hoverOffset=18;d.borderWidth=2;d.borderColor='#fff';});}else{cfg.data.datasets.forEach(d=>{d.borderRadius=4;d.hoverBorderColor='#f26f21';d.hoverBorderWidth=3;});}CH[id]=new Chart($(id),cfg);}
 const fmtM=v=>'$'+(Math.abs(v)>=1e6?(v/1e6).toFixed(1).replace('.',',')+' M':Math.round(v).toLocaleString('es-CO'));
 const ejeM={ticks:{callback:v=>fmtM(v)}};
 const tipM={callbacks:{label:c=>(c.dataset.label?c.dataset.label+': ':'')+money(c.parsed.y!==undefined&&c.chart.config.options.indexAxis!=='y'?c.parsed.y:c.parsed.x)}};
 function chartsCot(L){
   const est={};L.forEach(c=>est[c.estado]=(est[c.estado]||0)+1);const ks=Object.keys(est);
-  graf('gCotEst',{type:'doughnut',data:{labels:ks,datasets:[{data:ks.map(k=>est[k]),backgroundColor:ks.map(k=>({Aceptada:'#0a7a3d',Enviada:'#f6c41c',Borrador:'#9ca3af',Perdida:'#b91c1c',Anulada:'#d1d5db'}[k]||'#2563a8'))}]},options:{plugins:{legend:{position:'bottom'}}}});
+  graf('gCotEst',{type:'doughnut',data:{labels:ks,datasets:[{data:ks.map(k=>est[k]),backgroundColor:ks.map(k=>({Aceptada:'#0a7a3d',Enviada:'#f6c41c',Borrador:'#9ca3af',Perdida:'#b91c1c',Anulada:'#d1d5db'}[k]||'#2563a8'))}]},options:{plugins:{legend:{position:'bottom'},tooltip:tipDonut('cotizaciones')}}});
   const v={};L.forEach(c=>{const n=nomV(c.vendedor_id);v[n]=v[n]||{t:0,a:0};v[n].t+=Number(c.total)||0;if(c.estado==='Aceptada')v[n].a+=Number(c.total)||0;});
   const vn=Object.keys(v);
-  graf('gCotVend',{type:'bar',data:{labels:vn,datasets:[{label:'Cotizado',data:vn.map(n=>v[n].t),backgroundColor:'#f6c41c'},{label:'Aceptado',data:vn.map(n=>v[n].a),backgroundColor:'#0a7a3d'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipM}}});
+  graf('gCotVend',{type:'bar',data:{labels:vn,datasets:[{label:'Cotizado',data:vn.map(n=>v[n].t),backgroundColor:'#f6c41c'},{label:'Aceptado',data:vn.map(n=>v[n].a),backgroundColor:'#0a7a3d'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipBarM('Amarillo = lo cotizado; verde = lo que el cliente aceptó')}}});
   const d={};L.forEach(c=>{const k=iso(pf(c.fecha));d[k]=(d[k]||0)+1;});const dk=Object.keys(d).sort();
-  graf('gCotDia',{type:'bar',data:{labels:dk.map(k=>k.slice(8)+'/'+k.slice(5,7)),datasets:[{label:'Cotizaciones',data:dk.map(k=>d[k]),backgroundColor:'#0a7a3d'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+  graf('gCotDia',{type:'bar',data:{labels:dk.map(k=>k.slice(8)+'/'+k.slice(5,7)),datasets:[{label:'Cotizaciones',data:dk.map(k=>d[k]),backgroundColor:'#0a7a3d'}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y+' cotizaciones ese día',footer:()=>'Día/mes en el eje inferior'}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
 }
 function chartsAp(L){
   const v={},e={};L.forEach(a=>{const x=D.apx[String(a.ap_id)],n=nomV(a.vendedor_id);v[n]=v[n]||{p:0,d:0,g:0};v[n].p+=x.vS;v[n].d+=x.vD;v[n].g+=x.pagado;e[a.estado_ap]=(e[a.estado_ap]||0)+1;});
   const vn=Object.keys(v);
-  graf('gApVend',{type:'bar',data:{labels:vn,datasets:[{label:'Pedido',data:vn.map(n=>v[n].p),backgroundColor:'#f6c41c'},{label:'Despachado',data:vn.map(n=>v[n].d),backgroundColor:'#0a7a3d'},{label:'Pagado',data:vn.map(n=>v[n].g),backgroundColor:'#f26f21'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipM}}});
+  graf('gApVend',{type:'bar',data:{labels:vn,datasets:[{label:'Pedido',data:vn.map(n=>v[n].p),backgroundColor:'#f6c41c'},{label:'Despachado',data:vn.map(n=>v[n].d),backgroundColor:'#0a7a3d'},{label:'Pagado',data:vn.map(n=>v[n].g),backgroundColor:'#f26f21'}]},options:{scales:{y:ejeM},plugins:{tooltip:tipBarM('Pedido = lo vendido; Despachado = lo ya entregado; Pagado = lo que ya abonó el cliente')}}});
   const ek=Object.keys(e);
-  graf('gApEst',{type:'doughnut',data:{labels:ek,datasets:[{data:ek.map(k=>e[k]),backgroundColor:PAL}]},options:{plugins:{legend:{position:'bottom'}}}});
+  graf('gApEst',{type:'doughnut',data:{labels:ek,datasets:[{data:ek.map(k=>e[k]),backgroundColor:PAL}]},options:{plugins:{legend:{position:'bottom'},tooltip:tipDonut('APs')}}});
 }
 function chartsVen(m,vs,an,M){
-  graf('gVenMes',{type:'bar',data:{labels:M,datasets:vs.map((v,i)=>({label:nomV(v),data:m[v],backgroundColor:PAL[i%PAL.length]}))},options:{scales:{x:{stacked:true},y:{stacked:true,...ejeM}},plugins:{tooltip:tipM}}});
+  graf('gVenMes',{type:'bar',data:{labels:M,datasets:vs.map((v,i)=>({label:nomV(v),data:m[v],backgroundColor:PAL[i%PAL.length]}))},options:{scales:{x:{stacked:true},y:{stacked:true,...ejeM}},plugins:{tooltip:tipBarM('Cada color es un vendedor; la suma es lo vendido en el mes')}}});
   const c={};D.aps.forEach(a=>{if(!apOk(a))return;const f=pf(a.fecha_creacion);if(!f||f.getFullYear()!==an)return;const n=D.nomC[String(a.cliente_nit)]||a.cliente_nit;c[n]=(c[n]||0)+D.apx[String(a.ap_id)].vS;});
   const top=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,10);
-  graf('gTopCli',{type:'bar',data:{labels:top.map(n=>String(n).slice(0,28)),datasets:[{label:'Ventas',data:top.map(n=>c[n]),backgroundColor:'#0a7a3d'}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:tipM},scales:{x:ejeM}}});
+  graf('gTopCli',{type:'bar',data:{labels:top.map(n=>String(n).slice(0,28)),datasets:[{label:'Ventas',data:top.map(n=>c[n]),backgroundColor:'#0a7a3d'}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' Ventas del año: '+money(c.parsed.x),footer:it=>{return 'Entre más larga la barra, más depende POSTECSA de este cliente';}}}},scales:{x:ejeM}}});
 }
 // ---- Tips de inteligencia comercial (ideas resumidas; datos en vivo)
 function renderTips(){
