@@ -507,7 +507,28 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card-title">🧾 Cotizaciones</div>
       <div style="display:flex;gap:6px;margin-bottom:.6rem;">
         <button class="btn btn-primary btn-sm" id="gzTabEmbudo" onclick="gzTab('embudo')">📈 Embudo</button>
+        <button class="btn btn-sm" id="gzTabListas" onclick="gzTab('listas')" style="background:#e5e7eb;color:#1a3a5c;">📋 Listados</button>
         <button class="btn btn-sm" id="gzTabTextos" onclick="gzTab('textos')" style="background:#e5e7eb;color:#1a3a5c;">✏️ Textos del cotizador</button>
+      </div>
+      <div id="gzListas" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+          <select class="form-control" id="glTipo" onchange="glRender()">
+            <option value="ap_activas">APs tramitadas (activas)</option>
+            <option value="ap_pend">APs pendientes de despacho</option>
+            <option value="ap_desp">APs despachadas</option>
+            <option value="ap_canc">APs canceladas</option>
+            <option value="cot_pend">Cotizaciones pendientes (Borrador / Enviada)</option>
+          </select>
+          <select class="form-control" id="glVend" onchange="glRender()"><option value="">Todos los vendedores</option></select>
+          <input class="form-control" type="date" id="glDesde" onchange="glRender()" title="Desde">
+          <input class="form-control" type="date" id="glHasta" onchange="glRender()" title="Hasta">
+        </div>
+        <input class="form-control" id="glBuscar" placeholder="🔍 Buscar por número, cliente u obra" oninput="glRender()" style="margin-bottom:.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;gap:6px;">
+          <div id="glResumen" style="font-size:.76rem;color:#1a3a5c;font-weight:700;"></div>
+          <button class="btn btn-sm" style="background:var(--verde);color:#fff;" onclick="glExportar()">⬇️ Exportar a Excel</button>
+        </div>
+        <div id="glLista"><div class="loading"><div class="spinner"></div></div></div>
       </div>
       <div id="gzEmbudo">
         <div id="gzKpis" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:.6rem;"></div>
@@ -3496,6 +3517,10 @@ function gzColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada
 function gzTab(t) {
   document.getElementById('gzEmbudo').style.display = t === 'embudo' ? 'block' : 'none';
   document.getElementById('gzTextos').style.display = t === 'textos' ? 'block' : 'none';
+  document.getElementById('gzListas').style.display = t === 'listas' ? 'block' : 'none';
+  document.getElementById('gzTabListas').style.cssText = t === 'listas' ? '' : 'background:#e5e7eb;color:#1a3a5c;';
+  document.getElementById('gzTabListas').className = 'btn btn-sm' + (t === 'listas' ? ' btn-primary' : '');
+  if (t === 'listas') glInit();
   document.getElementById('gzTabEmbudo').style.cssText = t === 'embudo' ? '' : 'background:#e5e7eb;color:#1a3a5c;';
   document.getElementById('gzTabTextos').style.cssText = t === 'textos' ? '' : 'background:#e5e7eb;color:#1a3a5c;';
   document.getElementById('gzTabEmbudo').className = 'btn btn-sm' + (t === 'embudo' ? ' btn-primary' : '');
@@ -3539,6 +3564,73 @@ function gzRenderEmbudo() {
       (c.estado === 'Perdida' && c.nota_estado ? '<div style="font-size:.72rem;color:#b91c1c;margin-top:2px;">Motivo: ' + gzH(c.nota_estado) + '</div>' : '') +
       (c.ap_id ? '<div style="font-size:.72rem;color:#166534;margin-top:2px;">AP: ' + gzH(c.ap_id) + '</div>' : '') + '</div>';
   }).join('');
+}
+// ===== LISTADOS (APs y cotizaciones pendientes) con exportación a Excel — 25 oct 2026 =====
+var GL = { aps: null, cli: null, filas: [], cols: [] };
+async function glInit() {
+  document.getElementById('glLista').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    var r = await Promise.all([leerGVIZ('PREVENTAS_AP'), leerGVIZ('CLIENTES').catch(function () { return []; }), GZ.cot && GZ.cot.length ? Promise.resolve(GZ.cot) : leerGVIZ('COTIZACIONES').catch(function () { return []; })]);
+    GL.aps = r[0]; GL.cli = {}; r[1].forEach(function (c) { GL.cli[String(c.cliente_nit)] = c.razon_social || c.nombre || ''; });
+    if (!GZ.cot || !GZ.cot.length) GZ.cot = r[2];
+    if (!GZ.nom) GZ.nom = function (id) { var v = (G.vendedores || []).find(function (x) { return String(x.id_vendedor) === String(id) || String(x.cedula) === String(id); }); return v ? (v.nombre_vendedor || v.nombre_completo || id) : id; };
+  } catch (e) { document.getElementById('glLista').innerHTML = '<div style="text-align:center;color:#b91c1c;padding:1rem;">No se pudieron cargar los datos</div>'; return; }
+  var vs = {}; GL.aps.forEach(function (a) { if (a.vendedor_id !== '') vs[a.vendedor_id] = 1; }); GZ.cot.forEach(function (c) { if (c.vendedor_id !== '') vs[c.vendedor_id] = 1; });
+  var sel = document.getElementById('glVend'), act = sel.value;
+  sel.innerHTML = '<option value="">Todos los vendedores</option>' + Object.keys(vs).map(function (id) { return '<option value="' + gzH(id) + '">' + gzH(GZ.nom(id)) + '</option>'; }).join('');
+  sel.value = act; glRender();
+}
+function glRender() {
+  if (!GL.aps) return;
+  var tipo = document.getElementById('glTipo').value, v = document.getElementById('glVend').value, q = document.getElementById('glBuscar').value.toLowerCase().trim();
+  var d1 = document.getElementById('glDesde').value, d2 = document.getElementById('glHasta').value;
+  var dI = d1 ? new Date(d1 + 'T00:00:00') : null, dF = d2 ? new Date(d2 + 'T23:59:59') : null;
+  var hoy = new Date(), dias = function (f) { return f ? Math.floor((hoy - f) / 86400000) : ''; };
+  var enRango = function (f) { return !f || ((!dI || f >= dI) && (!dF || f <= dF)); };
+  var esAP = tipo.indexOf('ap_') === 0, filas = [], cols;
+  if (esAP) {
+    cols = ['AP', 'Fecha', 'Cliente', 'NIT', 'Vendedor', 'Estado', 'Entrega', 'Destino', 'Obra', 'Orden de compra', 'Cotización', 'Pago', 'Total'];
+    GL.aps.forEach(function (a) {
+      var est = String(a.estado_ap || ''), canc = /^cancel/i.test(est), desp = /^despach/i.test(est);
+      if (tipo === 'ap_activas' && canc) return; if (tipo === 'ap_pend' && (canc || desp)) return; if (tipo === 'ap_desp' && !desp) return; if (tipo === 'ap_canc' && !canc) return;
+      if (v && String(a.vendedor_id) !== v) return;
+      var f = parseFecha(a.fecha_creacion); if (!enRango(f)) return;
+      var cli = GL.cli[String(a.cliente_nit)] || '';
+      if (q && [a.ap_id, cli, a.cliente_nit, a.nombre_obra, a.orden_compra_cliente, a.cotizacion_ref].join(' ').toLowerCase().indexOf(q) < 0) return;
+      filas.push([a.ap_id, f ? fmtFecha(f) : '', cli, a.cliente_nit, GZ.nom(a.vendedor_id), est, a.tipo_entrega || '', a.destino || '', a.nombre_obra || '', a.orden_compra_cliente || '', a.cotizacion_ref || '', a.condiciones_pago || '', Number(a.total_ap) || 0, f ? f.getTime() : 0]);
+    });
+    filas.sort(function (a, b) { return b[13] - a[13]; });
+  } else {
+    cols = ['Cotización', 'Fecha', 'Cliente', 'Obra', 'Vendedor', 'Estado', 'Días abierta', 'Vigencia', 'Total'];
+    GZ.cot.forEach(function (c) {
+      if (c.estado !== 'Borrador' && c.estado !== 'Enviada') return; if (c.ap_id) return;
+      if (v && String(c.vendedor_id) !== v) return;
+      var f = parseFecha(c.fecha); if (!enRango(f)) return;
+      if (q && [c.numero, c.cliente_nombre, c.obra].join(' ').toLowerCase().indexOf(q) < 0) return;
+      filas.push([c.numero, f ? fmtFecha(f) : '', c.cliente_nombre || '', c.obra || '', GZ.nom(c.vendedor_id), c.estado, dias(f), c.vigencia ? fmtFecha(c.vigencia) : '', Number(c.total) || 0, f ? f.getTime() : 0]);
+    });
+    filas.sort(function (a, b) { return b[9] - a[9]; });
+  }
+  GL.filas = filas; GL.cols = cols;
+  var tot = filas.reduce(function (s, r) { return s + (r[cols.length - 1] || 0); }, 0);
+  document.getElementById('glResumen').textContent = filas.length + (esAP ? ' AP' : ' cotizaciones') + ' · ' + fmt(tot);
+  var el = document.getElementById('glLista');
+  if (!filas.length) { el.innerHTML = '<div style="text-align:center;color:#888;font-size:.82rem;padding:1rem;">No hay registros con estos filtros</div>'; return; }
+  el.innerHTML = filas.slice(0, 300).map(function (r) {
+    if (esAP) return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;margin-bottom:6px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:6px;"><b style="font-size:.84rem;">AP ' + gzH(r[0]) + '</b><span style="font-size:.68rem;font-weight:800;color:#1a3a5c;">' + gzH(r[5]) + '</span></div><div style="font-size:.78rem;">' + gzH(r[2]) + (r[8] ? ' · ' + gzH(r[8]) : '') + '</div><div style="font-size:.72rem;color:#666;">' + gzH(r[1]) + ' · ' + gzH(r[4]) + ' · ' + gzH(r[6]) + ' · <b>' + fmt(r[12]) + '</b></div></div>';
+    var viejo = Number(r[6]) >= 14;
+    return '<div style="border:1px solid ' + (viejo ? '#f59e0b' : '#e5e7eb') + ';border-radius:10px;padding:8px 10px;margin-bottom:6px;background:#fff;"><div style="display:flex;justify-content:space-between;gap:6px;"><b style="font-size:.84rem;">' + gzH(r[0]) + '</b><span style="font-size:.68rem;font-weight:800;color:#fff;background:' + gzColor(r[5]) + ';border-radius:8px;padding:1px 8px;">' + gzH(r[5]) + '</span></div><div style="font-size:.78rem;">' + gzH(r[2]) + (r[3] ? ' · ' + gzH(r[3]) : '') + '</div><div style="font-size:.72rem;color:#666;">' + gzH(r[1]) + ' · ' + gzH(r[4]) + ' · <b' + (viejo ? ' style="color:#b45309;"' : '') + '>' + gzH(r[6]) + ' días</b> · <b>' + fmt(r[8]) + '</b></div></div>';
+  }).join('') + (filas.length > 300 ? '<div style="text-align:center;font-size:.72rem;color:#888;">Se muestran 300; el Excel trae todos.</div>' : '');
+}
+function glExportar() {
+  if (!GL.filas.length) { toast('No hay datos para exportar'); return; }
+  var esc = function (x) { x = String(x == null ? '' : x); return /[";\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+  var n = GL.cols.length;
+  var txt = [GL.cols.map(esc).join(';')].concat(GL.filas.map(function (r) { return r.slice(0, n).map(esc).join(';'); })).join('\r\n');
+  var blob = new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a'), tipo = document.getElementById('glTipo').value;
+  a.href = URL.createObjectURL(blob); a.download = 'SIVIL_' + tipo + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 async function gzCargarTextos() {
   var f = []; try { f = await leerGVIZ('COTIZ_TEXTOS'); } catch (e) {}
