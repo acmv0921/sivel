@@ -1471,6 +1471,7 @@ async function cargarTodo() {
     ]);
     sincronizarFuncionariosBackend(funcionariosBackend);
     leerGVIZSafe('COTIZACIONES').then(function (c) { S.cotiz = c; try { renderAPs(); } catch (e) {} });
+    leerGVIZSafe('PAGOS_AP').then(function (c) { S.pagosAP = {}; (c || []).forEach(function (r) { if (String(r.anulado || '').toUpperCase() === 'SI' || !r.ap_id) return; (S.pagosAP[String(r.ap_id)] = S.pagosAP[String(r.ap_id)] || []).push(r); }); try { renderAPs(); } catch (e) {} });
     leerGVIZSafe('CARTERA_CLIENTES').then(function (c) { S.cartera = {}; (c || []).forEach(function (r) { S.cartera[String(r.cliente_nit)] = r; }); try { renderAPs(); } catch (e) {} });
     cargarMetaActualizacion();
     poblarSelectProductos();
@@ -1497,7 +1498,14 @@ function obsInternaDe(ap) {
 }
 // Semáforo de cartera/anticipos por cliente (lo registra Contabilidad/Gerencia en SIVIL Gerencia → Cartera).
 // Solo informa: no bloquea el despacho.
-function htmlCartera(ap) {
+function htmlPagoAP(ap) {
+  const L = (S.pagosAP || {})[String(ap.ap_id)]; if (!L || !L.length) return '';
+  const pag = L.reduce((t, p) => t + (Number(p.valor) || 0), 0), tot = Number(ap.total_ap) || 0;
+  const saldo = tot > 0 ? (tot - pag > 0.5 ? ` · saldo ${fmt(tot - pag)}` : ' · ✅ AP PAGADA') : '';
+  return `<div style="font-size:0.72rem;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:4px 6px;margin-top:4px;font-weight:700;">💵 Pagado en esta AP: ${fmt(pag)} (${L.length} ${L.length === 1 ? 'abono' : 'abonos'})${saldo}</div>`;
+}
+function htmlCartera(ap) { return htmlPagoAP(ap) + htmlCarteraCliente(ap); }
+function htmlCarteraCliente(ap) {
   const d = (S.cartera || {})[String(ap.cliente_nit)];
   if (!d) return '';
   const ant = Number(d.anticipo_disponible) || 0, ven = Number(d.cartera_vencida) || 0, tot = Number(ap.total_ap) || 0.01;

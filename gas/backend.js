@@ -95,6 +95,9 @@ function doPost(e) {
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
+      case "registrarPagoAP": resultado = registrarPagoAP(body); break;
+      case "anularPagoAP": resultado = anularPagoAP(body); break;
+      case "asignarPagoAP": resultado = asignarPagoAP(body); break;
       case "respaldarCotizacionDrive": resultado = respaldarCotizacionDrive(body); break;
       case "agregarDetalleAP": resultado = agregarDetalleAP(body); break;
       case "actualizarEstadoAP": resultado = actualizarEstadoAP(body); break;
@@ -2440,5 +2443,69 @@ function actualizarPreciosMasivo(body) {
     _historialPrecios(hist);
     SpreadsheetApp.flush();
     return { ok: true, actualizados: actualizados, sin_cambio: sinCambio, no_encontrados: noEncontrados, invalidos: inval, omitidas_por_formula: Object.keys(omitidas) };
+  } finally { lock.releaseLock(); }
+}
+
+
+// =============================================================================
+// PAGOS POR AP (25 oct 2026) — Tatiana (Contabilidad) registra los abonos/pagos de cada AP
+// cuando quedan contabilizados (recibo de caja o factura). Ventas, Despacho y Gerencia solo consultan.
+// Hoja PAGOS_AP (se crea sola). Un pago puede quedar SIN AP (ap_id vacío) si el banco muestra un
+// ingreso que aún no se identifica; luego se asigna con asignarPagoAP. Nunca se borra: se anula.
+// =============================================================================
+const _ENC_PAGOS_AP = ["pago_id", "ap_id", "cliente_nit", "fecha_pago", "valor", "tipo", "recibo_contable", "nota", "registrado_por", "fecha_registro", "anulado"];
+function _hojaPagosAP() {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let h = ss.getSheetByName("PAGOS_AP");
+  if (!h) { h = ss.insertSheet("PAGOS_AP"); h.getRange(1, 1, 1, _ENC_PAGOS_AP.length).setValues([_ENC_PAGOS_AP]).setFontWeight("bold"); h.setFrozenRows(1); }
+  return h;
+}
+function registrarPagoAP(body) {
+  const valor = Number(String(body.valor === undefined || body.valor === null ? "" : body.valor).replace(/[^0-9.\-]/g, ""));
+  if (!(valor > 0)) return { ok: false, error: "El valor del pago debe ser mayor que cero" };
+  const ap = String(body.ap_id || "").trim();
+  const nit = Number(String(body.cliente_nit || "").replace(/\D/g, "")) || "";
+  if (!ap && !nit) return { ok: false, error: "Indica la AP o, si aún no se identifica, el NIT del cliente" };
+  const tipos = ["Anticipo", "Abono", "Pago final"];
+  const tipo = tipos.indexOf(body.tipo) >= 0 ? body.tipo : "Abono";
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const h = _hojaPagosAP();
+    const ult = h.getLastRow();
+    let max = 0;
+    if (ult >= 2) h.getRange(2, 1, ult - 1, 1).getValues().forEach(function (r) { max = Math.max(max, Number(r[0]) || 0); });
+    const id = max + 1;
+    const fecha = body.fecha_pago ? new Date(String(body.fecha_pago).slice(0, 10) + "T12:00:00") : new Date();
+    h.appendRow([id, ap, nit, fecha, valor, tipo, String(body.recibo_contable || ""), String(body.nota || ""), String(body.usuario || ""), new Date(), ""]);
+    return { ok: true, pago_id: id };
+  } finally { lock.releaseLock(); }
+}
+function anularPagoAP(body) {
+  const id = Number(body.pago_id);
+  if (!id) return { ok: false, error: "Falta el pago" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const h = _hojaPagosAP(), d = h.getDataRange().getValues();
+    for (let i = 1; i < d.length; i++) {
+      if (Number(d[i][0]) === id) {
+        h.getRange(i + 1, 11).setValue("SI");
+        h.getRange(i + 1, 8).setValue(String(d[i][7] || "") + (d[i][7] ? " · " : "") + "Anulado por " + String(body.usuario || "") + ": " + String(body.motivo || ""));
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: "No se encontró el pago" };
+  } finally { lock.releaseLock(); }
+}
+function asignarPagoAP(body) {
+  const id = Number(body.pago_id), ap = String(body.ap_id || "").trim();
+  if (!id || !ap) return { ok: false, error: "Falta el pago o la AP" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const h = _hojaPagosAP(), d = h.getDataRange().getValues();
+    for (let i = 1; i < d.length; i++) { if (Number(d[i][0]) === id) { h.getRange(i + 1, 2).setValue(ap); return { ok: true }; } }
+    return { ok: false, error: "No se encontró el pago" };
   } finally { lock.releaseLock(); }
 }

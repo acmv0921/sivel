@@ -549,6 +549,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card-title">🚚 Despachos por AP</div>
       <div style="font-size:.74rem;color:#555;margin-bottom:.6rem;">Lo que registra Despacho (Valentina) en cada AP: pedido, despachado y por despachar, en unidades y en pesos (productos, sin flete). Valor = precio con descuento × cantidad; el IVA se incluye si la AP lo trae guardado.</div>
       <div id="gdResumen" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:.6rem;"></div>
+      <button class="btn btn-sm" style="margin-bottom:.5rem;" onclick="gpAbrir(null)">💵 Registrar pago aún sin AP (por NIT)</button>
       <input class="form-control" id="gdBuscar" placeholder="🔍 AP, cliente u obra" oninput="gdRender()" style="margin-bottom:.4rem;">
       <select class="form-control" id="gdEstado" onchange="gdRender()" style="margin-bottom:.5rem;">
         <option value="abiertas">En curso (Pendiente + Parcial)</option><option value="Pendiente">Pendiente</option><option value="Despachado Parcial">Despachado Parcial</option><option value="Despachado Total">Despachado Total</option><option value="todas">Todas</option>
@@ -571,6 +572,20 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <input class="form-control" id="gcBuscar" placeholder="🔍 Buscar cliente por nombre o NIT" oninput="gcRender()" style="margin-bottom:.5rem;">
       <label style="font-size:.74rem;display:flex;gap:6px;align-items:center;margin-bottom:.5rem;"><input type="checkbox" id="gcSoloConDatos" onchange="gcRender()"> Solo clientes con datos registrados</label>
       <div id="gcLista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+  <div id="modalPagoAP" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="cerrarModal('modalPagoAP')">✕</button>
+      <div class="modal-title" id="gpTitulo">Registrar pago</div>
+      <div id="gpPrevios" style="font-size:.72rem;margin-bottom:.5rem;"></div>
+      <div class="form-group" id="gpGrpNit" style="display:none;"><label class="form-label">NIT del cliente (pago aún sin AP)</label><input id="gpNit" class="form-control" inputmode="numeric"></div>
+      <div class="form-group"><label class="form-label">Valor ($)</label><input id="gpValor" class="form-control" type="number" min="0" step="any"></div>
+      <div class="form-group"><label class="form-label">Fecha del pago</label><input id="gpFecha" class="form-control" type="date"></div>
+      <div class="form-group"><label class="form-label">Tipo</label><select id="gpTipo" class="form-control"><option>Abono</option><option>Anticipo</option><option>Pago final</option></select></div>
+      <div class="form-group"><label class="form-label">N.º de recibo de caja / factura (contabilidad)</label><input id="gpRecibo" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Nota (opcional)</label><input id="gpNota" class="form-control"></div>
+      <button class="btn btn-primary" style="width:100%;" id="gpBtn" onclick="gpGuardar()">💾 Guardar pago</button>
     </div>
   </div>
   <div id="modalCartera" class="modal-overlay">
@@ -3754,12 +3769,41 @@ async function gcGuardar() {
   } catch (e) { toast('❌ ' + (e.message || 'Error al guardar')); }
   btn.disabled = false;
 }
+// ===== PAGOS POR AP (25 oct 2026): Contabilidad registra, los demás consultan =====
+var GP = { ap: null };
+function gpAbrir(apId) {
+  GP.ap = apId; var f = apId ? GD.filas.find(function (x) { return String(x.ap.ap_id) === String(apId); }) : null;
+  document.getElementById('gpTitulo').textContent = apId ? 'Pago · AP ' + apId : 'Pago aún sin AP';
+  document.getElementById('gpGrpNit').style.display = apId ? 'none' : '';
+  ['gpValor', 'gpNit', 'gpRecibo', 'gpNota'].forEach(function (i) { document.getElementById(i).value = ''; });
+  document.getElementById('gpFecha').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('gpTipo').value = 'Abono';
+  document.getElementById('gpPrevios').innerHTML = f ? ('Total AP <b>' + fmt(f.totalAp) + '</b> · Pagado <b>' + fmt(f.pagado) + '</b>' + f.pagos.map(function (p) { return '<div>• ' + fmtFecha(p.fecha_pago) + ' · ' + fmt(p.valor) + ' · ' + gzH(p.tipo) + (p.recibo_contable ? ' · ' + gzH(p.recibo_contable) : '') + ' <a href="#" onclick="gpAnular(' + Number(p.pago_id) + ');return false;" style="color:#b91c1c;">anular</a></div>'; }).join('')) : '';
+  document.getElementById('modalPagoAP').classList.add('show');
+}
+async function gpGuardar() {
+  var v = function (i) { return document.getElementById(i).value; }, btn = document.getElementById('gpBtn');
+  if (!(Number(v('gpValor')) > 0)) { toast('Escribe el valor del pago'); return; }
+  if (!GP.ap && !v('gpNit').trim()) { toast('Escribe el NIT del cliente'); return; }
+  btn.disabled = true;
+  try {
+    var r = await escribirGAS({ accion: 'registrarPagoAP', ap_id: GP.ap || '', cliente_nit: v('gpNit'), valor: v('gpValor'), fecha_pago: v('gpFecha'), tipo: v('gpTipo'), recibo_contable: v('gpRecibo'), nota: v('gpNota'), usuario: G.usuario || '' });
+    if (r && r.ok === false) { toast('❌ ' + (r.error || 'No se pudo guardar')); btn.disabled = false; return; }
+    cerrarModal('modalPagoAP'); toast('✅ Pago registrado'); await gdInit();
+  } catch (e) { toast('❌ ' + (e.message || 'Error al guardar')); }
+  btn.disabled = false;
+}
+async function gpAnular(id) {
+  var m = prompt('Motivo de la anulación:'); if (!m) return;
+  try { var r = await escribirGAS({ accion: 'anularPagoAP', pago_id: id, motivo: m, usuario: G.usuario || '' }); if (r && r.ok === false) { toast('❌ ' + r.error); return; } cerrarModal('modalPagoAP'); toast('Pago anulado'); await gdInit(); } catch (e) { toast('❌ ' + e.message); }
+}
 // ===== DESPACHOS POR AP valorizados (25 oct 2026) =====
 var GD = { cli: null, filas: [] };
 function gdCalc() {
   var porAp = {}; (G.detalles || []).forEach(function (d) { (porAp[String(d.ap_id)] = porAp[String(d.ap_id)] || []).push(d); });
   var nCli = {}; (GD.cli || []).forEach(function (c) { nCli[String(c.cliente_nit)] = c.razon_social; });
   var viajes = {}; (G.patio || []).forEach(function (x) { if (x.ap_id !== '' && x.cant_despachada_viaje !== '') viajes[String(x.ap_id)] = (viajes[String(x.ap_id)] || 0) + 1; });
+  var pagAp = {}; (GD.pagos || []).forEach(function (p) { if (String(p.anulado || '').toUpperCase() === 'SI' || !p.ap_id) return; (pagAp[String(p.ap_id)] = pagAp[String(p.ap_id)] || []).push(p); });
   GD.filas = (G.aps || []).filter(function (a) { return a.estado_ap !== 'Cancelado' && a.estado_ap !== 'Modificado'; }).map(function (a) {
     var L = porAp[String(a.ap_id)] || [], sol = 0, des = 0, vSol = 0, vDes = 0;
     L.forEach(function (d) {
@@ -3769,12 +3813,14 @@ function gdCalc() {
       sol += cs; des += cd; vSol += vl; vDes += cs > 0 ? vl * cd / cs : 0;
     });
     return { ap: a, cliente: nCli[String(a.cliente_nit)] || a.cliente_nit, obra: a.nombre_obra || '', vend: GZ.nom ? GZ.nom(a.vendedor_id) : a.vendedor_id,
+      pagos: pagAp[String(a.ap_id)] || [], pagado: (pagAp[String(a.ap_id)] || []).reduce(function (t, p) { return t + (Number(p.valor) || 0); }, 0), totalAp: (parseFloat(a.total_ap) > 0 ? parseFloat(a.total_ap) : vSol),
       sol: sol, des: des, vSol: vSol, vDes: vDes, vPor: Math.max(0, vSol - vDes), pct: sol > 0 ? Math.round(100 * des / sol) : 0, viajes: viajes[String(a.ap_id)] || 0 };
   }).sort(function (x, y) { return Number(y.ap.ap_id) - Number(x.ap.ap_id); });
 }
 async function gdInit() {
   if (!GD.cli) { try { GD.cli = await leerGVIZ('CLIENTES'); } catch (e) { GD.cli = []; } }
   if (!GZ.nom) GZ.nom = function (id) { var v = (G.vendedores || []).find(function (x) { return String(x.id_vendedor) === String(id) || String(x.cedula) === String(id); }); return v ? (v.nombre_vendedor || v.nombre_completo || id) : id; };
+  try { GD.pagos = await leerGVIZ('PAGOS_AP'); } catch (e) { GD.pagos = []; }
   gdCalc(); gdRender();
 }
 function gdRender() {
@@ -3796,6 +3842,7 @@ function gdRender() {
       '<div style="font-size:.72rem;color:#666;">' + (f.obra ? gzH(f.obra) + ' · ' : '') + gzH(f.vend) + ' · ' + fmtFecha(f.ap.fecha_creacion) + (f.viajes ? ' · ' + f.viajes + ' viaje(s)' : '') + '</div>' +
       '<div style="background:#e5e7eb;border-radius:6px;height:7px;margin:5px 0;"><div style="width:' + Math.min(100, f.pct) + '%;background:' + col + ';height:7px;border-radius:6px;"></div></div>' +
       '<div style="font-size:.74rem;">' + f.des.toLocaleString('es-CO') + ' / ' + f.sol.toLocaleString('es-CO') + ' und (' + f.pct + ' %)</div>' +
+      '<div style="font-size:.74rem;margin-top:3px;padding-top:3px;border-top:1px dashed #e5e7eb;">💵 Total AP <b>' + fmt(f.totalAp) + '</b> · Pagado <b style="color:#166534;">' + fmt(f.pagado) + '</b> · Saldo <b style="color:' + (f.totalAp - f.pagado > 0.5 ? '#b91c1c' : '#166534') + ';">' + (f.totalAp - f.pagado > 0.5 ? fmt(f.totalAp - f.pagado) : 'PAGADA') + '</b> <button class="btn btn-sm" style="margin-left:6px;padding:1px 8px;" onclick="gpAbrir(\'' + gzH(f.ap.ap_id) + '\')">+ Pago</button></div>' +
       '<div style="font-size:.74rem;">Pedido <b>' + fmt(f.vSol) + '</b> · Despachado <b style="color:#166534;">' + fmt(f.vDes) + '</b> · Falta <b style="color:#b45309;">' + fmt(f.vPor) + '</b></div></div>';
   }).join('');
 }
