@@ -561,6 +561,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div class="card">
       <div class="card-title">💵 Cartera y anticipos por cliente</div>
       <div style="font-size:.74rem;color:#555;margin-bottom:.6rem;">Aquí Contabilidad o Gerencia registra el anticipo disponible y la cartera vencida de cada cliente. Despacho lo ve como semáforo en cada AP: 🟢 sin problema · 🟡 hay anticipo disponible · 🔴 cartera vencida sin anticipo que cubra la AP.</div>
+      <div id="gcCierres"></div>
       <div style="border:1px dashed #9ca3af;border-radius:10px;padding:8px 10px;margin-bottom:.6rem;background:#f9fafb;">
         <div style="font-size:.76rem;font-weight:800;margin-bottom:4px;">📎 Cargar cartera y anticipos desde Excel/CSV</div>
         <div style="font-size:.7rem;color:#555;margin-bottom:5px;">Sube el reporte que envía Contabilidad. Debe tener una columna NIT y al menos una de: <b>Anticipo</b> o <b>Cartera vencida</b> (puede ser un archivo para cada una). Solo se cambian las columnas que traiga el archivo; contactos y día de cierre no se tocan.</div>
@@ -1656,6 +1657,7 @@ async function cargarDatos() {
     renderAprobaciones();
     renderPrecios();
     avisoProductosSinPrecio();
+    avisoCierresFacturacion();
     renderVendedores();
     renderFlota();
     renderInformeGerencia();
@@ -3620,6 +3622,38 @@ function gcSemaforo(c, apTotal) {
   if (ant > 0) return { col: '#ca8a04', txt: 'Anticipo disponible' };
   return { col: '#166534', txt: 'Sin novedad' };
 }
+// ===== AVISO: CIERRES DE FACTURACIÓN PRÓXIMOS (25 oct 2026) =====
+// Reunión 24/10: Contabilidad debe saber con anticipación qué clientes cierran facturación para no
+// facturar con fecha posterior al cierre. Usa el día de cierre guardado en CARTERA_CLIENTES.
+function gcDiasParaCierre(dia, hoy) {
+  var y = hoy.getFullYear(), m = hoy.getMonth(), dm = function (yy, mm) { return new Date(yy, mm + 1, 0).getDate(); };
+  var d = Math.min(dia, dm(y, m)), f = new Date(y, m, d);
+  if (f < new Date(y, m, hoy.getDate())) { var m2 = m + 1; f = new Date(y, m2, Math.min(dia, dm(y, m2))); }
+  return Math.round((f - new Date(y, m, hoy.getDate())) / 86400000);
+}
+async function gcCierresProximos(ventana) {
+  var cc = [], cli = [];
+  try { cc = await leerGVIZ('CARTERA_CLIENTES'); } catch (e) { return []; }
+  try { cli = GC.cli && GC.cli.length ? GC.cli : await leerGVIZ('CLIENTES'); } catch (e) {}
+  var nom = {}; cli.forEach(function (c) { nom[String(c.cliente_nit)] = c.razon_social; });
+  var hoy = new Date();
+  return cc.filter(function (r) { return Number(r.dia_cierre_facturacion) >= 1; }).map(function (r) {
+    return { nit: r.cliente_nit, nombre: nom[String(r.cliente_nit)] || r.cliente_nit, dia: Number(r.dia_cierre_facturacion), en: gcDiasParaCierre(Number(r.dia_cierre_facturacion), hoy), cont: r.contacto_contable || '', tel: r.tel_contable || '' };
+  }).filter(function (x) { return x.en <= (ventana == null ? 3 : ventana); }).sort(function (a, b) { return a.en - b.en; });
+}
+function gcCierresHtml(L) {
+  var cuando = function (n) { return n === 0 ? '<b style="color:#b91c1c;">HOY</b>' : n === 1 ? '<b style="color:#b45309;">mañana</b>' : 'en ' + n + ' días'; };
+  return L.map(function (x) { return '<div style="font-size:.78rem;padding:2px 0;">• ' + gzH(x.nombre) + ' — cierra ' + cuando(x.en) + ' (día ' + x.dia + ')' + (x.cont ? ' · ' + gzH(x.cont) + (x.tel ? ' ' + gzH(x.tel) : '') : '') + '</div>'; }).join('');
+}
+async function avisoCierresFacturacion() {
+  var viejo = document.getElementById('avisoCierres'); if (viejo) viejo.remove();
+  var L = await gcCierresProximos(3); if (!L.length) return;
+  var dash = document.getElementById('screenDashboard'); if (!dash) return;
+  var b = document.createElement('div'); b.id = 'avisoCierres';
+  b.style.cssText = 'background:#fef2f2;border:1.5px solid #ef4444;border-left:5px solid #ef4444;border-radius:10px;padding:10px 12px;margin:0 0 .8rem;font-size:.82rem;color:#7f1d1d;';
+  b.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;"><div>🗓️ <b>Cierre de facturación próximo</b> — no facturar con fecha posterior al cierre del cliente.</div><button onclick="this.closest(\'#avisoCierres\').remove()" style="background:none;border:none;cursor:pointer;color:#7f1d1d;">✕</button></div><div style="margin-top:4px;">' + gcCierresHtml(L) + '</div>';
+  dash.insertBefore(b, dash.firstChild);
+}
 var GCI = { filas: [], tieneAnt: false, tieneVen: false };
 function gcNum(v) { if (typeof v === 'number') return v; var t = String(v == null ? '' : v).trim(); if (!t) return 0; var neg = /^\(.*\)$/.test(t) || /^-/.test(t); t = t.replace(/[^0-9,.]/g, ''); if (/,\d{1,2}$/.test(t) && t.indexOf('.') < t.indexOf(',')) t = t.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); else t = t.replace(/,/g, ''); var n = parseFloat(t) || 0; return neg ? -n : n; }
 function gcLeerArchivo(inp) {
@@ -3681,6 +3715,7 @@ async function gcInit() {
     GC.cart = {}; cc.forEach(function (r) { GC.cart[String(r.cliente_nit)] = r; });
   } catch (e) { document.getElementById('gcLista').innerHTML = '<div style="text-align:center;color:#b91c1c;padding:1rem;">No se pudieron cargar los clientes</div>'; return; }
   gcRender();
+  gcCierresProximos(7).then(function (L) { document.getElementById('gcCierres').innerHTML = L.length ? '<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:8px 10px;margin-bottom:.6rem;"><div style="font-size:.76rem;font-weight:800;color:#7f1d1d;">🗓️ Cierres de facturación en los próximos 7 días</div>' + gcCierresHtml(L) + '</div>' : ''; });
 }
 function gcRender() {
   var q = document.getElementById('gcBuscar').value.toLowerCase().trim(), solo = document.getElementById('gcSoloConDatos').checked;
