@@ -3885,6 +3885,7 @@ async function cerrarCesionYGenerarInforme(){
       if (y + needed > pageH - 16) { _pdfFooter(doc, pageW, pageH); doc.addPage(); y = _pdfHeader(doc, pageW, 'Informe de Negociación — Visita Comercial'); }
     };
 
+    const _extrasInforme = [];
     CESION_ACTUAL.forEach(function(it, idx){
       ensureSpace(30);
       doc.setFillColor(37, 99, 168);
@@ -3952,7 +3953,8 @@ async function cerrarCesionYGenerarInforme(){
         const neto = pUnit(l.cantidad_solicitada * _pDesc);
         const ivaLinea = (l.tipo_iva||'E')==='G' ? ivaEntero(neto * 0.19) : 0;
         const totalLinea = r2(neto + ivaLinea);
-        const nombre = (l.tmdescrip||'').length > 44 ? l.tmdescrip.substring(0,41)+'...' : (l.tmdescrip||'');
+        const _nomBase = (l.tmcode ? l.tmcode + ' · ' : '') + (l.tmdescrip||'');
+        const nombre = _nomBase.length > 50 ? _nomBase.substring(0,47)+'...' : _nomBase;
         doc.text(nombre, colX.prod, y);
         doc.text(l.calidad||'', colX.cal, y);
         doc.text(String(l.cantidad_solicitada||0) + ' ' + (l.tmund||''), colX.cant, y);
@@ -4044,6 +4046,7 @@ async function cerrarCesionYGenerarInforme(){
       const _archivosInforme = _archivosPedido.concat(_archivosVisitaAsoc);
       const _archivosImgInforme = _archivosInforme.filter(a => a.b64 && /^data:image\//.test(a.b64));
       const _archivosOtrosInforme = _archivosInforme.filter(a => !(a.b64 && /^data:image\//.test(a.b64)));
+      _archivosOtrosInforme.forEach(function(f){ if (f.b64) _extrasInforme.push(f); });
       if (_fotosInforme.length || _archivosInforme.length) {
         _pdfFooter(doc, pageW, pageH);
         doc.addPage();
@@ -4094,15 +4097,21 @@ async function cerrarCesionYGenerarInforme(){
     // ANTES: el envío por WhatsApp era 100% automático y sin ningún botón visible
     // — si el vendedor cerraba por error el selector de compartir, o el navegador
     // bloqueaba la ventana de wa.me, no tenía ninguna forma de reintentarlo.
-    _ultimoInformeVenta = { pdfFile, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', numPedidos: CESION_ACTUAL.length };
+    // Archivos adjuntos que no son fotos (OC, remisiones, RUT...): antes solo se
+    // listaban por nombre dentro del PDF y Despacho no podía abrirlos. Ahora se
+    // envían junto con el informe.
+    const _extraFiles = _extrasInforme.map(function(f){ return _b64AFile(f); }).filter(Boolean);
+    _ultimoInformeVenta = { pdfFile, extraFiles: _extraFiles, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', numPedidos: CESION_ACTUAL.length };
 
     // El intento automático de compartir se conserva como conveniencia (en
     // celular suele bastar), pero ya no es la única forma de enviarlo: el modal
     // que se abre después siempre trae un botón explícito para enviarlo o
     // reenviarlo por WhatsApp, se haya compartido automáticamente o no.
-    if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+    const _lote = [pdfFile].concat(_extraFiles);
+    const _filesShare = (navigator.canShare && navigator.canShare({files:_lote})) ? _lote : [pdfFile];
+    if (navigator.canShare && navigator.canShare({files:_filesShare})) {
       try {
-        await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+        await navigator.share({files:_filesShare, title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
       } catch (shareErr) {
         console.warn('Compartir PDF cancelado o falló (el botón del modal permite reintentar):', shareErr);
       }
@@ -4148,9 +4157,11 @@ function abrirModalInformeVenta(numPedidos) {
 async function reenviarInformeVentaWA() {
   if (!_ultimoInformeVenta) { toast('No hay informe reciente para reenviar'); return; }
   const { pdfFile, driveUrl, numPedidos } = _ultimoInformeVenta;
-  if (navigator.canShare && navigator.canShare({files:[pdfFile]})) {
+  const _lote = [pdfFile].concat(_ultimoInformeVenta.extraFiles || []);
+  const _filesShare = (navigator.canShare && navigator.canShare({files:_lote})) ? _lote : [pdfFile];
+  if (navigator.canShare && navigator.canShare({files:_filesShare})) {
     try {
-      await navigator.share({files:[pdfFile], title:'Informe de negociación', text:'Informe de ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+      await navigator.share({files:_filesShare, title:'Informe de negociación', text:'Informe de ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
       return;
     } catch (shareErr) {
       console.warn('Compartir cancelado, se intenta con el link de Drive:', shareErr);
@@ -5030,6 +5041,16 @@ function abrirWAVisita(registro) {
 }
 let _ultimaVisitaWA = null;
 let _ultimoInformeVenta = null;
+// Convierte un adjunto {nombre,tipo,b64:'data:...;base64,...'} en File para compartir.
+function _b64AFile(f) {
+  try {
+    const m = /^data:([^;]*);base64,(.*)$/.exec(f.b64 || '');
+    if (!m) return null;
+    const bin = atob(m[2]), u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new File([u8], f.nombre || 'archivo', { type: f.tipo || m[1] || 'application/octet-stream' });
+  } catch (e) { return null; }
+}
 
 function waEnviar(numero, msgEnc) {
   if (!numero) { toast("Sin número WhatsApp"); return; }
