@@ -701,6 +701,9 @@ function buscarCliente(q) {
   return { ok: true, data: res };
 }
 function crearCliente(body) {
+  // Blindaje (26/10/2026): el NIT solo admite números; un NIT con texto rompía la lectura (gviz lo devuelve vacío).
+  body.cliente_nit = String(body.cliente_nit == null ? "" : body.cliente_nit).replace(/[.\s]/g, "");
+  if (!/^\d{5,12}$/.test(body.cliente_nit)) return { ok: false, error: "El NIT o cédula debe llevar solo números (sin letras ni el nombre del cliente)." };
   const check = getCliente(body.cliente_nit);
   if (check.ok) return { ok: false, error: "NIT ya registrado." };
   getHoja(HOJAS.CLIENTES).appendRow([body.cliente_nit, body.razon_social, body.vendedor_asignado, body.coordenadas_home||"" , body.foto_fachada_url||""]);
