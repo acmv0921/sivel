@@ -4402,12 +4402,13 @@ function capturarGPS() {
 let _guardandoCliente = false;
 async function guardarCliente() {
   if (_guardandoCliente) return;
-  const nit    = document.getElementById('ncNit').value.trim();
+  const nit    = document.getElementById('ncNit').value.trim().replace(/[.\s]/g, '');
   const nombre = document.getElementById('ncNombre').value.trim();
   const gps    = document.getElementById('ncGps').value.trim();
   const err    = document.getElementById('clienteErr');
 
   if (!nit)    { err.textContent = "NIT requerido"; return; }
+  if (!/^\d{5,12}$/.test(nit)) { err.textContent = "❌ El NIT o cédula debe llevar SOLO NÚMEROS (sin letras, sin el nombre y sin dígito de verificación). El nombre va en su propia casilla."; return; }
   if (!nombre) { err.textContent = "Nombre requerido"; return; }
   const vendDueno = (document.getElementById('ncVendedor') || {}).value || '';
   if (!vendDueno) { err.textContent = "Escoge de qué vendedor es el cliente"; return; }
