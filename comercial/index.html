@@ -809,6 +809,15 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 <select id="llevaEstiba" class="form-control" onchange="calcularTotales()">
 <option value="">— Seleccione —</option><option value="SI">Sí</option><option value="NO">No</option>
 </select>
+<div id="grupoEstibaParcial" style="display:none;margin-top:.5rem;background:#fffbeb;border:1px dashed #d97706;border-radius:8px;padding:8px;">
+<label style="display:flex;gap:8px;align-items:center;font-size:.8rem;font-weight:700;"><input type="checkbox" id="estibaParcial" onchange="calcularTotales()" style="width:18px;height:18px;"> Cobrar solo algunas estibas (el cliente no compra todas)</label>
+<div id="estibaParcialCampos" style="display:none;margin-top:6px;">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+<div><label class="form-label" style="font-size:.7rem;">N° de estibas a cobrar</label><input id="estibasCobrar" type="number" min="1" step="1" class="form-control" oninput="calcularTotales()"></div>
+<div><label class="form-label" style="font-size:.7rem;">Valor por estiba ($)</label><input id="valorPorEstiba" type="number" min="0" step="1" class="form-control" oninput="this.dataset.manual='1';calcularTotales()"></div>
+</div>
+<div id="estibaParcialInfo" style="font-size:.7rem;color:#92400e;margin-top:4px;"></div>
+</div></div>
 <label class="form-label" style="margin-top:.6rem;">🚚 ¿Con o sin flete?</label>
 <select id="conFlete" class="form-control" onchange="cambiarConFlete()">
 <option value="">— Seleccione —</option><option value="NO">Sin flete (recoge el cliente en planta)</option><option value="SI">Con flete (entrega en obra)</option>
@@ -3067,6 +3076,7 @@ orden_compra_cliente:'', cotizacion_ref:'', condiciones_pago:'', nombre_obra:'' 
 'ordenCompraCliente','cotizacionRef','condicionesPago','nombreObra','obsInternasAP','fleteValorInput','transportistaFleteInput','apViajesCon','apViajesSin','formaPago','diasCredito','anticipoPct','llevaEstiba','conFlete','fleteIncluidoSel']
 .forEach(id => { const el = document.getElementById(id); if(el) { el.value=''; delete el.dataset.autofilled; } });
 { const _ow = document.getElementById('obsInternasWrap'); if (_ow) _ow.style.display = 'none'; }
+{ const _ck = document.getElementById('estibaParcial'); if (_ck) _ck.checked = false; ['estibasCobrar','valorPorEstiba'].forEach(function (i) { const e = document.getElementById(i); if (e) { e.value = ''; delete e.dataset.manual; } }); }
 const sel = document.getElementById('tipoEntrega'); if (sel) sel.value = 'PLANTA';
 const _nv = document.getElementById('numViajes'); if (_nv) _nv.value = '1';
 const _ce = document.getElementById('fleteContraEntregaCheck'); if (_ce) _ce.checked = false;
@@ -3421,6 +3431,23 @@ const _antc = parseInt(val('anticipoPct')) || 0;
 P.condiciones_pago = P._condPagoTexto ? P._condPagoTexto : P.forma_pago === 'CREDITO' ? ((_antc > 0 && _antc < 100 ? ('Anticipo ' + _antc + ' % + saldo a crédito ') : 'Crédito ') + (parseInt(P.dias_credito) > 0 ? parseInt(P.dias_credito) : '?') + ' días') : (P.forma_pago === 'CONTADO' ? 'Contado' : '');
 if (g('condicionesPago')) g('condicionesPago').value = P.condiciones_pago;
 P.lleva_estiba = val('llevaEstiba');
+{ // Estibas parciales: el cliente solo compra N estibas, no todas las de la orden
+  const gp = g('grupoEstibaParcial'), ck = g('estibaParcial');
+  if (gp) gp.style.display = P.lleva_estiba === 'SI' ? 'block' : 'none';
+  const on = P.lleva_estiba === 'SI' && ck && ck.checked;
+  if (g('estibaParcialCampos')) g('estibaParcialCampos').style.display = on ? 'block' : 'none';
+  P.estiba_parcial = null;
+  if (on) {
+    const vp = g('valorPorEstiba');
+    if (vp && !vp.dataset.manual) { // valor sugerido: unidades por estiba x valor por unidad del producto
+      let sug = 0; (STATE.pedido.lineas || []).forEach(function (l) { const pr = (STATE.inventario || []).find(function (q) { return String(q.tmcode) === String(l.tmcode); }) || {}; const v = (parseFloat(pr.unidades_por_estiba) || 0) * (parseFloat(pr.valor_estiba_unidad) || 0); if (v > sug) sug = v; });
+      vp.value = sug ? Math.round(sug) : '';
+    }
+    const n = parseFloat(val('estibasCobrar')) || 0, vpe = parseFloat(val('valorPorEstiba')) || 0;
+    if (n > 0 && vpe > 0) P.estiba_parcial = { n: n, valor: vpe, total: Math.round(n * vpe) };
+    if (g('estibaParcialInfo')) g('estibaParcialInfo').textContent = P.estiba_parcial ? ('Se cobrarán ' + n + ' estiba(s) × ' + fmt(vpe) + ' = ' + fmt(P.estiba_parcial.total)) : 'Escribe cuántas estibas se cobran y el valor de cada una.';
+  }
+}
 P.flete_incluido = val('fleteIncluidoSel');
 const chk = g('fleteIncorporadoCheck'); if (chk) chk.checked = P.flete_incluido === 'SI';
 P.num_viajes = Math.max(1, parseInt(val('numViajes')) || 1);
@@ -3457,7 +3484,7 @@ if (g('grupoFleteIva')) g('grupoFleteIva').style.display = (hayFlete && P.flete_
 const _vCon = parseFloat(val('apViajesCon')) || 0, _vSin = parseFloat(val('apViajesSin')) || 0;
 P.viajes_con_iva = _vCon; P.viajes_sin_iva = _vSin;
 const _pctSin = (hayFlete && P.flete_incluido === 'NO' && _vSin > 0) ? (_vSin / ((_vCon + _vSin) || _vSin)) : 0;
-const R = calcPedido(lineas, { conFlete: hayFlete, flete: flete, incluido: P.flete_incluido === 'SI', llevaEstiba: P.lleva_estiba, viajes: P.num_viajes, fleteSinIvaPct: _pctSin });
+const R = calcPedido(lineas, { conFlete: hayFlete, flete: flete, incluido: P.flete_incluido === 'SI', llevaEstiba: P.lleva_estiba, estibaFija: P.estiba_parcial ? P.estiba_parcial.total : null, viajes: P.num_viajes, fleteSinIvaPct: _pctSin });
 lineas.forEach(function (l, i) {
   const x = R.lineas[i];
   l.valor_estiba = x.estiba;
@@ -3528,9 +3555,12 @@ function calcPedido(lineas, cfg) {
   // precio con descuento por unidad, valor de cada línea, IVA de cada línea y IVA del flete.
   // Así los totales de la pantalla suman exactamente lo que se ve.
   const IVA = 0.19;
+  // Estiba fija (cobro de N estibas): se reparte por unidad entre todas las líneas
+  const _cantTot = lineas.reduce(function (a, l) { return a + (parseFloat(l.cantidad_solicitada) || 0); }, 0);
+  const _eFija = (cfg.estibaFija != null && _cantTot > 0) ? Math.round(cfg.estibaFija / _cantTot * 100) / 100 : null;
   const L = lineas.map(function (l) {
     const cant = parseFloat(l.cantidad_solicitada) || 0;
-    const estiba = cfg.llevaEstiba === 'SI' ? trunc2(parseFloat(l.estiba_tabla) || 0) : 0;
+    const estiba = cfg.llevaEstiba === 'SI' ? (_eFija != null ? _eFija : trunc2(parseFloat(l.estiba_tabla) || 0)) : 0;
     const postes = trunc2(parseFloat(l.valor_postes) || 0);
     const pb = trunc2(parseFloat(l.precio_base) || 0), d = parseFloat(l.descuento_aplicado) || 0;
     const pDesc = pUnit(pb * (1 - d));              // precio por unidad con descuento
@@ -4298,7 +4328,7 @@ cotizacion_ref: STATE.pedido.cotizacion_ref || '',
 condiciones_pago: STATE.pedido.condiciones_pago || '',
 nombre_obra: STATE.pedido.nombre_obra || '',
 plan_entregas: STATE.pedido.plan_entregas || '',
-obs_internas: STATE.pedido.obs_internas || '',
+obs_internas: ((STATE.pedido.obs_internas || '') + (STATE.pedido.estiba_parcial ? ((STATE.pedido.obs_internas ? ' | ' : '') + 'Estibas cobradas: ' + STATE.pedido.estiba_parcial.n + ' x $' + STATE.pedido.estiba_parcial.valor) : '')),
 // Datos de la negociación para Despacho (9 oct 2026): todo lo acordado viaja con la AP
 forma_pago: STATE.pedido.forma_pago || '',
 dias_credito: STATE.pedido.forma_pago === 'CREDITO' ? (parseInt(STATE.pedido.dias_credito) || '') : '',
