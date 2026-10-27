@@ -2651,6 +2651,7 @@ ${entregas.length ? `<div style="margin-top:8px;font-size:.7rem;color:#555;">
   }).join('')}
 </div>` : ''}
 </div>
+<div id="adjAPbox" style="margin-bottom:1rem;"></div>
 <div class="card-title">Productos</div>`;
 
 let total = 0;
@@ -2710,6 +2711,7 @@ html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-da
 }
 
 document.getElementById('modalVerAPContent').innerHTML = html;
+try { AdjuntosAP.ver(ap_id, document.getElementById('adjAPbox')); } catch (e) {}
 document.getElementById('modalVerAP').classList.add('show');
 }
 
@@ -4335,6 +4337,10 @@ if (!resultado || resultado.ok === false) {
 }
 
 toast("✅ AP guardada correctamente");
+// Fotos y anexos del pedido -> Drive (segundo plano), para que Despacho/Gerencia los vean al aprobar
+{ const _fp = FOTOS_PEDIDO.slice(), _ar = ARCHIVOS_PEDIDO.slice();
+  if (_fp.length || _ar.length) { toast('⏳ Subiendo ' + (_fp.length + _ar.length) + ' foto(s)/anexo(s) del pedido…', 3500);
+    AdjuntosAP.subir(resultado.ap_id, _fp, _ar, (STATE.vendedor && STATE.vendedor.nombre_vendedor) || '').then(function (r) { toast(r.mal ? '⚠️ Se subieron ' + r.ok + ' de ' + r.total + ' adjuntos de la AP. Revisa tu conexión.' : '✅ Fotos y anexos de la AP #' + resultado.ap_id + ' guardados', 4000); }).catch(function () {}); } }
 
 registrarApEnCesion(vendedorFinalNombre, esApoyo, apoyoPorNombre, resultado.ap_id);
 await czVincularAP(resultado.ap_id);
@@ -5953,6 +5959,7 @@ async function czPDF(opts) {
 <script src="../assets/offline.js"></script>
 <script>OfflineSIVIL.init({app:"comercial",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return",cola:["registrarVisita","actualizarCliente"]});</script>
 <script src="docs.js"></script>
+<script src="../assets/adjuntos_ap.js"></script>
 <script src="../assets/catalogo.js"></script>
 <script>CatalogoSIVIL.init({app:"comercial",leer:"leerGVIZ",listo:function(){var e=document.getElementById("appMain");return !!e&&e.style.display!=="none";}});</script>
 <script src="../assets/guia.js"></script>

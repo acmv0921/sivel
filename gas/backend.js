@@ -96,6 +96,9 @@ function doPost(e) {
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "registrarPagoAP": resultado = registrarPagoAP(body); break;
+      case "guardarAdjuntoAP": resultado = guardarAdjuntoAP(body); break;
+      case "listarAdjuntosAP": resultado = listarAdjuntosAP(body); break;
+      case "getAdjuntoAP": resultado = getAdjuntoAP(body); break;
       case "listarDocsComerciales": resultado = listarDocsComerciales(); break;
       case "getDocComercial": resultado = getDocComercial(body); break;
       case "guardarDocComercial": resultado = guardarDocComercial(body); break;
@@ -2579,6 +2582,55 @@ function guardarDocComercial(body) {
     return { ok: true, file_id: archivo.getId() };
   } catch (e) { return { ok: false, error: String(e) }; }
   finally { lock.releaseLock(); }
+}
+
+// ===== Fotos y anexos de la AP (27 oct 2026) =====
+// El vendedor adjunta fotos y documentos al pedido; Despacho/Gerencia los ven al aprobar.
+// Drive: "SIVIL - APs" > "Adjuntos" > "AP <id>". Se descargan por backend (no se hacen públicos).
+function _carpetaAdjuntosAP(ap_id, crear) {
+  const raiz = _getOrCrearCarpetaInformes('SIVIL - APs');
+  let it = raiz.getFoldersByName("Adjuntos");
+  let adj = it.hasNext() ? it.next() : (crear ? raiz.createFolder("Adjuntos") : null);
+  if (!adj) return null;
+  const nom = "AP " + String(ap_id).replace(/[^A-Za-z0-9_-]+/g, "");
+  it = adj.getFoldersByName(nom);
+  return it.hasNext() ? it.next() : (crear ? adj.createFolder(nom) : null);
+}
+function guardarAdjuntoAP(body) {
+  try {
+    if (!body.ap_id || !body.b64) return { ok: false, error: "Faltan datos del adjunto" };
+    const carpeta = _carpetaAdjuntosAP(body.ap_id, true);
+    const nombre = String(body.nombre || "adjunto").replace(/[\\/:*?"<>|]+/g, " ").trim();
+    const blob = Utilities.newBlob(Utilities.base64Decode(body.b64), String(body.mime || "application/octet-stream"), nombre);
+    const f = carpeta.createFile(blob);
+    f.setDescription(JSON.stringify({ tipo: body.tipo || "archivo", por: body.usuario || "", hora: body.hora || "" }));
+    return { ok: true, file_id: f.getId() };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+function listarAdjuntosAP(body) {
+  try {
+    const carpeta = _carpetaAdjuntosAP(body.ap_id, false);
+    if (!carpeta) return { ok: true, items: [] };
+    const items = [], it = carpeta.getFiles();
+    while (it.hasNext()) {
+      const f = it.next(); let d = {}; try { d = JSON.parse(f.getDescription() || "{}"); } catch (e) {}
+      items.push({ id: f.getId(), nombre: f.getName(), mime: f.getMimeType(), tamano: f.getSize(), tipo: d.tipo || "archivo", por: d.por || "", orden: f.getDateCreated().getTime() });
+    }
+    items.sort(function (a, b) { return a.orden - b.orden; });
+    return { ok: true, items: items };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+function getAdjuntoAP(body) {
+  try {
+    const carpeta = _carpetaAdjuntosAP(body.ap_id, false);
+    if (!carpeta) return { ok: false, error: "La AP no tiene adjuntos" };
+    const it = carpeta.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.getId() === String(body.file_id)) return { ok: true, nombre: f.getName(), mime: f.getMimeType(), b64: Utilities.base64Encode(f.getBlob().getBytes()) };
+    }
+    return { ok: false, error: "Adjunto no encontrado" };
+  } catch (e) { return { ok: false, error: String(e) }; }
 }
 function anularPagoAP(body) {
   const id = Number(body.pago_id);
