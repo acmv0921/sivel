@@ -96,6 +96,9 @@ function doPost(e) {
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "registrarPagoAP": resultado = registrarPagoAP(body); break;
+      case "listarDocsComerciales": resultado = listarDocsComerciales(); break;
+      case "getDocComercial": resultado = getDocComercial(body); break;
+      case "guardarDocComercial": resultado = guardarDocComercial(body); break;
       case "anularPagoAP": resultado = anularPagoAP(body); break;
       case "asignarPagoAP": resultado = asignarPagoAP(body); break;
       case "respaldarCotizacionDrive": resultado = respaldarCotizacionDrive(body); break;
@@ -2483,6 +2486,99 @@ function registrarPagoAP(body) {
     h.appendRow([id, ap, nit, fecha, valor, tipo, String(body.recibo_contable || ""), String(body.nota || ""), String(body.usuario || ""), new Date(), ""]);
     return { ok: true, pago_id: id };
   } finally { lock.releaseLock(); }
+}
+
+// ===== Documentos comerciales (27 oct 2026) =====
+// Catálogo de documentos que el vendedor anexa a cotizaciones y pedidos (RUT, portafolio, fichas, certificados).
+// Los archivos viven en Drive ("SIVIL - Respaldos" > "DOCUMENTOS COMERCIALES"); la hoja DOCUMENTOS_COMERCIALES guarda cuál es el vigente.
+// RUT y certificados piden confirmar que son los actuales (confirmar=SI); quien reemplaza queda registrado y el anterior pasa a "Anteriores".
+const _ENC_DOCS_COM = ["doc_id", "categoria", "nombre", "confirmar", "file_id", "nombre_archivo", "mime", "tamano", "vigente_hasta", "fecha_documento", "actualizado_por", "fecha_actualizacion"];
+const _DOCS_COM_BASE = [
+  ["RUT", "RUT", "RUT POSTECSA", "SI"],
+  ["PORTAFOLIO", "Portafolio", "Portafolio de productos POSTECSA", "NO"],
+  ["FICHA_POSTES", "Fichas técnicas", "Postes de concreto (energía y telecomunicaciones)", "NO"],
+  ["CARACT_POSTES", "Fichas técnicas", "Características técnicas de postes", "NO"],
+  ["CERT_RETIE_REDES", "Certificados de calidad", "Certificado CIDET CP25_AA00255 · Postes para redes de energía", "SI"],
+  ["CERT_RETIE_ALUMBRADO", "Certificados de calidad", "Certificado CIDET CP25_AA00254 · Postes para alumbrado público", "SI"]
+];
+function _hojaDocsCom() {
+  const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+  let h = ss.getSheetByName("DOCUMENTOS_COMERCIALES");
+  if (!h) {
+    h = ss.insertSheet("DOCUMENTOS_COMERCIALES");
+    h.getRange(1, 1, 1, _ENC_DOCS_COM.length).setValues([_ENC_DOCS_COM]).setFontWeight("bold"); h.setFrozenRows(1);
+    h.getRange(2, 1, _DOCS_COM_BASE.length, 4).setValues(_DOCS_COM_BASE);
+  }
+  return h;
+}
+function _carpetaDocsCom() {
+  const props = PropertiesService.getScriptProperties();
+  let c = null;
+  const id = props.getProperty("DOCS_COM_CARPETA");
+  if (id) { try { c = DriveApp.getFolderById(id); if (c.isTrashed()) c = null; } catch (e) { c = null; } }
+  if (!c) {
+    const r = DriveApp.getFoldersByName("SIVIL - Respaldos");
+    const padre = r.hasNext() ? r.next() : null;
+    const nombre = "DOCUMENTOS COMERCIALES";
+    if (padre) { const it = padre.getFoldersByName(nombre); c = it.hasNext() ? it.next() : padre.createFolder(nombre); }
+    else { const it2 = DriveApp.getFoldersByName("SIVIL - " + nombre); c = it2.hasNext() ? it2.next() : DriveApp.createFolder("SIVIL - " + nombre); }
+    props.setProperty("DOCS_COM_CARPETA", c.getId());
+  }
+  return c;
+}
+function listarDocsComerciales() {
+  try {
+    const h = _hojaDocsCom();
+    const v = h.getDataRange().getValues();
+    const tz = Session.getScriptTimeZone();
+    const fmt = function (x) { return x instanceof Date ? Utilities.formatDate(x, tz, "yyyy-MM-dd") : String(x || ""); };
+    const docs = v.slice(1).filter(function (r) { return r[0]; }).map(function (r) {
+      return { doc_id: String(r[0]), categoria: r[1], nombre: r[2], confirmar: r[3] === "SI", tiene_archivo: !!r[4], nombre_archivo: r[5] || "", tamano: Number(r[7]) || 0,
+        vigente_hasta: fmt(r[8]), fecha_documento: fmt(r[9]), actualizado_por: r[10] || "", fecha_actualizacion: r[11] instanceof Date ? Utilities.formatDate(r[11], tz, "yyyy-MM-dd HH:mm") : String(r[11] || "") };
+    });
+    return { ok: true, docs: docs };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+function getDocComercial(body) {
+  try {
+    const v = _hojaDocsCom().getDataRange().getValues();
+    const f = v.slice(1).filter(function (r) { return String(r[0]) === String(body.doc_id); })[0];
+    if (!f || !f[4]) return { ok: false, error: "Este documento aún no tiene archivo cargado" };
+    const a = DriveApp.getFileById(String(f[4]));
+    return { ok: true, nombre_archivo: f[5] || a.getName(), mime: f[6] || a.getMimeType(), b64: Utilities.base64Encode(a.getBlob().getBytes()) };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+function guardarDocComercial(body) {
+  if (!body.doc_id || !body.b64) return { ok: false, error: "Faltan datos del documento" };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const h = _hojaDocsCom();
+    const v = h.getDataRange().getValues();
+    let fila = -1;
+    for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(body.doc_id)) { fila = i + 1; break; }
+    if (fila < 0) return { ok: false, error: "Documento no encontrado en el catálogo" };
+    const carpeta = _carpetaDocsCom();
+    const viejo = v[fila - 1][4];
+    if (viejo) {
+      try {
+        const it = carpeta.getFoldersByName("Anteriores");
+        const ant = it.hasNext() ? it.next() : carpeta.createFolder("Anteriores");
+        const fv = DriveApp.getFileById(String(viejo));
+        fv.setName(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmm") + " " + fv.getName());
+        fv.moveTo(ant);
+      } catch (e) {}
+    }
+    const nombre = String(body.nombre_archivo || (body.doc_id + ".pdf")).replace(/[\\/:*?"<>|]+/g, " ").trim();
+    const mime = String(body.mime || "application/pdf");
+    const blob = Utilities.newBlob(Utilities.base64Decode(body.b64), mime, nombre);
+    const archivo = carpeta.createFile(blob);
+    const vig = body.vigente_hasta ? new Date(String(body.vigente_hasta).slice(0, 10) + "T12:00:00") : "";
+    const fdoc = body.fecha_documento ? new Date(String(body.fecha_documento).slice(0, 10) + "T12:00:00") : "";
+    h.getRange(fila, 5, 1, 8).setValues([[archivo.getId(), nombre, mime, blob.getBytes().length, vig, fdoc, String(body.usuario || ""), new Date()]]);
+    return { ok: true, file_id: archivo.getId() };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
 }
 function anularPagoAP(body) {
   const id = Number(body.pago_id);
