@@ -3365,7 +3365,7 @@ function renderLineasAP() {
         <div class="linea-cant">${l.cantidad_solicitada} ${l.tmund} · ${fmt(l.precio_base)}/u · Desc ${pctTxt(l.descuento_aplicado)}${unitResultante !== null ? ' · Unit. resultante: ' + fmt(unitResultante) + '/u' : ''}${fletePesoTxt}</div>
       </div>
       <div style="display:flex;align-items:center;gap:4px;">
-        <div class="linea-precio">${fmt(pUnit(l.cantidad_solicitada * pUnit(l.precio_base * (1-l.descuento_aplicado))))}</div>
+        <div class="linea-precio">${typeof l._netoLinea === 'number' ? fmt(l._netoLinea) : fmt(pUnit(l.cantidad_solicitada * pUnit(l.precio_base * (1-l.descuento_aplicado))))}</div>
         <button class="linea-del" onclick="eliminarLinea(${i})">✕</button>
       </div>
     </div>`;
@@ -3569,7 +3569,7 @@ function calcPedido(lineas, cfg) {
     const vEst = pUnit(cant * estiba), vPost = pUnit(cant * postes);
     return { cant: cant, estiba: estiba, postes: postes, pb: pb, pDesc: pDesc, base: base, netoProd: netoProd, desc: r2(base - netoProd),
       neto: r2(netoProd + vEst + vPost), vEst: vEst, vPost: vPost,
-      unitNeto: pDesc + (_eFija != null ? 0 : estiba) + postes, // con estibas fijas, la estiba va como valor aparte (no se suma al unitario)
+      unitNeto: pDesc + estiba + postes,
       grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
   });
   const flete = cfg.conFlete ? pUnit(parseFloat(cfg.flete) || 0) : 0;
@@ -3601,7 +3601,7 @@ function calcPedido(lineas, cfg) {
     const ivaLinea = x.grav ? ivaEntero(x.neto * IVA) : 0;
     iva += ivaLinea;
     return { estiba: x.estiba, fleteUnit: fu[i], precioDesc: x.pDesc, base: x.base, netoProd: x.netoProd, neto: x.neto, grav: x.grav, ivaLinea: ivaLinea,
-      totalLinea: r2(x.neto + ivaLinea), unitFinal: pUnit(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
+      totalLinea: r2(x.neto + ivaLinea), unitFinal: (function (u) { return _eFija != null ? r2(u) : pUnit(u); })(x.unitNeto * (x.grav ? 1 + IVA : 1) + fu[i] * (gf ? 1 + IVA : 1)) };
   });
   let ivaFlete = (flete > 0 && fleteGrav) ? ivaEntero(flete * IVA) : 0;
   let fleteGravOut = fleteGrav, fleteGravValor = fleteGrav ? flete : 0;
@@ -4281,6 +4281,9 @@ if (!STATE.pedido.cotizacion_ref && !STATE.pedido._avisoCotiz) {
 // Venta de apoyo: si el checkbox está marcado, la AP debe quedar a nombre
 // del vendedor real (para que sus métricas no se pierdan), con nota de
 // quién la gestionó como apoyo.
+if (STATE.puedeApoyar && !document.getElementById('checkVentaApoyo')?.checked) {
+  if (!confirm('⚠️ Esta AP va a quedar a TU nombre (' + (STATE.vendedor.nombre_vendedor || '') + ').\n\nSi es una venta de apoyo para otro vendedor, pulsa Cancelar, marca «Venta de apoyo» y elige al vendedor.\n\nAceptar = guardar a mi nombre.')) return;
+}
 let vendedorFinalId     = STATE.vendedor.id_vendedor;
 let vendedorFinalNombre = STATE.vendedor.nombre_vendedor;
 let esApoyo = false;
