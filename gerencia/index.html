@@ -2138,12 +2138,14 @@ function renderAprobaciones() {
           · Máximo permitido: ${(parseFloat(a.desc_max)*100).toFixed(1)}%<br>
           AP #${a.ap_id} · ${fecha?fmtFechaHora(fecha):''}
         </div>
+        <div id="adjA_${a.id}" style="margin-top:8px;"></div>
         <div class="btn-row" style="margin-top:.75rem;">
           <button class="btn btn-primary btn-sm" onclick="resolverAprobacion('${a.id}','aprobada')">✅ Aprobar</button>
           <button class="btn btn-danger btn-sm"  onclick="resolverAprobacion('${a.id}','rechazada')">❌ Rechazar</button>
         </div>
       </div>`;
     }).join('');
+    try { pend.forEach(a => AdjuntosAP.ver(a.ap_id, document.getElementById('adjA_' + a.id))); } catch (e) {}
   }
 
   // Historial
@@ -3947,6 +3949,7 @@ async function gzGuardarTextos() {
   GZ.textos = T; toast('✅ Textos del cotizador guardados');
 }
 </script>
+<script src="../assets/adjuntos_ap.js"></script>
 <script src="../assets/offline.js"></script>
 <script>OfflineSIVIL.init({app:"gerencia",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return"});</script>
 <script src="../assets/guia.js"></script>
