@@ -3569,7 +3569,7 @@ function calcPedido(lineas, cfg) {
     const vEst = pUnit(cant * estiba), vPost = pUnit(cant * postes);
     return { cant: cant, estiba: estiba, postes: postes, pb: pb, pDesc: pDesc, base: base, netoProd: netoProd, desc: r2(base - netoProd),
       neto: r2(netoProd + vEst + vPost), vEst: vEst, vPost: vPost,
-      unitNeto: pDesc + estiba + postes,
+      unitNeto: pDesc + (_eFija != null ? 0 : estiba) + postes, // con estibas fijas, la estiba va como valor aparte (no se suma al unitario)
       grav: (l.tipo_iva || 'E') === 'G', peso: parseFloat(l.peso_kg_unitario) || 0, ref: String(l.tmcode) };
   });
   const flete = cfg.conFlete ? pUnit(parseFloat(cfg.flete) || 0) : 0;
