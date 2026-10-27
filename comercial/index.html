@@ -2699,7 +2699,7 @@ html += `
 <div class="linea-cant"><span style="color:#15803d;font-weight:700;">✅ Entregado: ${Math.min(cant,despachadoLinea)}</span> · ${pendienteLinea>0 ? '<span style="color:#b91c1c;font-weight:700;">⏳ Por despachar: '+pendienteLinea+'</span>' : '<span style="color:#15803d;font-weight:700;">Completo</span>'}</div>
 <div class="linea-cant" style="margin-top:2px;">🏷️ Sin descuento: ${fmt(precio)}/u · 💲 Con descuento: ${fmt(precioConDescuento)}/u${fletePorUnidadAP>0 ? ' · 🚚 Flete: '+fmt(fletePorUnidadAP)+'/u · 💵 Con desc. + flete: '+fmt(precioConDescuentoYFlete)+'/u' : ''}</div>
 </div>
-<div class="linea-precio">${fmt(sub)}</div>
+<div class="linea-precio">${fmt(R.lineas[i].neto)}</div>
 </div>`;
 });
 html += `
@@ -4362,7 +4362,21 @@ flete_unitario: l._fleteUnit || 0
 };
 
 toast("⏳ Guardando AP...");
-const resultado = await escribirGAS(body);
+let resultado = await escribirGAS(body);
+
+// Si la respuesta fue error de conexión/"ya existe" pero la AP SÍ quedó guardada hace un momento (misma cliente, vendedor y total),
+// se toma como guardada: evita APs duplicadas cuando el servidor tardó y el vendedor volvió a pulsar «Confirmar».
+if (resultado && resultado.ok === false && /ya existe|conexi/i.test(String(resultado.error || ''))) {
+  try {
+    const _todas = await leerGVIZ('PREVENTAS_AP');
+    const _ahora = Date.now();
+    const _ya = _todas.filter(a => String(a.cliente_nit) === String(body.cliente_nit) && String(a.vendedor_id) === String(body.vendedor_id)
+      && !/^cancel/i.test(String(a.estado_ap || '')) && Math.round(parseFloat(a.total_ap) || 0) === Math.round(parseFloat(body.total_ap) || 0)
+      && (!body.ap_manual || String(a.ap_id) === String(body.ap_manual))
+      && (_ahora - (parseFecha(a.fecha_creacion) || new Date(0)).getTime()) < 10 * 60 * 1000)[0];
+    if (_ya) resultado = { ok: true, ap_id: _ya.ap_id, _recuperada: true };
+  } catch (e) {}
+}
 
 if (!resultado || resultado.ok === false) {
   toast("❌ No se pudo guardar: " + (resultado && resultado.error ? resultado.error : "error desconocido del servidor"));
