@@ -609,6 +609,9 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <button class="btn btn-outline" onclick="czGuardar().then(function(ok){})">💾 Guardar borrador</button>
           <button class="btn btn-primary" onclick="czPDF()">📄 Guardar y generar PDF</button>
           <button class="btn btn-outline" onclick="czWhatsApp()">💬 Guardar y enviar por WhatsApp</button>
+          <button class="btn btn-outline" style="border-color:#0a7a3d;color:#0a7a3d;font-weight:700;" onclick="DocsPostecsa.abrir({subtitulo:'Se enviarán junto con la cotización (RUT, portafolio, fichas, certificados).',alAdjuntar:czAnexarDocs})">📚 Anexar documentos de POSTECSA <span id="czDocsCnt"></span></button>
+          <div id="czDocsLista" style="font-size:.76rem;color:#166534;"></div>
+          <button class="btn btn-primary" id="czBtnCompDocs" style="display:none;" onclick="czCompartirConDocs()">📤 Enviar cotización + anexos (WhatsApp / correo)</button>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;"><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Aceptada')">✅ Aceptada</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Perdida')">❌ Perdida</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Anulada')">🗑️ Anular</button></div>
           <button class="btn btn-outline" id="czBtnVer" style="width:100%;" onclick="czNuevaVersion()">🆕 Nueva versión (A/B) de esta cotización</button>
           <button class="btn btn-primary" id="czBtnAP" style="width:100%;margin-top:8px;" onclick="czAAP()">📦 Convertir en AP (pedido)</button><div id="czApInfo" style="font-size:.76rem;color:#166534;margin-top:4px;"></div>
@@ -896,6 +899,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
             <p>Agregar archivo(s)</p>
           </label>
           <input id="inputArchivoPedido" type="file" multiple style="display:none;" onchange="agregarArchivoPedido(this)">
+          <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:6px;border-color:#0a7a3d;color:#0a7a3d;font-weight:700;" onclick="DocsPostecsa.abrir({subtitulo:'RUT, portafolio, fichas técnicas y certificados de POSTECSA.',alAdjuntar:anexarDocsPedido})">📚 Anexar documentos de POSTECSA (RUT, portafolio, certificados…)</button>
           <div id="pedidoArchivos"></div>
           <button type="button" class="btn btn-outline btn-sm" id="btnReenviarArchivosPedido" style="display:none;margin-top:6px;width:100%;" onclick="reenviarArchivosWA(ARCHIVOS_PEDIDO)">💬 Reenviar archivos por WhatsApp</button>
         </div>
@@ -1492,6 +1496,10 @@ async function agregarArchivoPedido(input){
   _renderAP();
   if(fallidos>0) toast('⚠️ '+ARCHIVOS_PEDIDO.length+' archivo(s) adjuntado(s) — '+fallidos+' no se pudo(eron) cargar (máx. 15MB c/u)');
   else toast('✅ '+ARCHIVOS_PEDIDO.length+' archivo(s) adjuntado(s)');
+}
+function anexarDocsPedido(docs){
+  docs.forEach(function(d){ if(!ARCHIVOS_PEDIDO.some(function(x){return x.nombre===d.nombre&&x.tamano===d.tamano;})) ARCHIVOS_PEDIDO.push({nombre:d.nombre,tipo:d.tipo,tamano:d.tamano,b64:d.b64}); });
+  _renderAP(); toast('✅ '+docs.length+' documento(s) de POSTECSA anexado(s)');
 }
 function _renderAP(){
   const c=document.getElementById('pedidoArchivos');if(!c)return;
@@ -5369,13 +5377,13 @@ function czRenderLista() {
         (function () { try { var oi = (JSON.parse(c.payload) || {}).obs_interna; return oi ? '<div style="font-size:.7rem;color:#92400e;background:#fffbeb;border-radius:6px;padding:2px 6px;margin-top:3px;">🔒 ' + czH(String(oi).slice(0, 110)) + '</div>' : ''; } catch (e) { return ''; } })() + '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b>' + (c.ap_id ? ' · <span style="color:#166534;">AP ' + czH(c.ap_id) + '</span>' : '') + '</div></div>';
     }).join('') : '<div style="text-align:center;color:#888;padding:1rem;">Sin cotizaciones</div>');
 }
-function czNueva() {
+function czNueva() { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {}
   var v = STATE.vendedor || {};
   CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
     lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, vig_modo: 'auto', desp_modo: 'auto', fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
   czMostrarForm();
 }
-function czAbrir(uid) {
+function czAbrir(uid) { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {}
   var c = CZ_LISTA.filter(function (x) { return String(x.uid) === String(uid); })[0]; if (!c) return;
   try { CZ = JSON.parse(c.payload); } catch (e) { toast('No se pudo abrir la cotización'); return; }
   CZ.ap_id = c.ap_id || '';
@@ -5816,6 +5824,30 @@ function czTextoWA() {
   t += '\nSubtotal: ' + fmt(czSumas(T).subt) + '\nIVA: ' + fmt(czSumas(T).iva) + '\n*TOTAL A PAGAR: ' + fmt(czSumas(T).total) + '*\n\n' + ((CZ.entrega_libre || (CZ.entrega ? CZ_TEXTOS.entrega[CZ.entrega - 1] : '')) ? (CZ.entrega_libre || CZ_TEXTOS.entrega[CZ.entrega - 1]) + '\n' : '') + (czTxtPago() ? 'Pago: ' + czTxtPago() : '');
   return t;
 }
+var CZ_DOCS = [];
+function czAnexarDocs(docs) {
+  docs.forEach(function (d) { if (!CZ_DOCS.some(function (x) { return x.nombre === d.nombre && x.tamano === d.tamano; })) CZ_DOCS.push(d); });
+  czRenderDocs(); toast('✅ ' + docs.length + ' documento(s) anexado(s) — usa “Enviar cotización + anexos”');
+}
+function czRenderDocs() {
+  var l = document.getElementById('czDocsLista'), b = document.getElementById('czBtnCompDocs'), n = document.getElementById('czDocsCnt');
+  if (n) n.textContent = CZ_DOCS.length ? '(' + CZ_DOCS.length + ')' : '';
+  if (l) l.innerHTML = CZ_DOCS.map(function (f, i) { return '<div style="display:flex;justify-content:space-between;gap:6px;padding:2px 0;"><span>📎 ' + f.nombre + ' · ' + _tamanoLegible(f.tamano) + '</span><a href="#" onclick="CZ_DOCS.splice(' + i + ',1);czRenderDocs();return false;" style="color:#b91c1c;">quitar</a></div>'; }).join('');
+  if (b) b.style.display = CZ_DOCS.length ? 'block' : 'none';
+}
+async function czCompartirConDocs() {
+  if (!CZ_DOCS.length) { toast('Primero anexa documentos'); return; }
+  if (!(await czGuardar('Enviada'))) return;
+  toast('⏳ Preparando cotización y anexos…');
+  try {
+    var r = await czPDF({ backup: true });
+    if (!r || !r.b64) { toast('⚠️ No se pudo generar el PDF'); return; }
+    var files = [_b64AFile(r.name, 'application/pdf', 'data:application/pdf;base64,' + r.b64)].concat(CZ_DOCS.map(function (f) { return _b64AFile(f.nombre, f.tipo, f.b64); }));
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      await navigator.share({ files: files, title: 'Cotización ' + CZ.numero, text: czTextoWA() });
+    } else toast('⚠️ Este dispositivo no permite compartir varios archivos: usa “Guardar y generar PDF” y adjunta los anexos desde Descargas.', 5000);
+  } catch (e) { if (e.name !== 'AbortError') toast('⚠️ ' + e.message, 4000); }
+}
 async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
 function czImg(url, respaldo) {
   var ok = function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); };
@@ -5920,6 +5952,7 @@ async function czPDF(opts) {
 </script>
 <script src="../assets/offline.js"></script>
 <script>OfflineSIVIL.init({app:"comercial",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return",cola:["registrarVisita","actualizarCliente"]});</script>
+<script src="docs.js"></script>
 <script src="../assets/catalogo.js"></script>
 <script>CatalogoSIVIL.init({app:"comercial",leer:"leerGVIZ",listo:function(){var e=document.getElementById("appMain");return !!e&&e.style.display!=="none";}});</script>
 <script src="../assets/guia.js"></script>
