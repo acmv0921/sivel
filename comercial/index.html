@@ -2728,54 +2728,50 @@ document.getElementById('modalVerAP').classList.add('show');
 // PDF de UNA AP (desde el detalle de Mis APs): descargar o compartir por WhatsApp.
 // Arma el PDF de una AP a partir de sus datos (ap = fila de PREVENTAS_AP, lineas = filas de DETALLE_AP).
 function _apPDFArmar(ap, lineas) {
+  // PDF de la AP con el detalle de precios tal como quedaron guardados (lista, descuento, estiba, flete, IVA, total) — pedido de Contabilidad 28 oct 2026
   const cli = STATE.clientes.find(c => String(c.cliente_nit) === String(ap.cliente_nit)) || {};
-  const flete = parseFloat(ap.flete_valor) || 0;
+  const num = v => parseFloat(v) || 0;
+  const flete = num(ap.flete_valor);
   const incl = ap.flete_incorporado === true || /^(TRUE|VERDADERO)$/i.test(String(ap.flete_incorporado));
-  const R = calcPedido(lineas.map(function (l) {
-    const pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
-    return { tmcode: l.tmcode, cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado,
-      precio_base: (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (parseFloat(pr.precio_base) || 0),
-      tipo_iva: l.tipo_iva || pr.tipo_iva || 'E', peso_kg_unitario: pr.peso_kg_unitario, valor_postes: l.valor_postes, estiba_tabla: l.valor_estiba };
-  }), { conFlete: flete > 0, flete: flete, incluido: incl, llevaEstiba: 'SI', viajes: 1, ivaFleteFijo: ap.iva_flete_ap });
-  const { jsPDF } = window.jspdf; const doc = new jsPDF();
-  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-  let y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id);
-  doc.setFontSize(9);
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'landscape' });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 10;
   const fecha = parseFecha(ap.fecha_creacion) || new Date();
-  const linea = (t) => { String(t).split('\n').forEach(function (x) { doc.splitTextToSize(x, W - 28).forEach(function (z) { doc.text(z, 14, y); y += 4.6; }); }); };
   const vend = _vendedorDoc(ap.vendedor_id);
-  linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit);
-  linea('Vendedor: ' + ((vend && vend.nombre_vendedor) || (STATE.vendedor || {}).nombre_vendedor || '') + '   ·   Fecha: ' + fmtFechaHora(fecha));
-  linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge cliente)' : 'Con transporte — ' + (ap.destino || '')));
-  if (ap.nombre_obra) linea('Obra: ' + ap.nombre_obra);
-  if (ap.direccion_obra) linea('Dirección: ' + ap.direccion_obra);
-  if (ap.orden_compra_cliente) linea('Orden de compra: ' + ap.orden_compra_cliente);
-  if (ap.cotizacion_ref) linea('Cotización: ' + ap.cotizacion_ref);
-  if (ap.condiciones_pago) linea('Condiciones de pago: ' + ap.condiciones_pago);
+  let y = 14;
+  doc.setFont(undefined, 'bold'); doc.setFontSize(13); doc.text('POSTECSA DE COLOMBIA S.A.S.  —  Pedido AP #' + ap.ap_id, M, y);
+  doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.text('Estado: ' + (ap.estado_ap || 'Pendiente') + (ap.es_apoyo === true || /^(TRUE|VERDADERO)$/i.test(String(ap.es_apoyo)) ? '  ·  Venta de apoyo' : ''), W - M, y, { align: 'right' });
+  y += 7; doc.setFontSize(9);
+  const linea = t => { doc.splitTextToSize(String(t), W - 2 * M).forEach(z => { doc.text(z, M, y); y += 4.4; }); };
+  linea('Cliente: ' + (cli.razon_social || ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit + '   ·   Vendedor: ' + ((vend && vend.nombre_vendedor) || (STATE.vendedor || {}).nombre_vendedor || '') + '   ·   Fecha: ' + fmtFechaHora(fecha));
+  linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge el cliente)' : ('Con transporte — ' + (ap.destino || ''))) + (ap.fecha_entrega ? '   ·   Fecha solicitada: ' + fmtFecha(ap.fecha_entrega) : ''));
+  const l3 = [ap.nombre_obra ? 'Obra: ' + ap.nombre_obra : '', ap.direccion_obra ? 'Dirección: ' + ap.direccion_obra : '', ap.orden_compra_cliente ? 'OC: ' + ap.orden_compra_cliente : '', ap.cotizacion_ref ? 'Cotización: ' + ap.cotizacion_ref : '', ap.condiciones_pago ? 'Pago: ' + ap.condiciones_pago : ''].filter(Boolean).join('   ·   ');
+  if (l3) linea(l3);
   if (ap.obs_entrega) linea('Observaciones: ' + ap.obs_entrega);
-  y += 3;
-  const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(14, y, W - 28, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(8);
-    doc.text('Código', 16, y + 4.6); doc.text('Producto', 32, y + 4.6); doc.text('Cant.', 118, y + 4.6, { align: 'right' }); doc.text('Desc.', 132, y + 4.6, { align: 'right' }); doc.text('V. unit.', 158, y + 4.6, { align: 'right' }); doc.text('Total', W - 16, y + 4.6, { align: 'right' });
-    doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
+  y += 2;
+  const cols = [['Código', 10, 'l'], ['Producto', 24, 'l'], ['Cant.', 108, 'r'], ['Desc.', 121, 'r'], ['P. lista', 140, 'r'], ['P. c/desc.', 160, 'r'], ['Estiba/u', 178, 'r'], ['Flete/u', 195, 'r'], ['Unit. a facturar', 220, 'r'], ['Valor línea', 245, 'r'], ['IVA', 262, 'r'], ['Total línea', W - M, 'r']];
+  const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(M, y, W - 2 * M, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(7.5);
+    cols.forEach(c => doc.text(c[0], c[1], y + 4.5, { align: c[2] === 'r' ? 'right' : 'left' })); doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
   cab();
-  lineas.forEach(function (l, i) {
-    const r = R.lineas[i], pr = STATE.inventario.find(function (p) { return String(p.tmcode) === String(l.tmcode); }) || {};
-    const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 78);
-    if (y + nom.length * 4 + 6 > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); cab(); }
-    doc.setFontSize(8);
-    doc.text(String(l.tmcode), 16, y); doc.text(nom, 32, y);
-    doc.text(String(l.cantidad_solicitada) + ' ' + (pr.tmund || ''), 118, y, { align: 'right' });
-    doc.text(pctTxt(parseFloat(l.descuento_aplicado) || 0), 132, y, { align: 'right' });
-    doc.text(fmt(r.precioDesc), 158, y, { align: 'right' });
-    doc.text(fmt(r.neto) + (r.grav ? ' +IVA' : ''), W - 16, y, { align: 'right' });
-    y += nom.length * 4 + 2;
+  let sVal = 0, sIva = 0, sTot = 0, sEst = 0;
+  lineas.forEach(l => {
+    const pr = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode)) || {};
+    const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 82);
+    if (y + nom.length * 4 + 4 > H - 28) { _pdfFooter(doc, W, H); doc.addPage(); y = 14; cab(); }
+    const cant = num(l.cantidad_solicitada), est = num(l.valor_estiba) + num(l.valor_postes), fl = num(l.flete_unitario);
+    const unit = num(l.precio_con_descuento) + est + fl;
+    const v = [String(l.tmcode), null, cant + ' ' + (pr.tmund || ''), (num(l.descuento_aplicado) * 100).toFixed(1).replace('.0', '') + '%', fmt(num(l.precio_base)), fmt(num(l.precio_con_descuento)), est ? fmt(est) : '—', fl ? fmt(fl) : '—', fmt(unit), fmt(num(l.valor_linea)), String(l.tipo_iva) === 'G' ? fmt(num(l.iva_linea)) : 'Excl.', fmt(num(l.total_linea))];
+    doc.setFontSize(7.5);
+    cols.forEach((c, i) => { if (i === 1) doc.text(nom, c[1], y); else doc.text(v[i], c[1], y, { align: c[2] === 'r' ? 'right' : 'left' }); });
+    sVal += num(l.valor_linea); sIva += num(l.iva_linea); sTot += num(l.total_linea); sEst += est * cant;
+    y += nom.length * 4 + 1.5;
   });
-  y += 4; if (y > H - 40) { _pdfFooter(doc, W, H); doc.addPage(); y = _pdfHeader(doc, W, 'Pedido AP #' + ap.ap_id); }
-  const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 70, y); doc.text(b, W - 16, y, { align: 'right' }); y += 5; };
-  fila('Subtotal', fmt(R.subtotal - R.descuentos + R.estiba + R.postes));
-  fila('Flete' + (incl ? ' (incluido)' : ''), fmt(flete));
-  fila('IVA', fmt(R.iva));
-  fila('TOTAL', fmt(R.total), true);
+  y += 3; if (y > H - 45) { _pdfFooter(doc, W, H); doc.addPage(); y = 14; }
+  const subt = num(ap.subtotal_ap) || lineas.reduce((a, l) => a + num(l.cantidad_solicitada) * num(l.precio_base), 0);
+  const desc = num(ap.descuento_ap) || Math.max(0, subt - (sVal - sEst));
+  const estT = num(ap.estiba_ap) || sEst, iva = num(ap.iva_ap) || sIva, tot = num(ap.total_ap) || (sTot + flete);
+  const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 95, y); doc.text(b, W - M, y, { align: 'right' }); y += 5; };
+  fila('Subtotal (a precio de lista)', fmt(subt)); fila('Descuentos', '-' + fmt(desc)); if (estT) fila('Estiba y postes', fmt(estT));
+  fila('Flete' + (incl ? ' (incluido en el precio unitario)' : ''), fmt(flete)); fila('IVA', fmt(iva)); fila('TOTAL DE LA AP', fmt(tot), true);
   _pdfFooter(doc, W, H);
   const limpio = String(cli.razon_social || ap.cliente_nit).replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ ]/g, '').trim().slice(0, 40);
   const dd = ('0' + fecha.getDate()).slice(-2) + '-' + ('0' + (fecha.getMonth() + 1)).slice(-2) + '-' + fecha.getFullYear();
