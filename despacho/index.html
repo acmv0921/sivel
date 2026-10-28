@@ -533,6 +533,21 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     </div>
   </div>
 
+  <!-- APs EN PDF (28 oct 2026, pedido de Contabilidad): todas las APs con su PDF -->
+  <div id="screenAPPdf" class="screen">
+    <div class="card">
+      <div class="card-title">📄 APs en PDF</div>
+      <div style="font-size:.74rem;color:#555;margin-bottom:8px;">Todas las APs creadas en SIVIL con el PDF guardado en Drive. Toca «Ver PDF» para abrirlo, descargarlo o enviarlo.</div>
+      <input class="form-control" id="appdfBuscar" placeholder="Buscar por N.º de AP, cliente, NIT o vendedor..." oninput="renderAPPdf()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+        <select class="form-control" id="appdfEstado" onchange="renderAPPdf()"><option value="">Todos los estados</option><option value="Pendiente">Pendiente</option><option value="Parcial">Parcial</option><option value="Despachado">Despachado</option><option value="Cancelado">Cancelado</option></select>
+        <select class="form-control" id="appdfPdf" onchange="renderAPPdf()"><option value="">Con y sin PDF</option><option value="con">Solo con PDF</option><option value="sin">Solo sin PDF</option></select>
+      </div>
+      <div id="appdfResumen" style="font-size:.72rem;color:#666;margin-top:6px;"></div>
+    </div>
+    <div id="listaAPPdf"></div>
+  </div>
+
   <!-- INVENTARIO (mismo calculo que usa Ventas: disponible = bruto - curado - averias - comprometido) -->
   <div id="screenInventario" class="screen">
     <div class="card">
@@ -783,6 +798,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn"        onclick="irA('screenCurado')"      id="navCurado">      <span class="icon">⏳</span>Curado</button>
   <button class="nav-btn"        onclick="irA('screenAverias')"     id="navAverias">     <span class="icon">⚠️</span>Averías</button>
   <button class="nav-btn"        onclick="irA('screenFuncionarios')" id="navFuncionarios"><span class="icon">👥</span>Personal</button>
+  <button class="nav-btn"        onclick="irA('screenAPPdf')"       id="navAPPdf">       <span class="icon">📄</span>APs PDF</button>
 </nav>
 
 <div id="toast" class="toast"></div>
@@ -3768,11 +3784,40 @@ function irA(screenId) {
   const map = {
     screenHome:'navHome', screenDespacho:'navDespacho',
     screenCurado:'navCurado', screenAverias:'navAverias',
-    screenFuncionarios:'navFuncionarios'
+    screenFuncionarios:'navFuncionarios', screenAPPdf:'navAPPdf'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
+  if (screenId === 'screenAPPdf') renderAPPdf();
   if (screenId === 'screenInventario') { calcularInventario(); renderInventario(document.getElementById('buscarProdDespacho')?.value || ''); }
   window.scrollTo(0,0);
+}
+
+function renderAPPdf() {
+  const cont = document.getElementById('listaAPPdf'); if (!cont) return;
+  const q = (document.getElementById('appdfBuscar')?.value || '').trim().toLowerCase();
+  const est = document.getElementById('appdfEstado')?.value || '', pdf = document.getElementById('appdfPdf')?.value || '';
+  const esc = x => String(x == null ? '' : x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const todas = (S.aps || []).filter(a => a.ap_id && !/^(7777|6666)$/.test(String(a.ap_id)));
+  const conPdf = todas.filter(a => String(a.pdf_url || '').indexOf('http') === 0).length;
+  let lista = todas.filter(a => {
+    const url = String(a.pdf_url || '').indexOf('http') === 0;
+    if (est && !String(a.estado_ap || '').toLowerCase().startsWith(est.toLowerCase())) return false;
+    if (pdf === 'con' && !url) return false; if (pdf === 'sin' && url) return false;
+    if (q) { const t = (a.ap_id + ' ' + nombreCliente(a.cliente_nit) + ' ' + a.cliente_nit + ' ' + nombreVendedor(a.vendedor_id) + ' ' + (a.cotizacion_ref || '') + ' ' + (a.orden_compra_cliente || '')).toLowerCase(); if (!t.includes(q)) return false; }
+    return true;
+  }).sort((a, b) => (parseInt(String(b.ap_id)) || 0) - (parseInt(String(a.ap_id)) || 0));
+  const r = document.getElementById('appdfResumen');
+  if (r) r.textContent = lista.length + ' AP(s) mostradas · ' + conPdf + ' de ' + todas.length + ' tienen PDF guardado en Drive';
+  cont.innerHTML = lista.slice(0, 300).map(a => {
+    const url = String(a.pdf_url || '').indexOf('http') === 0;
+    const tot = parseFloat(a.total_ap) || 0;
+    return '<div class="card" style="padding:.7rem;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">' +
+      '<div style="min-width:0;"><div style="font-weight:800;">AP #' + esc(a.ap_id) + ' <span style="font-weight:600;font-size:.7rem;color:#666;">· ' + esc(a.estado_ap) + (String(a.es_apoyo).toUpperCase() === 'TRUE' ? ' · apoyo' : '') + '</span></div>' +
+      '<div style="font-size:.8rem;">' + esc(nombreCliente(a.cliente_nit)) + '</div>' +
+      '<div style="font-size:.7rem;color:#666;">' + esc(nombreVendedor(a.vendedor_id)) + ' · ' + esc(fmtFecha(a.fecha_creacion)) + (tot ? ' · ' + fmt(tot) : '') + '</div></div>' +
+      (url ? '<a class="btn btn-primary btn-sm" href="' + esc(a.pdf_url) + '" target="_blank" rel="noopener" style="white-space:nowrap;text-decoration:none;">📄 Ver PDF</a>'
+           : '<span style="font-size:.68rem;color:#b45309;background:#fffbeb;border-radius:6px;padding:3px 6px;white-space:nowrap;">Sin PDF</span>') + '</div></div>';
+  }).join('') + (lista.length > 300 ? '<div style="text-align:center;font-size:.72rem;color:#888;">Se muestran las 300 más recientes: usa el buscador para ver otras.</div>' : '') || '<div style="text-align:center;color:#888;padding:1rem;">Sin resultados</div>';
 }
 
 function cerrarModal(id) { document.getElementById(id)?.classList.remove('show'); }
