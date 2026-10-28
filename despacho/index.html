@@ -3792,6 +3792,66 @@ function irA(screenId) {
   window.scrollTo(0,0);
 }
 
+// PDF de la AP con el detalle de precios tal como quedaron guardados (precio de lista, descuento, estiba, flete, IVA, total).
+// Se arma en el navegador con los datos de PREVENTAS_AP y DETALLE_AP; si guardar=true también queda en Drive (y en la columna pdf_url).
+async function generarPdfAP(ap_id, guardar) {
+  try {
+    if (!window.jspdf) { toast('⚠️ El generador de PDF no cargó. Revisa la conexión y recarga.'); return; }
+    const ap = (S.aps || []).find(a => String(a.ap_id) === String(ap_id) && !/^cancel/i.test(String(a.estado_ap || ''))) || (S.aps || []).find(a => String(a.ap_id) === String(ap_id));
+    if (!ap) { toast('No se encontró la AP'); return; }
+    toast('⏳ Armando el PDF de la AP #' + ap_id + '…', 4000);
+    const lineas = (S.detalles || []).filter(d => String(d.ap_id) === String(ap_id));
+    const num = v => parseFloat(v) || 0;
+    const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'landscape' });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 10;
+    let y = 14;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(13); doc.text('POSTECSA DE COLOMBIA S.A.S.  —  Pedido AP #' + ap.ap_id, M, y);
+    doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.text('Estado: ' + (ap.estado_ap || '') + (String(ap.es_apoyo).toUpperCase() === 'TRUE' ? '  ·  Venta de apoyo' : ''), W - M, y, { align: 'right' });
+    y += 7; doc.setFontSize(9);
+    const linea = t => { doc.splitTextToSize(String(t), W - 2 * M).forEach(z => { doc.text(z, M, y); y += 4.4; }); };
+    linea('Cliente: ' + nombreCliente(ap.cliente_nit) + '   ·   NIT: ' + ap.cliente_nit + '   ·   Vendedor: ' + nombreVendedor(ap.vendedor_id) + '   ·   Fecha: ' + fmtFecha(ap.fecha_creacion));
+    linea('Entrega: ' + (ap.tipo_entrega === 'PLANTA' ? 'Venta en planta (recoge el cliente)' : ((ap.tipo_entrega || '') + ' — ' + (ap.destino || ''))) + (ap.fecha_entrega ? '   ·   Fecha solicitada: ' + fmtFecha(ap.fecha_entrega) : ''));
+    const l3 = [ap.nombre_obra ? 'Obra: ' + ap.nombre_obra : '', ap.orden_compra_cliente ? 'OC: ' + ap.orden_compra_cliente : '', ap.cotizacion_ref ? 'Cotización: ' + ap.cotizacion_ref : '', ap.condiciones_pago ? 'Pago: ' + ap.condiciones_pago : ''].filter(Boolean).join('   ·   ');
+    if (l3) linea(l3);
+    if (ap.obs_entrega) linea('Observaciones: ' + ap.obs_entrega);
+    y += 2;
+    const cols = [['Código', 10, 'l'], ['Producto', 24, 'l'], ['Cant.', 108, 'r'], ['Desc.', 121, 'r'], ['P. lista', 140, 'r'], ['P. c/desc.', 160, 'r'], ['Estiba/u', 178, 'r'], ['Flete/u', 195, 'r'], ['Unit. a facturar', 220, 'r'], ['Valor línea', 245, 'r'], ['IVA', 262, 'r'], ['Total línea', W - M, 'r']];
+    const cab = () => { doc.setFillColor(37, 99, 168); doc.rect(M, y, W - 2 * M, 6.5, 'F'); doc.setTextColor(255); doc.setFont(undefined, 'bold'); doc.setFontSize(7.5);
+      cols.forEach(c => doc.text(c[0], c[1], y + 4.5, { align: c[2] === 'r' ? 'right' : 'left' })); doc.setTextColor(0); doc.setFont(undefined, 'normal'); y += 10; };
+    cab();
+    let sVal = 0, sIva = 0, sTot = 0, sEst = 0;
+    lineas.forEach(l => {
+      const pr = (S.productos || []).find(p => String(p.tmcode) === String(l.tmcode)) || {};
+      const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 82);
+      if (y + nom.length * 4 + 4 > H - 28) { doc.addPage(); y = 14; cab(); }
+      const cant = num(l.cantidad_solicitada), est = num(l.valor_estiba) + num(l.valor_postes), fl = num(l.flete_unitario);
+      const unit = num(l.precio_con_descuento) + est + fl;
+      const v = [String(l.tmcode), null, cant + ' ' + (pr.tmund || ''), (num(l.descuento_aplicado) * 100).toFixed(1).replace('.0', '') + '%', fmt(num(l.precio_base)), fmt(num(l.precio_con_descuento)), est ? fmt(est) : '—', fl ? fmt(fl) : '—', fmt(unit), fmt(num(l.valor_linea)), String(l.tipo_iva) === 'G' ? fmt(num(l.iva_linea)) : 'Excl.', fmt(num(l.total_linea))];
+      doc.setFontSize(7.5);
+      cols.forEach((c, i) => { if (i === 1) doc.text(nom, c[1], y); else doc.text(v[i], c[1], y, { align: c[2] === 'r' ? 'right' : 'left' }); });
+      sVal += num(l.valor_linea); sIva += num(l.iva_linea); sTot += num(l.total_linea); sEst += est * cant;
+      y += nom.length * 4 + 1.5;
+    });
+    y += 3; if (y > H - 45) { doc.addPage(); y = 14; }
+    const flete = num(ap.flete_valor), incl = /^(TRUE|VERDADERO)$/i.test(String(ap.flete_incorporado));
+    const subt = num(ap.subtotal_ap) || (lineas.reduce((a, l) => a + num(l.cantidad_solicitada) * num(l.precio_base), 0));
+    const desc = num(ap.descuento_ap) || Math.max(0, subt - (sVal - sEst));
+    const estT = num(ap.estiba_ap) || sEst, iva = num(ap.iva_ap) || sIva, tot = num(ap.total_ap) || (sTot + flete);
+    const fila = (a, b, bold) => { doc.setFont(undefined, bold ? 'bold' : 'normal'); doc.setFontSize(9); doc.text(a, W - 95, y); doc.text(b, W - M, y, { align: 'right' }); y += 5; };
+    fila('Subtotal (a precio de lista)', fmt(subt)); fila('Descuentos', '-' + fmt(desc)); if (estT) fila('Estiba y postes', fmt(estT));
+    fila('Flete' + (incl ? ' (incluido en el precio unitario)' : ''), fmt(flete)); fila('IVA', fmt(iva)); fila('TOTAL DE LA AP', fmt(tot), true);
+    doc.setFont(undefined, 'normal'); doc.setFontSize(7); doc.setTextColor(120);
+    doc.text('Generado desde SIVIL (Despacho) el ' + new Date().toLocaleDateString('es-CO') + ' con los valores guardados en la AP.', M, H - 8); doc.setTextColor(0);
+    const nombre = 'AP_' + ap.ap_id + '_detalle.pdf', blob = doc.output('blob');
+    if (guardar) {
+      const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.readAsDataURL(blob); });
+      const d = await escribirGAS({ accion: 'guardarInformePDF', tipo: 'ap', ap_id: ap.ap_id, nombre_archivo: 'AP_' + ap.ap_id + '_' + String(nombreCliente(ap.cliente_nit)).replace(/[^A-Za-z0-9 ]/g, '').trim().slice(0, 40) + '.pdf', base64_pdf: b64 });
+      if (d && d.ok && d.url) { ap.pdf_url = d.url; renderAPPdf(); toast('✅ PDF guardado en Drive'); } else toast('⚠️ Se generó, pero no se pudo guardar en Drive', 4000);
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.target = '_blank'; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { toast('⚠️ No se pudo armar el PDF: ' + e.message, 4000); }
+}
+
 function renderAPPdf() {
   const cont = document.getElementById('listaAPPdf'); if (!cont) return;
   const q = (document.getElementById('appdfBuscar')?.value || '').trim().toLowerCase();
@@ -3815,8 +3875,10 @@ function renderAPPdf() {
       '<div style="min-width:0;"><div style="font-weight:800;">AP #' + esc(a.ap_id) + ' <span style="font-weight:600;font-size:.7rem;color:#666;">· ' + esc(a.estado_ap) + (String(a.es_apoyo).toUpperCase() === 'TRUE' ? ' · apoyo' : '') + '</span></div>' +
       '<div style="font-size:.8rem;">' + esc(nombreCliente(a.cliente_nit)) + '</div>' +
       '<div style="font-size:.7rem;color:#666;">' + esc(nombreVendedor(a.vendedor_id)) + ' · ' + esc(fmtFecha(a.fecha_creacion)) + (tot ? ' · ' + fmt(tot) : '') + '</div></div>' +
-      (url ? '<a class="btn btn-primary btn-sm" href="' + esc(a.pdf_url) + '" target="_blank" rel="noopener" style="white-space:nowrap;text-decoration:none;">📄 Ver PDF</a>'
-           : '<span style="font-size:.68rem;color:#b45309;background:#fffbeb;border-radius:6px;padding:3px 6px;white-space:nowrap;">Sin PDF</span>') + '</div></div>';
+      '<div style="display:flex;flex-direction:column;gap:4px;">' +
+      (url ? '<a class="btn btn-primary btn-sm" href="' + esc(a.pdf_url) + '" target="_blank" rel="noopener" style="white-space:nowrap;text-decoration:none;">📄 Ver PDF</a>' +
+             '<button class="btn btn-outline btn-sm" style="white-space:nowrap;" onclick="generarPdfAP(\'' + esc(a.ap_id) + '\',false)">🧾 Detalle de precios</button>'
+           : '<button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="generarPdfAP(\'' + esc(a.ap_id) + '\',true)">🧾 Generar PDF</button>') + '</div></div></div>';
   }).join('') + (lista.length > 300 ? '<div style="text-align:center;font-size:.72rem;color:#888;">Se muestran las 300 más recientes: usa el buscador para ver otras.</div>' : '') || '<div style="text-align:center;color:#888;padding:1rem;">Sin resultados</div>';
 }
 
