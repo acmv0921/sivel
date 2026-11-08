@@ -92,6 +92,7 @@ function doPost(e) {
       case "eliminarContacto": resultado = eliminarContacto(body); break;
       case "crearPreventa": resultado = crearPreventa(body); break;
       case "guardarCotizacion": resultado = guardarCotizacion(body); break;
+      case "reservarNumerosCotizacion": resultado = reservarNumerosCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
@@ -2140,6 +2141,21 @@ function _siguienteNumeroCotiz(ini, datos) {
   do { n++; num = ini + "-" + ("000" + n).slice(-3); } while (usados[num.replace(/[^A-Z0-9]/g, "")]);
   props.setProperty("COTIZ_CONSEC", String(n));
   return num;
+}
+// Reserva un bloque de números del consecutivo general para que el vendedor cotice SIN SEÑAL (8 nov 2026).
+// Los números reservados avanzan el contador, así que nadie más los recibe; si no se usan quedan como huecos.
+function reservarNumerosCotizacion(body) {
+  const cant = Math.max(1, Math.min(20, parseInt(body.cantidad, 10) || 10));
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado asignando números, intenta de nuevo." }; }
+  try {
+    const ini = _inicialesCotiz(body.vendedor_id, body.iniciales);
+    if (!ini) return { ok: false, needs_iniciales: true, error: "Faltan las iniciales de este vendedor" };
+    const datos = _hojaCotiz().getDataRange().getValues();
+    const numeros = [];
+    for (let k = 0; k < cant; k++) { const n = _siguienteNumeroCotiz(ini, datos); numeros.push(n); datos.push(["", n]); }
+    return { ok: true, numeros: numeros };
+  } finally { lock.releaseLock(); }
 }
 function guardarCotizacion(body) {
   let num = String(body.numero || "").trim();

@@ -413,7 +413,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   padding:2px 8px;border-radius:12px;margin-top:2px;
   background:#dbeafe;color:#1e40af;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="../assets/jspdf.umd.min.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';document.head.appendChild(s);"></script>
 </head>
 <body>
 
@@ -5431,7 +5431,7 @@ function czRenderLista() {
         (function () { try { var oi = (JSON.parse(c.payload) || {}).obs_interna; return oi ? '<div style="font-size:.7rem;color:#92400e;background:#fffbeb;border-radius:6px;padding:2px 6px;margin-top:3px;">🔒 ' + czH(String(oi).slice(0, 110)) + '</div>' : ''; } catch (e) { return ''; } })() + '<div style="font-size:.82rem;">' + czH(c.cliente_nombre) + '</div><div style="font-size:.72rem;color:#666;">' + czH(c.obra || '') + ' · ' + fmtFecha(c.fecha) + ' · <b>' + fmt(c.total) + '</b>' + (c.ap_id ? ' · <span style="color:#166534;">AP ' + czH(c.ap_id) + '</span>' : '') + '</div></div>';
     }).join('') : '<div style="text-align:center;color:#888;padding:1rem;">Sin cotizaciones</div>');
 }
-function czNueva() { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {}
+function czNueva() { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {} try { _czResActiva = true; czReponerReserva(); } catch (e) {}
   var v = STATE.vendedor || {};
   CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
     lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, vig_modo: 'auto', desp_modo: 'auto', fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
@@ -5674,6 +5674,33 @@ function czTotales() {
 function czPayload() { czLeer(); var T = calcPedido(CZ.lineas, czCfg()); return { T: T }; }
 var CZ_INICIALES_PROPIAS = '';
 function czIniciales() { return CZ_INICIALES_PROPIAS || ''; }
+// ===== Cotizar SIN SEÑAL (8 nov 2026): números reservados + guardado en cola =====
+// Con señal, cada vendedor reserva en el celular un bloque de números del consecutivo general. Sin señal, la cotización toma
+// el siguiente número del bloque (el PDF sale con su número definitivo) y el guardado queda en cola hasta que vuelva la conexión.
+var _czResActiva = false, _czResOcupada = false;
+function czResKey() { var v = (STATE.vendedor || {}).id_vendedor; return v ? 'sivil_cz_reserva_' + v : null; }
+function czResLeer() { try { return JSON.parse(localStorage.getItem(czResKey()) || '[]'); } catch (e) { return []; } }
+function czResGuardar(a) { try { localStorage.setItem(czResKey(), JSON.stringify(a)); } catch (e) {} }
+function czTomarNumero() { var a = czResLeer(), n = a.shift(); czResGuardar(a); return n || ''; }
+async function czHayRed() {
+  if (!navigator.onLine) return false;
+  try { var ac = new AbortController(), t = setTimeout(function () { ac.abort(); }, 3000);
+    await fetch('https://script.google.com/', { mode: 'no-cors', cache: 'no-store', signal: ac.signal }); clearTimeout(t); return true;
+  } catch (e) { return false; }
+}
+async function czReponerReserva() {
+  try {
+    if (_czResOcupada || !czResKey()) return;
+    var a = czResLeer(); if (a.length >= 6) return;
+    if (!(await czHayRed())) return;
+    _czResOcupada = true;
+    var r = await escribirGAS({ accion: 'reservarNumerosCotizacion', vendedor_id: STATE.vendedor.id_vendedor, iniciales: czIniciales(), cantidad: 10 - a.length });
+    if (r && r.ok && r.numeros && r.numeros.length) czResGuardar(czResLeer().concat(r.numeros));
+  } catch (e) { /* sin señal: se intenta de nuevo luego */ } finally { _czResOcupada = false; }
+}
+setInterval(function () { if (_czResActiva) czReponerReserva(); }, 45000);
+window.addEventListener('online', function () { if (_czResActiva) setTimeout(czReponerReserva, 2000); });
+setTimeout(function () { try { if (czResKey() && czResLeer().length) { _czResActiva = true; czReponerReserva(); } } catch (e) {} }, 6000);
 async function czGuardar(estado, confirmarDup, sinRespaldo) {
   czLeer();
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
@@ -5681,6 +5708,13 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
   if (CZ.pago === 99 && !CZ.pago_libre) { toast('Elegiste OTRA condición de pago: escribe la condición en el recuadro'); return false; }
   var _tr = czTransporte();
   if (CZ.tarifa_viaje > 0 && _tr.viajes > 0 && CZ.fleteModo !== 'NO' && Math.round(CZ.flete) !== Math.round(_tr.sugerido) && !CZ.flete_motivo) { toast('El flete (' + fmt(CZ.flete) + ') difiere del sugerido por topes de carga (' + fmt(_tr.sugerido) + ' por ' + _tr.viajes + ' viaje(s)). Escribe el motivo del ajuste.', 6500); return false; }
+  if (!CZ.uid) CZ.uid = 'Q' + Date.now(); // uid propio: si el envío se repite no se duplica la cotización
+  var _sinSenal = false;
+  if (!CZ.numero && !(await czHayRed())) {
+    var _nr = czTomarNumero();
+    if (!_nr) { toast('📴 Sin señal y sin números reservados en este celular. Abre la app con señal una vez para reservarlos y vuelve a intentar.', 6000); return false; }
+    CZ.numero = _nr; _sinSenal = true; var _en0 = document.getElementById('czNumero'); if (_en0) _en0.value = _nr;
+  }
   var T = calcPedido(CZ.lineas, czCfg());
   var datos = JSON.parse(JSON.stringify(CZ)); delete datos._desdePedido; delete datos._respaldoAP;
   if (CZ._respaldoAP) estado = 'Aceptada';
@@ -5705,7 +5739,8 @@ async function czGuardar(estado, confirmarDup, sinRespaldo) {
     CZ_VINCULO = { uid: CZ.uid, numero: CZ.numero };
   }
   if (CZ._respaldoAP) { STATE.cotizDeAP = STATE.cotizDeAP || {}; STATE.cotizDeAP[String(CZ._respaldoAP)] = CZ.numero; CZ.ap_id = CZ._respaldoAP; }
-  toast('✅ Cotización ' + CZ.numero + ' guardada' + (CZ._desdePedido ? ' · queda como referencia del pedido' : ''));
+  if (r && r.encolado) toast('📴 Cotización ' + CZ.numero + ' guardada en el celular: se enviará sola cuando vuelva la señal. Ya puedes generar el PDF.', 6000);
+  else toast('✅ Cotización ' + CZ.numero + ' guardada' + (CZ._desdePedido ? ' · queda como referencia del pedido' : ''));
   if (!sinRespaldo) czRespaldoDrive();
   return true;
 }
@@ -6005,7 +6040,7 @@ async function czPDF(opts) {
 }
 </script>
 <script src="../assets/offline.js"></script>
-<script>OfflineSIVIL.init({app:"comercial",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return",cola:["registrarVisita","actualizarCliente"]});</script>
+<script>OfflineSIVIL.init({app:"comercial",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return",cola:["registrarVisita","actualizarCliente","guardarCotizacion","respaldarCotizacionDrive"]});</script>
 <script src="docs.js"></script>
 <script src="../assets/adjuntos_ap.js"></script>
 <script src="../assets/catalogo.js"></script>
