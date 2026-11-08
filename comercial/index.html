@@ -5707,16 +5707,16 @@ async function czHayRed() {
 async function czReponerReserva() {
   try {
     if (_czResOcupada || !czResKey()) return;
-    var a = czResLeer(); if (a.length >= 6) return;
+    var a = czResLeer(); if (a.length >= 3) return;
     if (!(await czHayRed())) return;
     _czResOcupada = true;
-    var r = await escribirGAS({ accion: 'reservarNumerosCotizacion', vendedor_id: STATE.vendedor.id_vendedor, iniciales: czIniciales(), cantidad: 10 - a.length });
+    var r = await escribirGAS({ accion: 'reservarNumerosCotizacion', vendedor_id: STATE.vendedor.id_vendedor, iniciales: czIniciales(), cantidad: 6 - a.length });
     if (r && r.ok && r.numeros && r.numeros.length) czResGuardar(czResLeer().concat(r.numeros));
   } catch (e) { /* sin señal: se intenta de nuevo luego */ } finally { _czResOcupada = false; }
 }
-setInterval(function () { if (_czResActiva) czReponerReserva(); }, 45000);
+setInterval(function () { if (!_czResActiva && czResKey()) _czResActiva = true; if (_czResActiva) czReponerReserva(); }, 45000);
 window.addEventListener('online', function () { if (_czResActiva) setTimeout(czReponerReserva, 2000); });
-setTimeout(function () { try { if (czResKey() && czResLeer().length) { _czResActiva = true; czReponerReserva(); } } catch (e) {} }, 6000);
+setTimeout(function () { try { if (czResKey()) { _czResActiva = true; czReponerReserva(); } } catch (e) {} }, 6000);
 async function czGuardar(estado, confirmarDup, sinRespaldo) {
   czLeer();
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }

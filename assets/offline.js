@@ -101,7 +101,7 @@
     var orig = window[nombre]; if (typeof orig !== 'function') return; origEsc = orig;
     var q = C.cola || [];
     window[nombre] = async function (body) {
-      var encolable = body && q.indexOf(body.accion) >= 0;
+      var encolable = body && q.indexOf(body.accion) >= 0 && !body.auto_numero; // sin número reservado no se encola: el PDF saldría sin número
       var avisoCola = function () { if (typeof window.toast === 'function') window.toast('📴 Sin conexión: guardado en el celular. Se enviará solo cuando haya señal.', 5000); };
       if (!navigator.onLine) {
         if (encolable) { await encolar(body); avisoCola(); return { ok: true, encolado: true }; }
