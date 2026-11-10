@@ -3350,6 +3350,7 @@ toast(`✅ ${p.tmdescrip.substring(0,30)} agregado`);
 // RENDER LÍNEAS DEL PEDIDO
 // =============================================================================
 function renderLineasAP() {
+  try { if ((document.getElementById('modoEntregaInput') || {}).value === 'tandas' && typeof renderTandas === 'function') renderTandas(); } catch (e) {} // el selector de producto de los despachos parciales siempre al día
   const cont = document.getElementById('lineasAP');
   // Pasos previos (borrador): los productos se ven SIEMPRE; el número de AP solo se exige al confirmar y guardar.
   if (!STATE.pedido.lineas.length) {
@@ -3813,11 +3814,16 @@ function seleccionarModoEntrega(modo){
   });
   const cont=document.getElementById('tandasContainer'); if(cont) cont.style.display = modo==='tandas'?'block':'none';
   if(modo==='tandas' && !_TANDAS.length) agregarTanda(); else calcularPlanEntregas();
+  if(modo==='tandas') renderTandas();
 }
 // "Despachos por porcentajes" (antes "tandas"; los identificadores internos se
 // conservan para no romper APs ya guardadas). Cada despacho lleva fecha, % del
 // pedido y detalle.
-function agregarTanda(){ _TANDAS.push({fecha:'',producto:'',cantidad:'',descripcion:''}); renderTandas(); }
+function agregarTanda(){
+  const _ls=(STATE.pedido&&STATE.pedido.lineas)||[];
+  if(!_ls.length){ renderTandas(); try{ toast('Primero agrega los productos del pedido y luego repártelos en despachos',5000); }catch(e){} return; }
+  _TANDAS.push({fecha:'',producto:_ls.length===1?String(_ls[0].tmcode):'',cantidad:'',descripcion:''}); renderTandas();
+}
 function quitarTanda(i){ _TANDAS.splice(i,1); renderTandas(); }
 function actualizarTanda(i,campo,valor){ if(_TANDAS[i]) _TANDAS[i][campo]=valor; calcularPlanEntregas(); mostrarTotalPorcentajes(); }
 // Control por producto: unidades programadas en los despachos vs. unidades del pedido.
@@ -3836,7 +3842,10 @@ function mostrarTotalPorcentajes(){
 function renderTandas(){
   const cont=document.getElementById('tandasLista'); if(!cont) return;
   const lineas=(STATE.pedido&&STATE.pedido.lineas)||[];
+  if(lineas.length&&!_TANDAS.length) _TANDAS.push({fecha:'',producto:'',cantidad:'',descripcion:''});
+  if(lineas.length===1) _TANDAS.forEach(function(t){ if(!t.producto) t.producto=String(lineas[0].tmcode); });
   const opts=function(sel){ return '<option value="">— Producto —</option>'+lineas.map(function(l){ const k=String(l.tmcode); const d=(l.tmdescrip||l.nombre||((STATE.inventario||[]).find(function(p){return String(p.tmcode)===k;})||{}).tmdescrip||''); return '<option value="'+k+'"'+(String(sel)===k?' selected':'')+'>'+k+' '+String(d).replace(/</g,'&lt;').slice(0,34)+'</option>'; }).join(''); };
+  if(!lineas.length){ cont.innerHTML='<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px;font-size:.8rem;color:#9a3412;">⚠️ Aún no hay productos en el pedido. Agrega primero los productos (con su cantidad) en el paso anterior; luego aquí eliges cuántas unidades de cada uno salen en cada despacho.</div>'; return; }
   cont.innerHTML=_TANDAS.map(function(t,i){
     return '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:6px;margin-bottom:6px;">'+
     '<div style="display:grid;grid-template-columns:120px 1fr 28px;gap:6px;margin-bottom:6px;">'+
