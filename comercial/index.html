@@ -2114,7 +2114,8 @@ async function obtenerProximaAPDisponible() {
     ]);
     // Un número de AP CANCELADA no se devuelve ni se reutiliza (10 nov 2026): el siguiente es siempre
     // mayor que el más alto usado, activo o cancelado.
-    const _ids = (todas || []).map(a => parseInt(a.ap_id)).filter(n => n > 0 && n < 100000);
+    // Las APs de prueba (5555, 6666, 7777, 7778...) no cuentan: son >= 5555 y jamás deben arrastrar el consecutivo real.
+    const _ids = (todas || []).map(a => parseInt(a.ap_id)).filter(n => n > 0 && n < 5555);
     let candidato = Math.max(parseInt(rCons.siguiente) || 1, _ids.length ? Math.max.apply(null, _ids) + 1 : 1);
     const ocupados = new Set((todas || []).map(a => String(a.ap_id).trim()));
     let vueltas = 0;
