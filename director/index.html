@@ -132,7 +132,7 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
       <div class="kpis" id="aKpi"></div>
       <div class="graf" id="grAp"><div class="card"><h3>Pedido, despachado y pagado por vendedor ($)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gApVend"></canvas></div></div><div class="card"><h3>APs por estado</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gApEst"></canvas></div></div></div>
       <div class="tablewrap" id="twAp"><table id="aTabla"></table></div>
-      <div class="muted" style="margin-top:6px;">Valor = precio con descuento × cantidad (sin flete). El total de la AP es el guardado en la AP; si no lo tiene, se calcula. Los pagos los registra Contabilidad.</div>
+      <div class="muted" style="margin-top:6px;">Valor = precio con descuento × cantidad (sin flete). El total de la AP es el guardado en la AP; si no lo tiene, se calcula. Los pagos los registra Contabilidad.<b id="apFuentePago"></b></div>
     </div>
     <div id="pVen" style="display:none;">
       <div class="filtros" id="fVen"><div><label>Año</label><select id="vAnio" onchange="renderVen()"></select></div><button class="btn" onclick="exportar('ven')">⬇ Excel</button></div>
@@ -235,6 +235,8 @@ function calcAp(){
   const porAp={};D.det.forEach(d=>(porAp[String(d.ap_id)]=porAp[String(d.ap_id)]||[]).push(d));
   const pag={};D.pagos.forEach(p=>{if(String(p.anulado||'').toUpperCase()==='SI'||!p.ap_id)return;pag[String(p.ap_id)]=(pag[String(p.ap_id)]||0)+(Number(p.valor)||0);});
   D.apx={};
+  const _con={};((typeof CRU!=='undefined'&&CRU.rows)||[]).forEach(r=>{if(r.ap)_con[r.ap]=(_con[r.ap]||0)+r.val;});
+  const _fu=document.getElementById('apFuentePago');if(_fu)_fu.textContent=(typeof CRU!=='undefined'&&CRU.rows&&CRU.rows.length)?' PAGADO Y SALDO según el archivo de Contabilidad cargado ('+CRU.arch+', '+CRU.cargado+'); las APs sin pagos allí usan lo registrado en SIVIL.':'';
   D.aps.forEach(a=>{
     let sol=0,des=0,vS=0,vD=0;
     (porAp[String(a.ap_id)]||[]).forEach(d=>{
@@ -243,7 +245,7 @@ function calcAp(){
       let vl=parseFloat(d.total_linea);if(!(vl>0))vl=pu*cs;
       sol+=cs;des+=cd;vS+=vl;vD+=cs>0?vl*cd/cs:0;});
     const tot=parseFloat(a.total_ap)>0?parseFloat(a.total_ap):vS;
-    D.apx[String(a.ap_id)]={sol,des,vS,vD,tot,pagado:pag[String(a.ap_id)]||0,pct:sol>0?Math.round(100*des/sol):0};
+    D.apx[String(a.ap_id)]={sol,des,vS,vD,tot,pagSiv:pag[String(a.ap_id)]||0,pagado:(_con[+a.ap_id]!=null?_con[+a.ap_id]:(pag[String(a.ap_id)]||0)),pct:sol>0?Math.round(100*des/sol):0};
   });
 }
 const colEst={Aceptada:'#166534',Enviada:'#2563a8',Borrador:'#6b7280',Perdida:'#b91c1c',Anulada:'#9ca3af'};
@@ -480,11 +482,11 @@ function cruCargar(file){
     if(!out.length){alert('No se leyó ningún pago de la hoja "'+nm+'".');return;}
     CRU.rows=out;CRU.arch=file.name;CRU.hoja=nm;CRU.cargado=fd(new Date())+' '+p2(new Date().getHours())+':'+p2(new Date().getMinutes());
     try{localStorage.setItem('dir_cruce',JSON.stringify(CRU));}catch(e){}
-    renderCru();
+    calcAp();renderCot();renderAp();renderCru();
   }catch(e){alert('No se pudo leer el archivo: '+e.message);}};
   rd.readAsArrayBuffer(file);
 }
-function cruBorrar(){CRU.rows=[];CRU.arch='';CRU.cargado='';try{localStorage.removeItem('dir_cruce');}catch(e){}$('cruFile').value='';renderCru();}
+function cruBorrar(){CRU.rows=[];CRU.arch='';CRU.cargado='';try{localStorage.removeItem('dir_cruce');}catch(e){}$('cruFile').value='';calcAp();renderCot();renderAp();renderCru();}
 function renderCru(){
   if(!$('cruTabla'))return;
   EXP.cru=[];
@@ -496,8 +498,8 @@ function renderCru(){
   const con={};CRU.rows.forEach(r=>{if(!r.ap)return;const o=con[r.ap]=con[r.ap]||{val:0,ret:0,n:0,fac:new Set(),doc:new Set(),ult:'',cli:r.cli};o.val+=r.val;if(r.ret)o.ret+=r.val;o.n++;if(r.fac)o.fac.add(r.fac);if(r.doc)o.doc.add(r.doc);if(r.f>o.ult)o.ult=r.f;});
   const filas=[];
   of.forEach(a=>{const k=String(a.ap_id),x=D.apx[k],c=con[+k]||{val:0,ret:0,n:0,fac:new Set(),doc:new Set(),ult:''};
-    const dif=Math.round(c.val-x.pagado),tipo=(c.val===0&&x.pagado===0)?'sin':(Math.abs(dif)<1?'ok':(dif>0?'falta':'sobra'));
-    filas.push({ap:+k,cli:D.nomC[String(a.cliente_nit)]||a.cliente_nit,obra:a.nombre_obra,tot:x.tot,con:c.val,ret:c.ret,siv:x.pagado,dif:dif,tipo:tipo,fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});});
+    const dif=Math.round(c.val-x.pagSiv),tipo=(c.val===0&&x.pagSiv===0)?'sin':(Math.abs(dif)<1?'ok':(dif>0?'falta':'sobra'));
+    filas.push({ap:+k,cli:D.nomC[String(a.cliente_nit)]||a.cliente_nit,obra:a.nombre_obra,tot:x.tot,con:c.val,ret:c.ret,siv:x.pagSiv,dif:dif,tipo:tipo,fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});});
   Object.keys(con).map(Number).forEach(n=>{if(of.some(a=>+a.ap_id===n))return;const a=D.aps.find(y=>+y.ap_id===n),c=con[n];
     if(a){if(n<2438||a.estado_ap==='Modificado'||n>=5555)return;filas.push({ap:n,cli:c.cli,obra:'',tot:0,con:c.val,ret:c.ret,siv:0,dif:Math.round(c.val),tipo:'cancel',fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});}
     else if(n>=2438&&n<5555)filas.push({ap:n,cli:c.cli,obra:'',tot:0,con:c.val,ret:c.ret,siv:0,dif:Math.round(c.val),tipo:'noexiste',fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});});
@@ -507,7 +509,7 @@ function renderCru(){
   if(q)L=L.filter(f=>(f.ap+' '+f.cli+' '+f.obra+' '+f.fac+' '+f.doc).toLowerCase().includes(q));
   L.sort((a,b)=>b.ap-a.ap);
   const nDif=filas.filter(f=>f.tipo!=='ok'&&f.tipo!=='sin').length,sinAp=CRU.rows.filter(r=>!r.ap&&(!minF||!r.f||r.f>=minF));
-  const sC=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)],c=con[+a.ap_id];return t+Math.max(0,x.tot-(c?c.val:0));},0),sS=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)];return t+Math.max(0,x.tot-x.pagado);},0);
+  const sC=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)],c=con[+a.ap_id];return t+Math.max(0,x.tot-(c?c.val:0));},0),sS=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)];return t+Math.max(0,x.tot-x.pagSiv);},0);
   $('cruKpi').innerHTML=[['APs con diferencia',nDif,'de '+filas.length+' APs revisadas'],['Saldo por cobrar según Contabilidad',money(sC),'APs oficiales'],['Saldo por cobrar según SIVIL',money(sS),'APs oficiales'],['Diferencia de saldo',money(sS-sC),sS-sC>0?'SIVIL cree que falta cobrar más':'Contabilidad cree que falta cobrar más'],['Pagos sin AP',sinAp.length,money(sinAp.reduce((t,r)=>t+r.val,0))]].map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b><div class="muted">'+k[2]+'</div></div>').join('');
   let html='<tr><th>AP</th><th>Cliente</th><th>Obra</th><th class="num">Total AP</th><th class="num">Pagado Contabilidad</th><th class="num">Pagado SIVIL</th><th class="num">Diferencia</th><th class="num">Saldo (Contab.)</th><th>Situación del pago (Contabilidad)</th><th>Estado del cruce con SIVIL</th><th>Facturas</th><th>Recibos</th><th>Último pago</th></tr>';
   L.forEach(f=>{const t=T[f.tipo],sal=Math.max(0,f.tot-f.con);
