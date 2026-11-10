@@ -100,11 +100,12 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
 </div>
 
 <div id="app" style="display:none;">
-  <div class="header"><div class="marca"><img src="./logo-postecsa.jpg" alt="POSTECSA de Colombia SAS"><h1>SIVIL · Director Comercial<small id="quien"></small></h1></div><div><select id="gOf" onchange="renderAp();renderVen()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="ayuda" id="bAyuda" onclick="iniciarGuia()">❓ Guía paso a paso</button> <button class="btn sec" id="bAct" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" id="bSalir" onclick="salir()">Salir</button></div></div>
+  <div class="header"><div class="marca"><img src="./logo-postecsa.jpg" alt="POSTECSA de Colombia SAS"><h1>SIVIL · Director Comercial<small id="quien"></small></h1></div><div><select id="gOf" onchange="renderAp();renderVen();renderCru()" title="Las APs anteriores a la 2438 eran pruebas"><option value="of">APs oficiales (desde la 2438)</option><option value="todo">Todas las APs (incluye pruebas)</option></select> <button class="ayuda" id="bAyuda" onclick="iniciarGuia()">❓ Guía paso a paso</button> <button class="btn sec" id="bAct" onclick="cargarTodo(true)">↻ Actualizar datos</button> <button class="btn sec" id="bSalir" onclick="salir()">Salir</button></div></div>
   <div class="tabs">
     <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
     <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
     <button class="tab" id="tVen" onclick="verTab('Ven')">📈 Ventas por vendedor</button>
+    <button class="tab" id="tCru" onclick="verTab('Cru')">💳 Cruce con Contabilidad</button>
     <button class="tab" id="tTip" onclick="verTab('Tip')">💡 Inteligencia comercial</button>
   </div>
   <div class="wrap">
@@ -139,6 +140,26 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
       <div class="tablewrap" id="twVen"><table id="vTabla"></table></div>
       <div class="muted" style="margin-top:6px;">Ventas = APs no canceladas, por fecha de creación (valor sin flete). Por defecto solo cuenta desde la AP 2438 (las anteriores eran pruebas); cámbialo arriba a la derecha.</div>
     </div>
+    <div id="pCru" style="display:none;">
+      <div class="card" style="border-left:6px solid var(--amar);">
+        <b>Cruce de pagos y saldos con el archivo de Contabilidad</b>
+        <div class="muted" style="margin:4px 0 8px;">Descarga de OneDrive el Excel "REPORTE DE PAGOS CLIENTES" y cárgalo aquí. Se lee solo en este equipo (no se sube a ningún lado ni se modifica nada). Se usa la hoja BANCOS y se cruza por el número de AP de la columna PEDIDO.</div>
+        <div class="filtros" style="margin-bottom:0;">
+          <div><label>Archivo de Contabilidad (.xlsx)</label><input type="file" id="cruFile" accept=".xlsx,.xls" onchange="cruCargar(this.files[0])"></div>
+          <div><label>Mostrar</label><select id="cruEst" onchange="renderCru()"><option value="dif">APs con diferencia</option><option value="todos">Todas las APs con pagos</option><option value="ok">Solo las que coinciden</option><option value="sin">APs sin ningún pago</option></select></div>
+          <div><label>Buscar</label><input id="cruQ" placeholder="AP, cliente, factura o recibo" oninput="renderCru()"></div>
+          <button class="btn" onclick="exportar('cru')">⬇ Excel</button>
+          <button class="btn sec" onclick="cruBorrar()">🗑 Quitar archivo</button>
+        </div>
+        <div class="muted" id="cruInfo" style="margin-top:6px;"></div>
+      </div>
+      <div class="kpis" id="cruKpi"></div>
+      <div class="tablewrap" id="twCru"><table id="cruTabla"></table></div>
+      <div class="muted" style="margin-top:6px;">Diferencia = pagado según Contabilidad − pagado según SIVIL (hoja PAGOS_AP). "Retención" cuenta como pago porque descuenta del saldo del cliente. Solo se comparan las APs oficiales (desde la 2438, sin canceladas).</div>
+      <h3 style="margin:16px 0 6px;font-size:.95rem;color:var(--verde2);">Pagos de Contabilidad sin número de AP</h3>
+      <div class="tablewrap" id="twCruSin"><table id="cruSin"></table></div>
+      <div class="muted" style="margin-top:6px;">Son anticipos, pagos de cartera o filas donde Contabilidad no anotó el pedido. Conviene pedirle que complete la columna PEDIDO para que entren al cruce.</div>
+    </div>
     <div id="pTip" style="display:none;">
       <div class="muted" style="margin-bottom:10px;">Ideas de reconocidos autores de ventas y estrategia, resumidas con palabras propias y conectadas con lo que dicen los datos de POSTECSA hoy. Son guías de trabajo, no recetas.</div>
       <div id="tipLista"></div>
@@ -152,7 +173,7 @@ const SHEET_ID="1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 const GVIZ="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:json&sheet=";
 const ROLES_OK=["JEFE_VENTAS","DIRECTOR_COMERCIAL","GERENTE","ADMIN"];
 const D={cot:[],aps:[],det:[],pagos:[],vend:[],cli:[],usr:null};
-let EXP={cot:[],ap:[],ven:[]};
+let EXP={cot:[],ap:[],ven:[],cru:[]};
 const H=x=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
 function money(n){n=Math.round(Number(n)||0);return (n<0?'-':'')+'$'+String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
@@ -201,14 +222,14 @@ async function cargarTodo(forzar){
   $('cVend').innerHTML=opt;$('aVend').innerHTML=opt;
   const anios=[...new Set(aps.map(a=>(pf(a.fecha_creacion)||{getFullYear:()=>0}).getFullYear()).filter(Boolean))].sort().reverse();
   $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
-  calcAp();renderCot();renderAp();renderVen();renderTips();
+  calcAp();renderCot();renderAp();renderVen();renderCru();renderTips();
   let vista=false;try{vista=!!localStorage.getItem('dir_guia_vista');}catch(e){}
   if(!vista&&!TOUR)ofertaGuia();
 }
 const CONOC={'31409227':'Gerencia (Nohra)'};
 const nomV=id=>D.nomV[String(id)]||CONOC[String(id)]||id;
 function apOk(a){if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;return $('gOf').value==='todo'||Number(a.ap_id)>=2438;}
-function verTab(t){['Cot','Ap','Ven','Tip'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
+function verTab(t){['Cot','Ap','Ven','Cru','Tip'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
 // ---- AP (despachado/pagado)
 function calcAp(){
   const porAp={};D.det.forEach(d=>(porAp[String(d.ap_id)]=porAp[String(d.ap_id)]||[]).push(d));
@@ -430,11 +451,76 @@ function renderTips(){
     'Hay '+money(porDesp)+' por despachar y '+money(saldo)+' por cobrar en las APs oficiales.','Revisar semanalmente las APs con avance bajo, avisar al cliente de la fecha real y pedir el abono a tiempo.']];
   $('tipLista').innerHTML='<div class="graf">'+T.map(t=>'<div class="card tip"><h3>'+H(t[0])+'</h3><div class="aut">'+H(t[1])+'</div><div>'+H(t[2])+'</div><div class="dato">📊 <b>Tus datos:</b> '+H(t[3])+'</div><div class="acc">✅ <b>Acción sugerida:</b> '+H(t[4])+'</div></div>').join('')+'</div>';
 }
+// ---- Cruce con el archivo de Contabilidad (solo lectura; el Excel se lee en este equipo)
+const CRU={rows:[],arch:'',cargado:'',hoja:''};
+try{const _c=localStorage.getItem('dir_cruce');if(_c)Object.assign(CRU,JSON.parse(_c));}catch(e){}
+const cruNorm=c=>String(c==null?'':c).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function cruNum(v){if(typeof v==='number')return v;let t=String(v==null?'':v).replace(/[^\d,.\-]/g,'');if(!t)return 0;if(t.indexOf(',')>=0)t=t.replace(/\./g,'').replace(',','.');else if((t.match(/\./g)||[]).length>1)t=t.replace(/\./g,'');return parseFloat(t)||0;}
+function cruFecha(v){if(v instanceof Date&&!isNaN(v)){const x=new Date(v.getTime()+43200000);return x.getFullYear()+'-'+p2(x.getMonth()+1)+'-'+p2(x.getDate());}
+  if(typeof v==='number'&&v>30000){const x=new Date(Math.round((v-25569)*864e5)+43200000);return x.getUTCFullYear()+'-'+p2(x.getUTCMonth()+1)+'-'+p2(x.getUTCDate());}
+  const m=String(v||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+p2(m[2])+'-'+p2(m[1]):'';}
+function cruCargar(file){
+  if(!file)return;
+  if(typeof XLSX==='undefined'){alert('No se cargó la librería de Excel (¿sin conexión?)');return;}
+  const rd=new FileReader();
+  rd.onload=function(){try{
+    const wb=XLSX.read(new Uint8Array(rd.result),{type:'array',cellDates:true});
+    const nm=wb.SheetNames.find(n=>/^bancos$/i.test(n.trim()))||wb.SheetNames[0];
+    const A=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true,defval:''});
+    const hi=A.findIndex(r=>r.some(c=>cruNorm(c)==='FECHA')&&r.some(c=>/^CLIENTES?$/.test(cruNorm(c))));
+    if(hi<0){alert('No encontré la fila de títulos (FECHA, CLIENTES...) en la hoja "'+nm+'". ¿Es el archivo REPORTE DE PAGOS CLIENTES?');return;}
+    const Hd=A[hi].map(cruNorm),ix=re=>Hd.findIndex(h=>re.test(h));
+    const c={f:ix(/^FECHA$/),cli:ix(/^CLIENTES?$/),ban:ix(/^BANCO/),ped:ix(/^PEDIDO/),fac:ix(/^FACTURA/),doc:ix(/^DOCUMENTO/),obs:ix(/^OBSERV/),val:ix(/^(VALOR|MONTO|IMPORTE|PAGO|CONSIGNACION|VR)/)};
+    if(c.val<0&&c.ped>0)c.val=c.ped-1;
+    if(c.val<0||c.ped<0){alert('No encontré las columnas VALOR y PEDIDO en la hoja "'+nm+'".');return;}
+    const out=[];
+    for(let i=hi+1;i<A.length;i++){const r=A[i],val=cruNum(r[c.val]);if(!val)continue;
+      const mp=String(r[c.ped]||'').match(/AP\D{0,3}0*(\d{3,5})/i),ban=String(c.ban>=0?r[c.ban]:'').trim();
+      out.push({f:cruFecha(r[c.f]),ap:mp?+mp[1]:0,cli:String(r[c.cli]||'').trim(),ban:ban,val:val,fac:String(c.fac>=0?r[c.fac]:'').trim(),doc:String(c.doc>=0?r[c.doc]:'').trim(),obs:String(c.obs>=0?r[c.obs]:'').trim(),ret:/RETENCION/.test(cruNorm(ban))});}
+    if(!out.length){alert('No se leyó ningún pago de la hoja "'+nm+'".');return;}
+    CRU.rows=out;CRU.arch=file.name;CRU.hoja=nm;CRU.cargado=fd(new Date())+' '+p2(new Date().getHours())+':'+p2(new Date().getMinutes());
+    try{localStorage.setItem('dir_cruce',JSON.stringify(CRU));}catch(e){}
+    renderCru();
+  }catch(e){alert('No se pudo leer el archivo: '+e.message);}};
+  rd.readAsArrayBuffer(file);
+}
+function cruBorrar(){CRU.rows=[];CRU.arch='';CRU.cargado='';try{localStorage.removeItem('dir_cruce');}catch(e){}$('cruFile').value='';renderCru();}
+function renderCru(){
+  if(!$('cruTabla'))return;
+  EXP.cru=[];
+  if(!CRU.rows.length){$('cruInfo').textContent='Aún no has cargado el archivo de Contabilidad.';$('cruKpi').innerHTML='';$('cruTabla').innerHTML='';$('cruSin').innerHTML='';return;}
+  if(!D.apx){$('cruInfo').textContent='Cargando datos de SIVIL...';return;}
+  const est=$('cruEst').value,q=($('cruQ').value||'').toLowerCase().trim();
+  $('cruInfo').innerHTML='Archivo: <b>'+H(CRU.arch)+'</b> · hoja '+H(CRU.hoja)+' · cargado '+H(CRU.cargado)+' · '+CRU.rows.length+' pagos leídos. Si Contabilidad lo actualiza, vuelve a cargarlo.';
+  const of=D.aps.filter(apOk),minF=of.reduce((m,a)=>{const f=iso(pf(a.fecha_creacion));return f&&(!m||f<m)?f:m;},'');
+  const con={};CRU.rows.forEach(r=>{if(!r.ap)return;const o=con[r.ap]=con[r.ap]||{val:0,ret:0,n:0,fac:new Set(),doc:new Set(),ult:'',cli:r.cli};o.val+=r.val;if(r.ret)o.ret+=r.val;o.n++;if(r.fac)o.fac.add(r.fac);if(r.doc)o.doc.add(r.doc);if(r.f>o.ult)o.ult=r.f;});
+  const filas=[];
+  of.forEach(a=>{const k=String(a.ap_id),x=D.apx[k],c=con[+k]||{val:0,ret:0,n:0,fac:new Set(),doc:new Set(),ult:''};
+    const dif=Math.round(c.val-x.pagado),tipo=(c.val===0&&x.pagado===0)?'sin':(Math.abs(dif)<1?'ok':(dif>0?'falta':'sobra'));
+    filas.push({ap:+k,cli:D.nomC[String(a.cliente_nit)]||a.cliente_nit,obra:a.nombre_obra,tot:x.tot,con:c.val,ret:c.ret,siv:x.pagado,dif:dif,tipo:tipo,fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});});
+  Object.keys(con).map(Number).forEach(n=>{if(of.some(a=>+a.ap_id===n))return;const a=D.aps.find(y=>+y.ap_id===n),c=con[n];
+    if(a){if(n<2438||a.estado_ap==='Modificado'||n>=5555)return;filas.push({ap:n,cli:c.cli,obra:'',tot:0,con:c.val,ret:c.ret,siv:0,dif:Math.round(c.val),tipo:'cancel',fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});}
+    else if(n>=2438&&n<5555)filas.push({ap:n,cli:c.cli,obra:'',tot:0,con:c.val,ret:c.ret,siv:0,dif:Math.round(c.val),tipo:'noexiste',fac:[...c.fac].join(', '),doc:[...c.doc].join(', '),ult:c.ult,n:c.n});});
+  const T={falta:['Contabilidad registra más que SIVIL','#b45309'],sobra:['SIVIL registra más que Contabilidad','#b91c1c'],ok:['Coincide','#166534'],sin:['Sin pagos','#6b7280'],cancel:['AP cancelada con pagos','#b91c1c'],noexiste:['AP no existe en SIVIL','#b91c1c']};
+  let L=filas.filter(f=>est==='todos'?(f.con>0||f.siv>0):est==='ok'?f.tipo==='ok'&&f.con>0:est==='sin'?f.tipo==='sin':(f.tipo!=='ok'&&f.tipo!=='sin'));
+  if(q)L=L.filter(f=>(f.ap+' '+f.cli+' '+f.obra+' '+f.fac+' '+f.doc).toLowerCase().includes(q));
+  L.sort((a,b)=>b.ap-a.ap);
+  const nDif=filas.filter(f=>f.tipo!=='ok'&&f.tipo!=='sin').length,sinAp=CRU.rows.filter(r=>!r.ap&&(!minF||!r.f||r.f>=minF));
+  const sC=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)],c=con[+a.ap_id];return t+Math.max(0,x.tot-(c?c.val:0));},0),sS=of.reduce((t,a)=>{const x=D.apx[String(a.ap_id)];return t+Math.max(0,x.tot-x.pagado);},0);
+  $('cruKpi').innerHTML=[['APs con diferencia',nDif,'de '+filas.length+' APs revisadas'],['Saldo por cobrar según Contabilidad',money(sC),'APs oficiales'],['Saldo por cobrar según SIVIL',money(sS),'APs oficiales'],['Diferencia de saldo',money(sS-sC),sS-sC>0?'SIVIL cree que falta cobrar más':'Contabilidad cree que falta cobrar más'],['Pagos sin AP',sinAp.length,money(sinAp.reduce((t,r)=>t+r.val,0))]].map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b><div class="muted">'+k[2]+'</div></div>').join('');
+  let html='<tr><th>AP</th><th>Cliente</th><th>Obra</th><th class="num">Total AP</th><th class="num">Pagado Contabilidad</th><th class="num">Pagado SIVIL</th><th class="num">Diferencia</th><th class="num">Saldo (Contab.)</th><th>Estado del cruce</th><th>Facturas</th><th>Recibos</th><th>Último pago</th></tr>';
+  L.forEach(f=>{const t=T[f.tipo],sal=Math.max(0,f.tot-f.con);
+    html+='<tr><td><b>'+f.ap+'</b></td><td>'+H(f.cli)+'</td><td>'+H(f.obra)+'</td><td class="num">'+money(f.tot)+'</td><td class="num">'+money(f.con)+(f.ret?'<div class="muted">incluye retención '+money(f.ret)+'</div>':'')+'</td><td class="num">'+money(f.siv)+'</td><td class="num" style="font-weight:700;color:'+(Math.abs(f.dif)<1?'#166534':'#b91c1c')+'">'+money(f.dif)+'</td><td class="num">'+(f.tipo==='noexiste'||f.tipo==='cancel'?'—':(sal>0.5?money(sal):'PAGADA'))+'</td><td><span class="pill" style="background:'+t[1]+'">'+t[0]+'</span></td><td>'+H(f.fac)+'</td><td>'+H(f.doc)+'</td><td>'+(f.ult?fd(pf(f.ult)):'')+'</td></tr>';
+    EXP.cru.push({AP:f.ap,Cliente:f.cli,Obra:f.obra,'Total AP':Math.round(f.tot),'Pagado Contabilidad':Math.round(f.con),'Retencion incluida':Math.round(f.ret),'Pagado SIVIL':Math.round(f.siv),Diferencia:f.dif,'Saldo segun Contabilidad':Math.round(Math.max(0,f.tot-f.con)),Estado:t[0],Facturas:f.fac,Recibos:f.doc,'Ultimo pago':f.ult});});
+  $('cruTabla').innerHTML=L.length?html:'<tr><td style="padding:14px;color:#166534;">✅ Nada que mostrar con este filtro.</td></tr>';
+  sinAp.sort((a,b)=>String(b.f).localeCompare(String(a.f)));
+  $('cruSin').innerHTML='<tr><th>Fecha</th><th>Cliente</th><th>Banco</th><th class="num">Valor</th><th>Factura</th><th>Recibo</th><th>Observación</th></tr>'+sinAp.slice(0,300).map(r=>'<tr><td>'+(r.f?fd(pf(r.f)):'')+'</td><td>'+H(r.cli)+'</td><td>'+H(r.ban)+'</td><td class="num">'+money(r.val)+'</td><td>'+H(r.fac)+'</td><td>'+H(r.doc)+'</td><td>'+H(r.obs)+'</td></tr>').join('')+(sinAp.length>300?'<tr><td colspan="7" class="muted">Se muestran los 300 más recientes de '+sinAp.length+'.</td></tr>':'');
+}
 function exportar(k){
   if(typeof XLSX==='undefined'){alert('No se cargó la librería de Excel (¿sin conexión?)');return;}
   const f=EXP[k];if(!f.length){alert('No hay filas para exportar');return;}
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(f),k==='cot'?'Cotizaciones':k==='ap'?'APs':'Ventas');
-  XLSX.writeFile(wb,'SIVIL_'+{cot:'cotizaciones',ap:'seguimiento_AP',ven:'ventas_vendedor'}[k]+'_'+iso(new Date())+'.xlsx');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(f),({cot:'Cotizaciones',ap:'APs',ven:'Ventas',cru:'Cruce Contabilidad'})[k]);
+  XLSX.writeFile(wb,'SIVIL_'+{cot:'cotizaciones',ap:'seguimiento_AP',ven:'ventas_vendedor',cru:'cruce_contabilidad'}[k]+'_'+iso(new Date())+'.xlsx');
 }
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 try{const s=sessionStorage.getItem('dir_usr');if(s){D.usr=JSON.parse(s);$('login').style.display='none';$('app').style.display='block';$('quien').textContent=D.usr.nombre+' · '+D.usr.rol+' · solo lectura';cargarTodo();}}catch(e){}
