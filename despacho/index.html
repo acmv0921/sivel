@@ -3722,7 +3722,7 @@ ${detalle}
 `;
   msg += `━━━━━━━━━━━━━━━━━━━━
 `;
-  msg += `_Reportado por: Valentina García — Despacho POSTEC_`;
+  msg += `_Reportado por: ${(S.vendedor && (S.vendedor.nombre_vendedor || S.vendedor.nombre_completo)) || 'Despacho'} — Despacho POSTEC_`;
 
   document.getElementById('novedadPreviewTexto').textContent = msg;
   document.getElementById('previewNovedad').style.display = 'block';
