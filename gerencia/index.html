@@ -1654,7 +1654,7 @@ async function cargarDatos() {
       leerGVIZ("APROBACIONES").catch(()=>[])
     ]);
     // Usuarios con acceso (para editar rol/cargo/celular sin tocar claves; el PIN no se guarda en memoria)
-    try { G.usuariosMaestro = (await leerGVIZ("USUARIOS_MAESTRO")).map(u => ({correo:u.correo, rol:u.rol, cargo:u.cargo, celular:u.celular})); }
+    try { G.usuariosMaestro = (await leerGVIZ("USUARIOS_MAESTRO")).map(u => ({correo:u.correo, rol:u.rol, cargo:u.cargo, celular:u.celular, nombre_completo:u.nombre_completo, cedula:u.cedula, estado:u.estado})); }
     catch(e) { G.usuariosMaestro = []; }
     // Defensivo: si la hoja APROBACIONES tiene encabezados pero cero filas de
     // datos, GVIZ a veces malinterpreta la fila de encabezado como si fuera
@@ -2821,12 +2821,23 @@ function renderVendedores() {
     ? `<button class="btn btn-primary btn-sm" style="margin-bottom:1rem;" onclick="abrirModalVendedor()">➕ Nuevo vendedor</button>`
     : '';
 
-  cont.innerHTML = bannerAdmin + botonNuevo + G.vendedores.map(v => {
+  // Usuarios que existen en USUARIOS_MAESTRO (despachadores, producción, etc.) pero no en la lista de vendedores:
+  // antes no se veían aquí aunque podían entrar a las apps (11/11/2026, caso Juan Felipe Quintero).
+  const _corrV = new Set(G.vendedores.map(v => String(v.correo_usuario||'').toLowerCase().trim()));
+  const soloUM = (G.usuariosMaestro || []).filter(u => u.correo && !_corrV.has(String(u.correo).toLowerCase().trim())).map(u => ({
+    id_vendedor: String(u.cedula||'').trim() || ('UM:' + String(u.correo).toLowerCase().trim()),
+    cedula_real: String(u.cedula||'').trim(),
+    nombre_vendedor: u.nombre_completo || u.correo,
+    correo_usuario: u.correo,
+    estado: /^inactivo$/i.test(String(u.estado||'')) ? 'Inactivo' : 'Activo',
+    soloUM: true
+  }));
+  cont.innerHTML = bannerAdmin + botonNuevo + G.vendedores.concat(soloUM).map(v => {
     const aps = G.aps.filter(a=>String(a.vendedor_id)===String(v.id_vendedor));
     const botonesAdmin = _esAdmin ? `
       <button class="btn btn-outline btn-sm" onclick="editarVendedor(${JSON.stringify(v).replace(/"/g,"'")})">✏️</button>
       <button class="btn btn-sm" style="background:${v.estado==='Activo'?'#ffe4e4':'#d1f5e0'};color:${v.estado==='Activo'?'var(--rojo)':'var(--verde)'};"
-              onclick="toggleVendedor('${v.id_vendedor}','${v.estado==='Activo'?'Inactivo':'Activo'}')">
+              onclick="toggleVendedor('${String(v.id_vendedor).replace(/'/g,'')}','${v.estado==='Activo'?'Inactivo':'Activo'}')">
         ${v.estado==='Activo'?'Desactivar':'Activar'}
       </button>` : '';
     return `
@@ -2835,7 +2846,7 @@ function renderVendedores() {
       <div class="vend-info">
         <div class="vend-nombre">${v.nombre_vendedor}</div>
         <div class="vend-meta">${v.correo_usuario}</div>
-        <div class="vend-meta" style="margin-top:2px;">CC: ${v.id_vendedor} · ${aps.length} APs totales</div>
+        <div class="vend-meta" style="margin-top:2px;">CC: ${v.soloUM ? (v.cedula_real||'') : v.id_vendedor} · ${v.soloUM ? 'Usuario del sistema' : aps.length + ' APs totales'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <span class="badge ${v.estado==='Activo'?'badge-activo':'badge-inactivo'}">${v.estado}</span>
@@ -2867,7 +2878,7 @@ function renderFlota() {
 function abrirModalVendedor(vend=null) {
   if (!_esAdmin) { abrirLoginAdmin(); return; }
   const um = (G.usuariosMaestro || []).find(u => String(u.correo||'').toLowerCase().trim() === String(vend?.correo_usuario||'').toLowerCase().trim()) || {};
-  document.getElementById('vendId').value     = vend?.id_vendedor||'';
+  document.getElementById('vendId').value     = vend?.soloUM ? (vend.cedula_real||'') : (vend?.id_vendedor||'');
   document.getElementById('vendNombre').value = vend?.nombre_vendedor||'';
   document.getElementById('vendCorreo').value = vend?.correo_usuario||'';
   document.getElementById('vendEstado').value = vend?.estado||'Activo';
@@ -2880,6 +2891,7 @@ function abrirModalVendedor(vend=null) {
   document.getElementById('vendErr').textContent='';
   document.getElementById('modalVendTitle').textContent = vend ? 'Editar usuario' : 'Nuevo usuario';
   document.getElementById('modalVendedor').dataset.editId = vend?.id_vendedor||'';
+  document.getElementById('modalVendedor').dataset.soloUM = vend?.soloUM ? '1' : '';
   document.getElementById('modalVendedor').classList.add('show');
 }
 
@@ -2911,8 +2923,9 @@ async function guardarVendedor() {
   try {
     let e1 = '';
     if (editId) {
-      let r = await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
-      e1 = falla(r);
+      const soloUM = document.getElementById('modalVendedor').dataset.soloUM === '1';
+      let r = soloUM ? null : await escribirGAS({accion:'actualizarVendedor',id_vendedor:editId,nombre_vendedor:nombre,correo_usuario:correo,estado});
+      e1 = soloUM ? '' : falla(r);
       const existeUM = (G.usuariosMaestro || []).some(u => String(u.correo||'').toLowerCase().trim() === correo);
       if (existeUM) {
         const datosU = {accion:'actualizarUsuario',correo,nombre_completo:nombre,cedula:id,rol,cargo,celular,estado:estado==='Activo'?'ACTIVO':'INACTIVO'};
@@ -2947,8 +2960,17 @@ async function guardarVendedor() {
 
 async function toggleVendedor(id, nuevoEstado) {
   if (!_esAdmin) { abrirLoginAdmin(); return; }
-  const v = G.vendedores.find(x=>String(x.id_vendedor)===String(id));
-  if (!v||!confirm(`¿${nuevoEstado==='Inactivo'?'Desactivar':'Activar'} a ${v.nombre_vendedor}?`)) return;
+  let v = G.vendedores.find(x=>String(x.id_vendedor)===String(id));
+  if (!v) {
+    // usuario que solo está en USUARIOS_MAESTRO (no es vendedor)
+    const um = (G.usuariosMaestro || []).find(u => String(u.cedula||'').trim() === String(id) || ('UM:' + String(u.correo||'').toLowerCase().trim()) === String(id));
+    if (!um || !confirm(`¿${nuevoEstado==='Inactivo'?'Desactivar':'Activar'} a ${um.nombre_completo || um.correo}?`)) return;
+    await escribirGAS({accion:'actualizarUsuario',correo:um.correo,estado:nuevoEstado==='Activo'?'ACTIVO':'INACTIVO'});
+    toast(`${nuevoEstado==='Activo'?'✅':'⛔'} ${um.nombre_completo || um.correo} → ${nuevoEstado}`);
+    await cargarDatos();
+    return;
+  }
+  if (!confirm(`¿${nuevoEstado==='Inactivo'?'Desactivar':'Activar'} a ${v.nombre_vendedor}?`)) return;
   await escribirGAS({accion:'actualizarVendedor',id_vendedor:id,estado:nuevoEstado});
   toast(`${nuevoEstado==='Activo'?'✅':'⛔'} ${v.nombre_vendedor} → ${nuevoEstado}`);
   await cargarDatos();
