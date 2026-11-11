@@ -508,7 +508,12 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div id="repartoResumen" style="font-size:0.82rem;margin-bottom:8px;color:#444;"></div>
       <div class="form-group">
         <label class="form-label">Vehiculo</label>
-        <select id="repartoVehiculo" class="form-control"><option value="">Seleccionar vehiculo...</option></select>
+        <select id="repartoVehiculo" class="form-control" onchange="repartoVehiculoCambio()"><option value="">Seleccionar vehiculo...</option></select>
+      </div>
+      <div id="repartoOtro" style="display:none;background:#fff;border:1px dashed #7c3aed;border-radius:8px;padding:8px;margin-bottom:8px;">
+        <div style="font-size:.74rem;color:#5b21b6;margin-bottom:6px;">El vehículo no es de la empresa (por ejemplo, el cliente retira): escribe sus datos.</div>
+        <div class="form-group" style="margin-bottom:6px;"><label class="form-label">Placa del vehículo</label><input id="repartoPlacaOtra" class="form-control" type="text" maxlength="12" placeholder="Ej: ABC123" style="text-transform:uppercase;"></div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Conductor o transportador (opcional)</label><input id="repartoConductorOtro" class="form-control" type="text" maxlength="60" placeholder="Ej: Cliente retira · Premoldeados"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Notas (opcional)</label>
@@ -2161,10 +2166,18 @@ function toggleModoReparto() {
       sel.innerHTML = '<option value="">Seleccionar vehiculo...</option>' +
         (VEHICULOS_SHEET||[]).filter(v => v.estado === 'Activo' || !v.estado).map(v =>
           `<option value="${v.placa}">${v.placa} - ${v.marca||''} ${v.modelo||''} (Cap: ${v.capacidad_und||'?'} Ton, ${v.conductor_nombre||'Sin conductor'})</option>`
-        ).join('');
+        ).join('') + '<option value="__OTRO__">➕ Otro vehículo / Cliente retira (escribir placa)</option>';
+      const _o = document.getElementById('repartoOtro'); if (_o) _o.style.display = 'none';
     }
   }
   renderAPs();
+}
+
+function repartoVehiculoCambio() {
+  const v = (document.getElementById('repartoVehiculo') || {}).value;
+  const o = document.getElementById('repartoOtro');
+  if (o) o.style.display = v === '__OTRO__' ? 'block' : 'none';
+  if (v === '__OTRO__') { const p = document.getElementById('repartoPlacaOtra'); if (p) setTimeout(() => p.focus(), 50); }
 }
 
 function toggleSeleccionReparto(apId, checked) {
@@ -2196,8 +2209,15 @@ async function confirmarViajeCompartido() {
   const seleccionados = ids.map(id => S.aps.find(a => String(a.ap_id) === id)).filter(Boolean);
   const destinos = new Set(seleccionados.map(a => a.destino || ''));
   if (destinos.size > 1) { toast('Los pedidos seleccionados deben tener el mismo destino/zona'); return; }
-  const placa = document.getElementById('repartoVehiculo').value;
+  let placa = document.getElementById('repartoVehiculo').value;
   if (!placa) { toast('Selecciona el vehiculo que hara el viaje'); return; }
+  if (placa === '__OTRO__') {
+    // Vehículo que no es de la empresa (p. ej. el cliente retira): placa y conductor digitados a mano.
+    const pl = (document.getElementById('repartoPlacaOtra').value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const cd = (document.getElementById('repartoConductorOtro').value || '').trim();
+    if (!pl) { toast('Escribe la placa del vehículo del cliente (o del transportador externo)'); return; }
+    placa = pl + ' (' + (cd || 'Cliente retira') + ')';
+  }
   const notas = document.getElementById('repartoNotas').value || '';
   const u = S.usuario || {};
   const usuario = u.nombre || u.nombre_completo || u.correo || '';
