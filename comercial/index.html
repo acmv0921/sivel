@@ -2728,6 +2728,11 @@ html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-ou
 if (ap.estado_ap === "Pendiente" || ap.estado_ap === "Modificado") {
 html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-danger btn-sm" onclick="cancelarAP('${ap_id}')">🗑️ Cancelar AP</button></div>`;
 }
+// Despacho parcial (reportado por Valentina, 13 nov 2026: la AP #1989 de prueba no dejaba cancelar el saldo):
+// se permite cancelar el saldo, con confirmación que muestra lo ya entregado.
+if (ap.estado_ap === "Despachado Parcial") {
+html += `<div class="btn-row" style="margin-top:1rem;"><button class="btn btn-danger btn-sm" onclick="cancelarSaldoAP('${ap_id}',${avance ? (avance.desp||0) : 0},${avance ? (avance.sol||0) : 0})">🗑️ Cancelar saldo pendiente</button></div>`;
+}
 
 document.getElementById('modalVerAPContent').innerHTML = html;
 try { AdjuntosAP.ver(ap_id, document.getElementById('adjAPbox')); } catch (e) {}
@@ -2832,6 +2837,16 @@ async function apCopiaDrive(ap, lineas) {
     if (!res || !res.ok) console.warn('Copia de la AP en Drive no se guardó:', res && res.error);
     else toast('📁 Copia de la AP #' + ap.ap_id + ' guardada en Drive', 2500);
   } catch (e) { console.warn('Copia de la AP en Drive falló:', e); }
+}
+
+async function cancelarSaldoAP(ap_id, entregado, pedido) {
+  const pend = Math.max(0, (parseFloat(pedido) || 0) - (parseFloat(entregado) || 0));
+  if (!confirm(`La AP #${ap_id} ya tiene despachos registrados: entregado ${entregado} de ${pedido} (por despachar ${pend}).\n\nSi continúas, la AP se cancela completa: deja de aparecer en pendientes de Despacho y en inventario comprometido, y lo ya entregado deja de contar en los reportes de Gerencia.\n\nÚsalo solo para APs de prueba o equivocadas. ¿Cancelar la AP #${ap_id}?`)) return;
+  if (!confirm(`Confirma otra vez: cancelar la AP #${ap_id} (entregado ${entregado} de ${pedido}).`)) return;
+  await escribirGAS({ accion:'actualizarEstadoAP', ap_id, estado_ap:'Cancelado' });
+  cerrarModal('modalVerAP');
+  toast("AP cancelada");
+  await cargarMisAPs();
 }
 
 async function cancelarAP(ap_id) {
