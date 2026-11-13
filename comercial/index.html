@@ -4284,6 +4284,53 @@ async function reenviarInformeVentaWA() {
 }
 
 let _guardandoAP = false;
+// ===== Revisión antes de enviar (13/11/2026): muestra cómo va a quedar y pide confirmar =====
+function revisarAntes(o) {
+  return new Promise(function (res) {
+    var old = document.getElementById('revAntesOv'); if (old) old.remove();
+    var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var ov = document.createElement('div'); ov.id = 'revAntesOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.65);display:flex;align-items:center;justify-content:center;padding:10px;';
+    var cuerpo = o.pre != null ? '<pre style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:.8rem;line-height:1.45;margin:0;">' + esc(o.pre) + '</pre>' : (o.html || '');
+    ov.innerHTML = '<div style="background:#fff;color:#0f172a;border-radius:14px;max-width:560px;width:100%;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.4);">'
+      + '<div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;"><div style="font-size:.66rem;font-weight:800;letter-spacing:.08em;color:#d97706;">REVISA Y VALIDA ANTES DE CONTINUAR</div><div style="font-weight:800;font-size:1rem;margin-top:4px;">' + esc(o.titulo) + '</div></div>'
+      + '<div style="padding:12px 16px;overflow:auto;">' + cuerpo + '<div style="margin-top:10px;font-size:.72rem;color:#64748b;">Si algo está mal, pulsa «Volver a corregir»: no se pierde nada de lo que ya llenaste.</div></div>'
+      + '<div style="padding:12px 16px;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">'
+      + '<button type="button" id="revAntesBack" style="padding:10px 16px;border-radius:9px;border:1.5px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:700;font-size:.82rem;cursor:pointer;">← Volver a corregir</button>'
+      + '<button type="button" id="revAntesOk" style="padding:10px 16px;border-radius:9px;border:0;background:#166534;color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">' + esc(o.ok || 'Confirmar') + '</button></div></div>';
+    document.body.appendChild(ov);
+    var fin = function (v) { ov.remove(); document.removeEventListener('keydown', kd); res(v); };
+    var kd = function (e) { if (e.key === 'Escape') fin(false); };
+    document.addEventListener('keydown', kd);
+    document.getElementById('revAntesBack').onclick = function () { fin(false); };
+    document.getElementById('revAntesOk').onclick = function () { fin(true); };
+  });
+}
+async function czRevisar(okTxt) {
+  try {
+    czLeer();
+    if (!CZ || !CZ.cliente || !CZ.cliente.nit || !CZ.lineas || !CZ.lineas.length) return true; // czGuardar avisará lo que falta
+    var txt = czTextoWA();
+    return await revisarAntes({ titulo: 'Cotización ' + (CZ.numero || '(el número se asigna al guardar)') + ' · así va a quedar', pre: txt, ok: okTxt });
+  } catch (e) { return true; }
+}
+function apResumenHTML(P, apNum, vendNombre) {
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var T = P._totales || {}, cli = P.cliente || {};
+  var fila = function (a, b) { return b === '' || b == null ? '' : '<div style="margin-top:3px;font-size:.8rem;"><b>' + a + ':</b> ' + esc(b) + '</div>'; };
+  var rows = (P.lineas || []).map(function (l) {
+    return '<tr><td style="padding:5px 6px;border-top:1px solid #e2e8f0;">' + esc(l.tmdescrip) + (l.calidad && l.calidad !== 'PRIMERA' ? ' <i>(' + esc(l.calidad) + ')</i>' : '') + '</td><td style="padding:5px 6px;border-top:1px solid #e2e8f0;text-align:right;white-space:nowrap;">' + esc(l.cantidad_solicitada) + ' ' + esc(l.tmund) + '</td><td style="padding:5px 6px;border-top:1px solid #e2e8f0;text-align:right;white-space:nowrap;">' + (l._totalLinea ? fmt(l._totalLinea) : '') + '</td></tr>';
+  }).join('');
+  var flete = P.con_flete === 'SI' ? ('Sí · destino ' + (P.destino || P.tipo_entrega || '') + ' · ' + (P.flete_incluido === 'SI' ? 'incluido en el precio' : 'se cobra aparte') + (P.flete_valor > 0 ? ' · ' + fmt(P.flete_valor) : '')) : 'Sin flete (recoge en planta)';
+  var h = '<div style="background:#f1f5f9;border-radius:8px;padding:8px 10px;"><div style="font-weight:800;">AP ' + esc(apNum) + ' · ' + esc(cli.razon_social || cli.nombre || '') + '</div><div style="font-size:.76rem;color:#475569;">NIT ' + esc(cli.cliente_nit || '') + '</div></div>'
+    + '<div style="margin-top:8px;">' + fila('Vendedor', vendNombre) + fila('Obra', P.nombre_obra) + fila('Dirección de la obra', P.direccion_obra) + fila('Cotización enlazada', P.cotizacion_ref) + fila('Orden de compra del cliente', P.orden_compra_cliente)
+    + fila('Forma de pago', P.condiciones_pago || P.forma_pago) + fila('Flete', flete) + fila('Estiba', P.lleva_estiba === 'SI' ? 'Sí' + (T.estiba > 0 ? ' · ' + fmt(T.estiba) : '') : 'No') + fila('Fecha de entrega solicitada', P.fecha_entrega) + fila('Observaciones de entrega', P.obs_entrega) + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:.78rem;"><thead><tr style="background:#f1f5f9;"><th style="padding:5px 6px;text-align:left;">Producto</th><th style="padding:5px 6px;text-align:right;">Cantidad</th><th style="padding:5px 6px;text-align:right;">Total línea</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="margin-top:10px;padding:8px 10px;background:#ecfdf5;border:1px solid #86efac;border-radius:8px;font-size:.82rem;">'
+    + (T.subtotal != null ? '<div>Subtotal: <b>' + fmt(T.subtotal) + '</b></div>' : '') + (T.descuentos > 0 ? '<div>Descuentos: <b>-' + fmt(T.descuentos) + '</b></div>' : '') + (T.flete > 0 ? '<div>Flete: <b>' + fmt(T.flete) + '</b></div>' : '') + (T.iva != null ? '<div>IVA: <b>' + fmt(T.iva) + '</b></div>' : '')
+    + '<div style="font-size:1rem;margin-top:4px;">TOTAL: <b>' + fmt(T.total || 0) + '</b></div></div>';
+  return h;
+}
 async function guardarAP() {
 if (_guardandoAP) { toast("⏳ Ya se está guardando este pedido..."); return; }
 if (!STATE.pedido.cliente) { toast("Selecciona un cliente"); return; }
@@ -4330,6 +4377,8 @@ if (STATE.puedeApoyar && document.getElementById('checkVentaApoyo')?.checked) {
   esApoyo = true;
   apoyoPorNombre = STATE.vendedor.nombre_vendedor;
 }
+
+if (!(await revisarAntes({ titulo: 'Convertir en AP ' + apManual + ' · revisa cómo queda', html: apResumenHTML(STATE.pedido, apManual, vendedorFinalNombre), ok: 'Confirmar y crear la AP' }))) return;
 
 _guardandoAP = true;
 try {
@@ -5965,6 +6014,7 @@ function czRenderDocs() {
 }
 async function czCompartirConDocs() {
   if (!CZ_DOCS.length) { toast('Primero anexa documentos'); return; }
+  if (!(await czRevisar('Confirmar y enviar con anexos'))) return;
   if (!(await czGuardar('Enviada'))) return;
   toast('⏳ Preparando cotización y anexos…');
   try {
@@ -5976,7 +6026,7 @@ async function czCompartirConDocs() {
     } else toast('⚠️ Este dispositivo no permite compartir varios archivos: usa “Guardar y generar PDF” y adjunta los anexos desde Descargas.', 5000);
   } catch (e) { if (e.name !== 'AbortError') toast('⚠️ ' + e.message, 4000); }
 }
-async function czWhatsApp() { if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
+async function czWhatsApp() { if (!(await czRevisar('Confirmar y enviar por WhatsApp'))) return; if (!(await czGuardar('Enviada'))) return; window.open('https://wa.me/?text=' + encodeURIComponent(czTextoWA()), '_blank'); }
 function czImg(url, respaldo) {
   var ok = function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); };
   var leer = function (b) { if (!/^image\//.test(b.type)) throw new Error('no es imagen'); return new Promise(function (res) { var f = new FileReader(); f.onload = function () { res(f.result); }; f.readAsDataURL(b); }); };
@@ -5987,6 +6037,7 @@ function czImg(url, respaldo) {
 }
 async function czPDF(opts) {
   opts = opts || {};
+  if (!opts.backup && !opts.sinRevision && !(await czRevisar('Confirmar y generar PDF'))) return;
   if (!opts.backup && !(await czGuardar(undefined, false, true))) return;
   var T = calcPedido(CZ.lineas, czCfg()), c = CZ.cliente, v = _vendedorDoc(CZ.vendedor_id);
   var logo1 = await czImg('../assets/logo_postecsa.jpg', (typeof _LOGO_SRC !== 'undefined' ? _LOGO_SRC : null)), logo2 = await czImg('../assets/logo_postec.jpg');
