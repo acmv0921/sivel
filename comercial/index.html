@@ -2686,7 +2686,10 @@ const _filaEstiba = R.estiba > 0 ? '<div class="resumen-row"><span>Estiba</span>
 lineas.forEach((l,i) => {
 const fletePorUnidadAP = R.lineas[i].fleteUnit;
 const prod = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode));
-const nombre = '<span style="color:#64748b;font-weight:700;">' + l.tmcode + '</span> · ' + (prod ? prod.tmdescrip : 'Producto sin nombre');
+const _calL = String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA';
+const nombre = '<span style="color:#64748b;font-weight:700;">' + l.tmcode + '</span> · ' + (prod ? prod.tmdescrip : 'Producto sin nombre') + ' ' + (_calL
+  ? '<span style="background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥈 SEGUNDA</span>'
+  : '<span style="background:#f0fdf4;color:#14532d;border:1px solid #16a34a;border-radius:4px;padding:1px 5px;font-size:.62rem;font-weight:700;">🥇 PRIMERA</span>');
 const precio = (parseFloat(l.precio_base) > 0) ? parseFloat(l.precio_base) : (prod ? prod.precio_base : 0);
 const desc = parseFloat(l.descuento_aplicado) || 0;
 const cant = parseFloat(l.cantidad_solicitada) || 0;
@@ -2779,7 +2782,7 @@ function _apPDFArmar(ap, lineas) {
   }
   lineas.forEach((l, _li) => {
     const pr = STATE.inventario.find(p => String(p.tmcode) === String(l.tmcode)) || {};
-    const nom = doc.splitTextToSize(pr.tmdescrip || ('Código ' + l.tmcode), 82);
+    const nom = doc.splitTextToSize((pr.tmdescrip || ('Código ' + l.tmcode)) + (String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? ' — SEGUNDA CALIDAD' : ''), 82);
     if (y + nom.length * 4 + 4 > H - 28) { _pdfFooter(doc, W, H); doc.addPage(); y = 14; cab(); }
     const cant = num(l.cantidad_solicitada), est = num(l.valor_estiba) + num(l.valor_postes), flG = num(l.flete_unitario), flRef = (_repFlete && flG === 0) ? (_repFlete[_li] || 0) : 0, fl = flG || flRef;
     const unit = num(l.precio_con_descuento) + est + flG; // el flete aparte NO suma al unitario
@@ -4206,7 +4209,10 @@ async function cerrarCesionYGenerarInforme(){
     _pdfFooter(doc, pageW, pageH);
 
     const blob = doc.output('blob');
-    const filename = 'Informe_Negociacion_' + Date.now() + '.pdf';
+    // Identificación inmediata (14 nov 2026): el nombre del archivo y el texto al compartir llevan AP y cliente.
+    const _idInf = CESION_ACTUAL.map(function (x) { return 'AP #' + (x.ap_id || '?') + ' ' + (x.cliente_nombre || ''); }).join(' · ');
+    const _idArch = CESION_ACTUAL.map(function (x) { return 'AP' + (x.ap_id || 'X') + '_' + String(x.cliente_nombre || '').replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ ]+/g, '').trim().replace(/\s+/g, '_').slice(0, 30); }).join('__');
+    const filename = 'Informe_Negociacion_' + _idArch + '_' + Date.now() + '.pdf';
     const pdfFile = new File([blob], filename, {type:'application/pdf'});
 
     // BUG CORREGIDO: el PDF se guardaba en Drive en segundo plano (sin esperar el
@@ -4224,7 +4230,7 @@ async function cerrarCesionYGenerarInforme(){
     // listaban por nombre dentro del PDF y Despacho no podía abrirlos. Ahora se
     // envían junto con el informe.
     const _extraFiles = _extrasInforme.map(function(f){ return _b64AFile(f); }).filter(Boolean);
-    _ultimoInformeVenta = { pdfFile, extraFiles: _extraFiles, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', numPedidos: CESION_ACTUAL.length };
+    _ultimoInformeVenta = { pdfFile, extraFiles: _extraFiles, driveUrl: (_driveInfo && _driveInfo.ok && _driveInfo.url) || '', numPedidos: CESION_ACTUAL.length, idInf: _idInf };
 
     // El intento automático de compartir se conserva como conveniencia (en
     // celular suele bastar), pero ya no es la única forma de enviarlo: el modal
@@ -4234,7 +4240,7 @@ async function cerrarCesionYGenerarInforme(){
     const _filesShare = (navigator.canShare && navigator.canShare({files:_lote})) ? _lote : [pdfFile];
     if (navigator.canShare && navigator.canShare({files:_filesShare})) {
       try {
-        await navigator.share({files:_filesShare, title:'Informe de negociación', text:'Informe de ' + CESION_ACTUAL.length + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+        await navigator.share({files:_filesShare, title:_idInf, text:_idInf + '\nInforme de negociación — POSTECSA DE COLOMBIA S.A.S.'});
       } catch (shareErr) {
         console.warn('Compartir PDF cancelado o falló (el botón del modal permite reintentar):', shareErr);
       }
@@ -4244,7 +4250,7 @@ async function cerrarCesionYGenerarInforme(){
       a.href = urlDescarga; a.download = filename; a.click();
     }
 
-    abrirModalInformeVenta(_ultimoInformeVenta.numPedidos);
+    abrirModalInformeVenta(_ultimoInformeVenta.numPedidos, _idInf);
   } catch(e) {
     console.error('Error generando informe PDF', e);
     toast('⚠️ No se pudo generar el PDF: ' + e.message);
@@ -4258,7 +4264,7 @@ async function cerrarCesionYGenerarInforme(){
 // WhatsApp — mismo criterio que el modal de Visitas: el vendedor siempre tiene
 // una acción visible y repetible, no solo un intento automático que puede fallar
 // o cerrarse por accidente.
-function abrirModalInformeVenta(numPedidos) {
+function abrirModalInformeVenta(numPedidos, idInf) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay show';
   overlay.id = 'modalInformeVenta';
@@ -4267,7 +4273,7 @@ function abrirModalInformeVenta(numPedidos) {
       <button class="modal-close" onclick="document.getElementById('modalInformeVenta').remove()">✕</button>
       <div class="modal-title">📄 Informe de Negociación Generado</div>
       <p style="font-size:.8rem;color:#555;line-height:1.5;margin-bottom:1rem;">
-        El PDF de ${numPedidos} pedido(s) ya se guardó en Drive. Toca el botón para enviarlo (o reenviarlo) por WhatsApp.
+        El PDF de ${idInf ? '<b>' + idInf + '</b>' : numPedidos + ' pedido(s)'} ya se guardó en Drive. Toca el botón para enviarlo (o reenviarlo) por WhatsApp.
       </p>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <button class="btn btn-success" style="width:100%;justify-content:center;" onclick="reenviarInformeVentaWA()">📲 Enviar por WhatsApp</button>
@@ -4279,19 +4285,19 @@ function abrirModalInformeVenta(numPedidos) {
 
 async function reenviarInformeVentaWA() {
   if (!_ultimoInformeVenta) { toast('No hay informe reciente para reenviar'); return; }
-  const { pdfFile, driveUrl, numPedidos } = _ultimoInformeVenta;
+  const { pdfFile, driveUrl, numPedidos } = _ultimoInformeVenta; const _idInf = _ultimoInformeVenta.idInf || (numPedidos + ' pedido(s)');
   const _lote = [pdfFile].concat(_ultimoInformeVenta.extraFiles || []);
   const _filesShare = (navigator.canShare && navigator.canShare({files:_lote})) ? _lote : [pdfFile];
   if (navigator.canShare && navigator.canShare({files:_filesShare})) {
     try {
-      await navigator.share({files:_filesShare, title:'Informe de negociación', text:'Informe de ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.'});
+      await navigator.share({files:_filesShare, title:_idInf, text:_idInf + '\nInforme de negociación — POSTECSA DE COLOMBIA S.A.S.'});
       return;
     } catch (shareErr) {
       console.warn('Compartir cancelado, se intenta con el link de Drive:', shareErr);
     }
   }
   if (driveUrl) {
-    const msgWA = 'Informe de negociación — ' + numPedidos + ' pedido(s) — POSTECSA DE COLOMBIA S.A.S.\n' + driveUrl;
+    const msgWA = _idInf + '\nInforme de negociación — POSTECSA DE COLOMBIA S.A.S.\n' + driveUrl;
     window.open('https://wa.me/?text=' + encodeURIComponent(msgWA), '_blank');
   } else {
     toast('⚠️ No se pudo obtener el link de Drive — intenta de nuevo en un momento');
@@ -5365,6 +5371,19 @@ function czH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function 
 function czHoy() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 function czNorm(n) { return String(n || '').toUpperCase().replace(/\s+/g, ''); }
 function czEstadoColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada: '#166534', Perdida: '#b91c1c', Anulada: '#9ca3af' }[e] || '#6b7280'; }
+// Calidad en la cotización (14 nov 2026): cada línea puede ser PRIMERA o SEGUNDA; la segunda usa el descuento de segunda del producto.
+function czFilaSegunda(tmcode) { return (STATE.inventario || []).filter(function (x) { return String(x.tmcode) === String(tmcode) && String(x.calidad || '').toUpperCase() === 'SEGUNDA'; })[0] || null; }
+function czDescCal(l) { return (l.tmdescrip || '') + (String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? ' — SEGUNDA CALIDAD' : ''); }
+function czCalidad(i, cal) {
+  czLeer(); var l = CZ.lineas[i]; if (!l) return;
+  var base = parseFloat(l.precio_base_primera != null ? l.precio_base_primera : l.precio_base) || 0;
+  if (cal === 'SEGUNDA') {
+    var f = czFilaSegunda(l.tmcode); if (!f) { toast('Este producto no tiene segunda calidad en el inventario'); czRenderLineas(); return; }
+    var d = parseFloat(f.descuento_segunda_pct || 0);
+    l.precio_base_primera = base; l.descuento_segunda_pct = d; l.calidad = 'SEGUNDA'; l.precio_base = trunc2(base * (1 - d / 100));
+  } else { l.calidad = 'PRIMERA'; l.precio_base = base; l.descuento_segunda_pct = 0; }
+  czRenderLineas();
+}
 function czProductos() {
   var vistos = {}, out = [];
   (STATE.inventario || []).forEach(function (p) { var k = String(p.tmcode); if (!vistos[k] && (p.calidad || 'PRIMERA').toUpperCase() !== 'SEGUNDA') { vistos[k] = 1; out.push(p); } });
@@ -5751,6 +5770,7 @@ function czRenderLineas() {
   cont.innerHTML = CZ.lineas.length ? CZ.lineas.map(function (l, i) {
     return '<div class="card" style="padding:.6rem;margin-bottom:6px;"><div style="display:flex;justify-content:space-between;gap:6px;font-size:.8rem;"><b>' + czH(l.tmcode) + ' ' + (l.tipo_iva === 'G' ? '<span style="color:#b91c1c;">G</span>' : '<span style="color:#166534;">E</span>') + '</b><button type="button" onclick="czQuitar(' + i + ')" style="border:none;background:var(--rojo);color:#fff;border-radius:6px;padding:0 8px;">✕</button></div>' +
       '<div style="font-size:.78rem;margin:2px 0 6px;">' + czH(l.tmdescrip) + ' · lista ' + fmt(l.precio_base) + '/' + czH(l.tmund) + '</div>' +
+      ((czFilaSegunda(l.tmcode) || String(l.calidad || '').toUpperCase() === 'SEGUNDA') ? '<div style="display:flex;gap:6px;margin-bottom:6px;"><button type="button" onclick="czCalidad(' + i + ',\'PRIMERA\')" style="flex:1;padding:6px;border-radius:8px;font-size:.74rem;font-weight:700;border:1.5px solid ' + (String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? '#e2e8f0;background:#fff;color:#888' : '#16a34a;background:#f0fdf4;color:#14532d') + ';">🥇 PRIMERA</button><button type="button" onclick="czCalidad(' + i + ',\'SEGUNDA\')" style="flex:1;padding:6px;border-radius:8px;font-size:.74rem;font-weight:700;border:1.5px solid ' + (String(l.calidad || '').toUpperCase() === 'SEGUNDA' ? '#f59e0b;background:#fffbeb;color:#92400e' : '#e2e8f0;background:#fff;color:#888') + ';">🥈 SEGUNDA</button></div>' : '') +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><input class="form-control" type="number" inputmode="decimal" min="0" step="any" value="' + l.cantidad_solicitada + '" oninput="czEdit(' + i + ',\'cant\',this.value)" placeholder="Cantidad">' +
       '<input class="form-control" type="number" inputmode="decimal" min="0" max="100" step="any" value="' + (Math.round(l.descuento_aplicado * 10000) / 100 || '') + '" oninput="czEdit(' + i + ',\'desc\',this.value)" placeholder="% descuento"></div>' +
       '<select class="form-control" style="margin-top:6px;font-size:.74rem;" onchange="czEdit(' + i + ',\'plazo\',this.value)">' + CZ_TEXTOS.plazo.map(function (t, k) { if ((CZ_INACTIVOS.plazo || {})[k + 1] && (l.plazo || 1) !== k + 1) return ''; return '<option value="' + (k + 1) + '"' + ((l.plazo || 1) === k + 1 ? ' selected' : '') + '>Plazo ' + (k + 1) + ': ' + czH(t.slice(0, 60)) + '</option>'; }).join('') + '</select>' +
@@ -5886,8 +5906,8 @@ async function czAAP() {
     seleccionarCliente(q.cliente.nit);
     if (q.obs_interna) czAvisoInterno(q.obs_interna, q.numero);
     STATE.pedido.lineas = q.lineas.map(function (l) {
-      return { tmcode: l.tmcode, tmdescrip: l.tmdescrip, tmund: l.tmund, calidad: 'PRIMERA', cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado, descuento_segunda_pct: 0,
-        precio_base: l.precio_base, precio_base_primera: l.precio_base, tipo_iva: l.tipo_iva || 'E', valor_estiba: l.estiba_tabla || 0, valor_postes: 0, peso_kg_unitario: l.peso_kg_unitario || 0, peso_origen: l.peso_kg_unitario ? 'MAESTRO' : '',
+      return { tmcode: l.tmcode, tmdescrip: l.tmdescrip, tmund: l.tmund, calidad: String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA', cantidad_solicitada: l.cantidad_solicitada, descuento_aplicado: l.descuento_aplicado, descuento_segunda_pct: parseFloat(l.descuento_segunda_pct) || 0,
+        precio_base: l.precio_base, precio_base_primera: l.precio_base_primera || l.precio_base, tipo_iva: l.tipo_iva || 'E', valor_estiba: l.estiba_tabla || 0, valor_postes: 0, peso_kg_unitario: l.peso_kg_unitario || 0, peso_origen: l.peso_kg_unitario ? 'MAESTRO' : '',
         u_viaje: l.u_viaje || 0, flete_total_viaje: l.flete_total_viaje || 0, estiba_tabla: l.estiba_tabla || 0 };
     });
     var set = function (id, v) { var e = document.getElementById(id); if (e && v != null) e.value = v; };
@@ -5945,7 +5965,8 @@ function czLineaDe(l, prod) {
   return { tmcode: l.tmcode, tmdescrip: l.tmdescrip || p.tmdescrip || String(l.tmcode), tmund: l.tmund || p.tmund || 'UND', tipo_iva: l.tipo_iva || p.tipo_iva || 'E', precio_base: parseFloat(l.precio_base) || 0,
     cantidad_solicitada: parseFloat(l.cantidad_solicitada) || 0, descuento_aplicado: parseFloat(l.descuento_aplicado) || 0, estiba_tabla: parseFloat(l.estiba_tabla != null ? l.estiba_tabla : p.valor_estiba_unidad) || 0,
     peso_kg_unitario: parseFloat(l.peso_kg_unitario != null ? l.peso_kg_unitario : p.peso_kg_unitario) || 0, u_viaje: parseFloat(l.u_viaje != null ? l.u_viaje : p.unidades_por_viaje) || 0,
-    flete_total_viaje: parseFloat(l.flete_total_viaje != null ? l.flete_total_viaje : p.flete_total_viaje_cali) || 0, plazo: 1 };
+    flete_total_viaje: parseFloat(l.flete_total_viaje != null ? l.flete_total_viaje : p.flete_total_viaje_cali) || 0, plazo: 1,
+    calidad: String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? 'SEGUNDA' : 'PRIMERA', descuento_segunda_pct: parseFloat(l.descuento_segunda_pct) || 0, precio_base_primera: parseFloat(l.precio_base_primera) || 0 };
 }
 async function czAbrirDesde(origen) {
   irA('screenCotizador'); await czInit(); czNueva();
@@ -6008,7 +6029,7 @@ async function czCambiarEstado(estado) {
 function czTextoWA() {
   var T = czCalc(), c = CZ.cliente;
   var t = '*COTIZACIÓN ' + CZ.numero + '* — POSTECSA\nCliente: ' + c.nombre + (c.obra ? '\nObra: ' + c.obra : '') + '\nFecha: ' + fmtFecha(CZ.fecha) + (CZ.vigencia ? ' · Vigencia: ' + fmtFecha(CZ.vigencia) : '') + '\n\n';
-  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + l.tmdescrip + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
+  CZ.lineas.forEach(function (l, i) { var r = T.lineas[i]; t += '• ' + czDescCal(l) + '\n   ' + l.cantidad_solicitada + ' ' + l.tmund + ' x ' + fmt(pUnit(r.precioDesc + r.estiba + r.fleteUnit)) + (l.tipo_iva === 'G' ? ' + IVA' : ' (excluido)') + ' = ' + fmt(r.neto) + '\n'; });
   (CZ.fletes_extra || []).forEach(function (f) { if (Number(f.valor) > 0) t += '• Flete' + (f.desc ? ' ' + f.desc : '') + (f.grav === 'G' ? ' (+ IVA)' : ' (excluido)') + ' = ' + fmt(f.valor) + '\n'; });
   if (T.fleteExclValor > 0 && T.fleteGravValor > 0) t += '• Flete: ' + fmt(T.fleteGravValor) + ' (+ IVA)' + (CZ.viajes_con_iva ? ' por ' + CZ.viajes_con_iva + ' viaje(s)' : '') + ' y ' + fmt(T.fleteExclValor) + ' (excluido)' + (CZ.viajes_sin_iva ? ' por ' + CZ.viajes_sin_iva + ' viaje(s)' : '') + '\n';
   if (!T.incluido && T.flete > 0 && !(T.fleteExclValor > 0 && T.fleteGravValor > 0) && CZ.n_viajes > 0 && CZ.flete_unit > 0 && Math.round(CZ.n_viajes * CZ.flete_unit) === Math.round(T.flete)) t += '• Flete: ' + CZ.n_viajes + ' viaje(s) × ' + fmt(CZ.flete_unit) + ' = ' + fmt(T.flete) + '\n';
@@ -6098,7 +6119,7 @@ async function czPDF(opts) {
   };
   CZ.lineas.forEach(function (l, i) {
     var r = T.lineas[i], vu = pUnit(r.precioDesc + r.estiba + r.fleteUnit), tot = r2(r.neto + (T.incluido ? pUnit(l.cantidad_solicitada * r.fleteUnit) : 0)); sumLin = r2(sumLin + tot);
-    var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', l.tmdescrip, l.plazo_libre || CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
+    var um = CZ_UM2[String(l.tmcode)]; filaTabla(String(l.tmcode), l.tipo_iva === 'G' ? 'G' : 'E', czDescCal(l), l.plazo_libre || CZ_TEXTOS.plazo[(l.plazo || 1) - 1], l.tmund, num2(l.cantidad_solicitada).replace(/,00$/, ''), fmt(vu), fmt(tot), um ? num2(l.cantidad_solicitada / um) : '');
   });
   if (!T.incluido && T.flete > 0) { sumLin = r2(sumLin + T.flete); var _tv = czTransporte().viajes, _nv = (CZ.n_viajes > 0 && CZ.flete_unit > 0 && Math.round(CZ.flete_unit * CZ.n_viajes) === Math.round(T.flete)) ? CZ.n_viajes : ((_tv > 1 && Math.round(T.flete) % _tv === 0) ? _tv : 1); if (T.fleteExclValor > 0 && T.fleteGravValor > 0) { var _cs = parseFloat(CZ.viajes_sin_iva) || 0, _cc = parseFloat(CZ.viajes_con_iva) || Math.max(0, (czTransporte().viajes || 0) - _cs); filaTabla('', 'G', 'FLETE (transporte)' + (_cc ? ' - ' + _cc + ' viaje(s) con IVA' : ''), '', 'VIAJE', _cc ? String(_cc) : '1', _cc ? fmt(T.fleteGravValor / _cc) : fmt(T.fleteGravValor), fmt(T.fleteGravValor), ''); filaTabla('', 'E', 'FLETE (transporte)' + (_cs ? ' - ' + _cs + ' viaje(s) sin IVA' : ''), '', 'VIAJE', _cs ? String(_cs) : '1', _cs ? fmt(T.fleteExclValor / _cs) : fmt(T.fleteExclValor), fmt(T.fleteExclValor), ''); } else filaTabla('', '', 'FLETE (transporte)', '', 'VIAJE', String(_nv), fmt(T.flete / _nv), fmt(T.flete), ''); }
   (CZ.fletes_extra || []).forEach(function (f) { var v = Math.round(Number(f.valor) || 0); if (v > 0) { sumLin = r2(sumLin + v); filaTabla('', f.grav === 'G' ? 'G' : 'E', 'FLETE' + (f.desc ? ': ' + f.desc : ' adicional'), '', 'VIAJE', '1', fmt(v), fmt(v), ''); } });
