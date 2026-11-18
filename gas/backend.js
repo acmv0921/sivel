@@ -71,6 +71,7 @@ function doPost(e) {
     body = JSON.parse(e.postData.contents);
     accion = body.accion || "";
     switch (accion) {
+      case "respaldarComisiones": resultado = respaldarComisiones(body); break;
       case "importarProductosMasivo": resultado = importarProductosMasivo(body); break;
       case "importarExistenciasDrive": resultado = importarExistenciasDrive(body); break;
       case "crearVendedor": resultado = crearVendedor(body); break;
@@ -2675,4 +2676,58 @@ function asignarPagoAP(body) {
     for (let i = 1; i < d.length; i++) { if (Number(d[i][0]) === id) { h.getRange(i + 1, 2).setValue(ap); return { ok: true }; } }
     return { ok: false, error: "No se encontró el pago" };
   } finally { lock.releaseLock(); }
+}
+
+// ===== Respaldo automático de SIVIL Comisiones =====
+// Solo ESCRIBE: guarda una copia con fecha y hora en "SIVIL - Comisiones / Respaldos automáticos" (junto a "SIVIL - Respaldos").
+// No lee ni borra nada de Drive fuera de esa carpeta; conserva las últimas COMISIONES_COPIAS copias.
+const COMISIONES_COPIAS = 60;
+function _carpetaComisionesRespaldo() {
+  const props = PropertiesService.getScriptProperties();
+  let c = null;
+  const id = props.getProperty("COMISIONES_RESPALDO_CARPETA");
+  if (id) { try { c = DriveApp.getFolderById(id); if (c.isTrashed()) c = null; } catch (e) { c = null; } }
+  if (!c) {
+    let raiz = null;
+    const r = DriveApp.getFoldersByName("SIVIL - Respaldos");
+    if (r.hasNext()) { const p = r.next().getParents(); if (p.hasNext()) raiz = p.next(); }
+    const nombre = "SIVIL - Comisiones";
+    let base;
+    if (raiz) { const it = raiz.getFoldersByName(nombre); base = it.hasNext() ? it.next() : raiz.createFolder(nombre); }
+    else { const it2 = DriveApp.getFoldersByName(nombre); base = it2.hasNext() ? it2.next() : DriveApp.createFolder(nombre); }
+    const it3 = base.getFoldersByName("Respaldos automáticos");
+    c = it3.hasNext() ? it3.next() : base.createFolder("Respaldos automáticos");
+    props.setProperty("COMISIONES_RESPALDO_CARPETA", c.getId());
+  }
+  return c;
+}
+function respaldarComisiones(body) {
+  try {
+    const contenido = String(body.contenido || "");
+    if (!contenido || contenido.length > 40 * 1024 * 1024) return { ok: false, error: "Contenido vacío o demasiado grande" };
+    if (contenido.indexOf("SIVIL_COMISIONES_DATOS") < 0) return { ok: false, error: "No es un paquete de datos de SIVIL Comisiones" };
+    const periodo = /^\d{4}-\d{2}$/.test(String(body.periodo || "")) ? String(body.periodo) : "sin-periodo";
+    const tz = Session.getScriptTimeZone();
+    const nombre = "datos_" + Utilities.formatDate(new Date(), tz, "yyyyMMdd-HHmmss") + "_" + periodo + ".json";
+    const carpeta = _carpetaComisionesRespaldo();
+    const f = carpeta.createFile(nombre, contenido, "application/json");
+    // conservar solo las últimas copias
+    const lista = [];
+    const it = carpeta.getFiles();
+    while (it.hasNext()) { const x = it.next(); lista.push({ f: x, t: x.getDateCreated().getTime() }); }
+    if (lista.length > COMISIONES_COPIAS) {
+      lista.sort(function (a, b) { return b.t - a.t; });
+      for (let i = COMISIONES_COPIAS; i < lista.length; i++) lista[i].f.setTrashed(true);
+    }
+    // Registro público (solo metadatos) para que la app confirme el respaldo leyendo esta hoja
+    try {
+      const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+      let h = ss.getSheetByName("RESPALDOS_COMISIONES");
+      if (!h) { h = ss.insertSheet("RESPALDOS_COMISIONES"); h.getRange(1, 1, 1, 5).setValues([["fecha", "huella", "archivo", "bytes", "motivo"]]).setFontWeight("bold"); h.setFrozenRows(1); }
+      h.appendRow([new Date(), String(body.huella || ""), nombre, contenido.length, String(body.motivo || "")]);
+      const n = h.getLastRow();
+      if (n > 300) h.deleteRows(2, n - 300);
+    } catch (e2) { /* el respaldo ya quedó en Drive; el registro es solo para confirmar */ }
+    return { ok: true, nombre: nombre, bytes: contenido.length, copias: Math.min(lista.length, COMISIONES_COPIAS), carpeta: carpeta.getUrl() };
+  } catch (e) { return { ok: false, error: String(e) }; }
 }
