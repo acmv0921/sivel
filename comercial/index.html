@@ -521,6 +521,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       <div class="card">
         <div class="card-title">🧾 Cotizaciones</div>
         <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="czNuevaConAviso()">➕ Nueva cotización</button>
+        <button class="btn btn-outline" style="width:100%;margin-bottom:8px;border-color:#7c3aed;color:#6d28d9;font-weight:700;" onclick="czNuevaVerbal()">📞 Cotización verbal (llamada de un cliente)</button>
         <input id="czBuscar" class="form-control" placeholder="🔍 Buscar por número, cliente, NIT, obra o AP..." oninput="czRenderLista()" style="margin-bottom:6px;">
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;font-size:.72rem;color:#555;">
           <span>Desde</span><input id="czDesde" type="date" class="form-control" onchange="czRenderLista()" style="flex:1;">
@@ -534,6 +535,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
     <div id="czForm" style="display:none;">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-title" style="margin:0;">🧾 Cotización · <span id="czEstadoTxt"></span></div><button class="btn btn-outline btn-sm" onclick="czVolver()">← Volver</button></div>
+        <div id="czVerbalBanner" style="display:none;background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:8px;padding:.55rem .7rem;margin-bottom:8px;font-size:.78rem;color:#4c1d95;line-height:1.4;">📞 <b>Cotización verbal por teléfono.</b> Queda registrada con el cliente, los productos y los precios que diste, sin PDF. Si el cliente no está registrado, escribe su nombre y su teléfono. Cuando confirme, conviértela en AP desde aquí.</div>
         <div class="form-group"><label>Número de cotización (automático)</label><input id="czNumero" class="form-control" placeholder="Se asigna solo al guardar: iniciales + consecutivo general" oninput="czVerNumero()"><div id="czNumAlert" style="font-size:.74rem;color:#b45309;margin-top:4px;"></div></div>
         <div id="czApoyoBloque" class="form-group" style="display:none;background:#eff6ff;border:1px solid #3b82f6;border-radius:8px;padding:.5rem .7rem;">
           <label style="font-weight:700;color:#1a3a5c;">🤝 Cotización a nombre del vendedor (apoyo)</label>
@@ -615,6 +617,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </div>
       <div class="card">
         <div class="btn-row" style="flex-direction:column;gap:8px;">
+          <button class="btn btn-primary" id="czBtnVerbal" style="display:none;background:#7c3aed;border-color:#7c3aed;" onclick="czGuardarVerbal()">📞 Guardar cotización verbal</button>
           <button class="btn btn-outline" onclick="czGuardar().then(function(ok){})">💾 Guardar borrador</button>
           <button class="btn btn-primary" onclick="czPDF()">📄 Guardar y generar PDF</button>
           <button class="btn btn-outline" onclick="czWhatsApp()">💬 Guardar y enviar por WhatsApp</button>
@@ -5370,7 +5373,7 @@ var CZ_ANEXO = ['Los precios de la presente cotización estarán vigentes por el
 function czH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function czHoy() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 function czNorm(n) { return String(n || '').toUpperCase().replace(/\s+/g, ''); }
-function czEstadoColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada: '#166534', Perdida: '#b91c1c', Anulada: '#9ca3af' }[e] || '#6b7280'; }
+function czEstadoColor(e) { return { Borrador: '#6b7280', Enviada: '#1d4ed8', Aceptada: '#166534', Perdida: '#b91c1c', Anulada: '#9ca3af', Verbal: '#7c3aed' }[e] || '#6b7280'; }
 // Calidad en la cotización (14 nov 2026): cada línea puede ser PRIMERA o SEGUNDA; la segunda usa el descuento de segunda del producto.
 function czFilaSegunda(tmcode) { return (STATE.inventario || []).filter(function (x) { return String(x.tmcode) === String(tmcode) && String(x.calidad || '').toUpperCase() === 'SEGUNDA'; })[0] || null; }
 function czDescCal(l) { return (l.tmdescrip || '') + (String(l.calidad || 'PRIMERA').toUpperCase() === 'SEGUNDA' ? ' — SEGUNDA CALIDAD' : ''); }
@@ -5536,7 +5539,7 @@ function czRenderLista() {
   if (selA && /GERENTE|GERENCIA|ADMIN|JEFE/.test(rol)) { selA.style.display = ''; if (selA.options.length <= 1) { var vs = {}; CZ_LISTA.forEach(function (c) { if (c.vendedor_id) vs[c.vendedor_id] = 1; }); Object.keys(vs).forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v; selA.appendChild(o); }); } }
   var cnt = { todas: 0 };
   CZ_LISTA.forEach(function (c) { if (!/GERENTE|GERENCIA|ADMIN|JEFE/.test(rol) && String(c.vendedor_id) !== yo) return; cnt.todas++; cnt[c.estado] = (cnt[c.estado] || 0) + 1; });
-  var tabs = ['todas', 'Borrador', 'Enviada', 'Aceptada', 'Perdida', 'Anulada'].map(function (e) {
+  var tabs = ['todas', 'Borrador', 'Enviada', 'Verbal', 'Aceptada', 'Perdida', 'Anulada'].map(function (e) {
     return '<button class="btn ' + (CZ_FILTRO === e ? 'btn-primary' : 'btn-outline') + ' btn-sm" style="font-size:.7rem;padding:4px 9px;" onclick="CZ_FILTRO=\'' + e + '\';czRenderLista()">' + (e === 'todas' ? 'Todas' : e) + ' (' + (cnt[e] || 0) + ')</button>';
   }).join(' ');
   cont.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + tabs + '</div>' +
@@ -5550,6 +5553,20 @@ function czNueva() { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {} try { _c
   CZ = { uid: '', estado: 'Borrador', numero: '', fecha: czHoy(), vigencia: '', despachos_hasta: '', cliente: { nit: '', nombre: '', atn: '', tel: '', cel: '', correo: '', obra: '', dir_oficina: '', dir_despacho: 'CLIENTE RECOGE' },
     lineas: [], estiba: 'NO', fleteModo: 'NO', flete: 0, vig_modo: 'auto', desp_modo: 'auto', fletes_extra: [], tope_kg: 2000, tarifa_viaje: 0, flete_motivo: '', nota_transp: '', pago: 8, entrega: 0, obs: [0], nota: '', vendedor_id: v.id_vendedor || '' };
   czMostrarForm();
+}
+// Cotización verbal por teléfono (18 nov 2026, pedido de Felipe): queda registrada aunque el cliente aún no esté en la base ni confirme.
+function czNuevaVerbal() {
+  window._czRegistrando = false; czNueva();
+  CZ.canal = 'VERBAL'; CZ.estado = 'Verbal'; CZ.hora_llamada = new Date().toISOString();
+  czMostrarForm();
+  toast('📞 Cotización verbal: elige o escribe el cliente, agrega los productos y guarda', 5000);
+}
+async function czGuardarVerbal() {
+  CZ.canal = 'VERBAL'; if (!CZ.hora_llamada) CZ.hora_llamada = new Date().toISOString();
+  var ok = await czGuardar('Verbal', false, true);
+  if (!ok) return;
+  toast('📞 Cotización verbal ' + CZ.numero + ' registrada', 4000);
+  czVolver(); try { await czCargarLista(); } catch (e) {}
 }
 function czAbrir(uid) { try { CZ_DOCS = []; czRenderDocs(); } catch (e) {}
   var c = CZ_LISTA.filter(function (x) { return String(x.uid) === String(uid); })[0]; if (!c) return;
@@ -5589,7 +5606,8 @@ function czMostrarForm() {
     czCorreo: CZ.cliente.correo, czObra: CZ.cliente.obra, czContObra: CZ.cliente.cont_obra || '', czCelObra: CZ.cliente.cel_obra || '', czFleteUnit: CZ.flete_unit || '', czNViajes: CZ.n_viajes || '', czDirOf: CZ.cliente.dir_oficina, czDirDesp: CZ.cliente.dir_despacho, czEstiba: CZ.estiba, czFleteModo: CZ.fleteModo, czFlete: CZ.flete || '', czViajesCon: CZ.viajes_con_iva || '', czViajesSin: CZ.viajes_sin_iva || '', czNota: CZ.nota, czPagoLibre: CZ.pago_libre || '', czEntregaLibre: CZ.entrega_libre || '', czObs1Libre: (CZ.obs_libre || [])[0] || '', czObs2Libre: (CZ.obs_libre || [])[1] || '', czVigModo: CZ.vig_modo || (CZ.vigencia ? 'manual' : 'auto'), czDespModo: CZ.desp_modo || (CZ.despachos_hasta ? 'manual' : 'auto'), czObsInterna: CZ.obs_interna || '', czTope: CZ.tope_kg || '', czTarifa: CZ.tarifa_viaje || '', czFleteMotivo: CZ.flete_motivo || '', czNotaTransp: CZ.nota_transp || '' };
   Object.keys(m).forEach(function (k) { var e = document.getElementById(k); if (e) e.value = m[k]; });
   document.getElementById('czFecha').textContent = fmtFecha(CZ.fecha);
-  document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : 'Nueva';
+  document.getElementById('czEstadoTxt').textContent = CZ.uid ? CZ.estado : (CZ.canal === 'VERBAL' ? 'Verbal (nueva)' : 'Nueva');
+  (function () { var v = CZ.canal === 'VERBAL', b = document.getElementById('czVerbalBanner'), k = document.getElementById('czBtnVerbal'); if (b) b.style.display = v ? 'block' : 'none'; if (k) k.style.display = v ? '' : 'none'; })();
   document.getElementById('czNumAlert').textContent = '';
   var ai = document.getElementById('czApInfo'); if (ai) ai.textContent = CZ.ap_id ? '✅ Ya convertida en la AP ' + CZ.ap_id : '';
   czModoFechas();
@@ -5825,6 +5843,13 @@ window.addEventListener('online', function () { if (_czResActiva) setTimeout(czR
 setTimeout(function () { try { if (czResKey()) { _czResActiva = true; czReponerReserva(); } } catch (e) {} }, 6000);
 async function czGuardar(estado, confirmarDup, sinRespaldo) {
   czLeer();
+  if (CZ.canal === 'VERBAL' && !CZ.cliente.nit) {
+    var _nm = ((document.getElementById('czCliente') || {}).value || '').split(' · ')[0].trim();
+    var _tl = String(CZ.cliente.cel || CZ.cliente.tel || '').replace(/\D/g, '');
+    if (!_nm) { toast('Escribe el nombre del cliente que llamó'); return false; }
+    if (!_tl) { toast('Escribe el celular o teléfono del cliente para poder devolverle la llamada'); return false; }
+    CZ.cliente.nit = 'POT-' + _tl; CZ.cliente.nombre = _nm; CZ.cliente.potencial = true;
+  }
   if (!CZ.cliente.nit) { toast('Elige el cliente'); return false; }
   if (!CZ.lineas.length) { toast('Agrega al menos un producto'); return false; }
   if (CZ.pago === 99 && !CZ.pago_libre) { toast('Elegiste OTRA condición de pago: escribe la condición en el recuadro'); return false; }
@@ -5893,6 +5918,7 @@ async function czAAP() {
   czLeer();
   if (CZ.ap_id && !confirm('Esta cotización ya se convirtió en la AP ' + CZ.ap_id + '.\n\n¿Crear otra AP de todas formas?')) return;
   if (!CZ.lineas.length || !CZ.cliente.nit) { toast('La cotización necesita cliente y productos'); return; }
+  if (/^POT-/.test(String(CZ.cliente.nit))) { alert('Este cliente es potencial y aún no está registrado.\n\nPrimero regístralo como cliente, vuelve a esta cotización, elígelo en el campo "Buscar cliente", guarda y luego conviértela en AP.'); return; }
   var _dias = czDiasDesde(CZ.fecha);
   if (_dias > 90) {
     if (confirm('Esta cotización tiene ' + _dias + ' días (más de 90): los precios pueden estar vencidos.\n\nPara convertirla en AP se debe crear una NUEVA VERSIÓN con precios vigentes.\n\n¿Crear la nueva versión ahora?')) czNuevaVersion();
