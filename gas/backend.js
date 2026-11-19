@@ -59,6 +59,8 @@ function doGet(e) {
       case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(); break;
       case "getFuncionarios": resultado = getFuncionarios(); break;
       case "getCarpetasInformes": resultado = getCarpetasInformes(); break;
+      case "listarRespaldosComisiones": resultado = listarRespaldosComisiones(); break;
+      case "getRespaldoComisiones": resultado = getRespaldoComisiones(e.parameter.id, e.parameter.clave); break;
       default: resultado = { ok: true, mensaje: "SIVIL API v1.0 activa", timestamp: new Date().toISOString() };
     }
   } catch (err) { resultado = { ok: false, error: err.message }; }
@@ -2701,6 +2703,56 @@ function _carpetaComisionesRespaldo() {
   }
   return c;
 }
+// ===== Restaurar los datos de SIVIL Comisiones desde Drive (Comisiones 2.9.8) =====
+// Solo LEE la carpeta "Respaldos automáticos" de Comisiones. El contenido solo se entrega con el código de restauración
+// (propiedad del script COMISIONES_RESTAURAR_CLAVE, que se fija una vez con fijarClaveRestauracionComisiones). Sin código fijado no se entrega nada.
+function _archivosRespaldoComisiones() {
+  const carpeta = _carpetaComisionesRespaldo();
+  const lista = [];
+  const it = carpeta.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    const n = f.getName();
+    if (n.indexOf("datos_") !== 0) continue;
+    const m = /^datos_(\d{8})-(\d{6})_(.+)\.json$/.exec(n);
+    lista.push({ f: f, id: f.getId(), nombre: n, t: f.getDateCreated().getTime(), bytes: f.getSize(), periodo: m ? m[3] : "" });
+  }
+  lista.sort(function (a, b) { return b.t - a.t; });
+  return lista;
+}
+
+function listarRespaldosComisiones() {
+  const props = PropertiesService.getScriptProperties();
+  const lista = _archivosRespaldoComisiones();
+  return {
+    ok: true,
+    habilitado: !!props.getProperty("COMISIONES_RESTAURAR_CLAVE"),
+    copias: lista.slice(0, 20).map(function (x) { return { id: x.id, nombre: x.nombre, fecha: new Date(x.t).toISOString(), bytes: x.bytes, periodo: x.periodo }; })
+  };
+}
+
+function getRespaldoComisiones(id, clave) {
+  const esperada = PropertiesService.getScriptProperties().getProperty("COMISIONES_RESTAURAR_CLAVE");
+  if (!esperada) return { ok: false, error: "La restauración desde Drive todavía no está habilitada en el script (falta fijar el código de restauración)." };
+  if (String(clave || "") !== String(esperada)) { Utilities.sleep(1500); return { ok: false, error: "Código de restauración incorrecto." }; }
+  const lista = _archivosRespaldoComisiones();
+  if (!lista.length) return { ok: false, error: "No hay respaldos en Drive." };
+  let elegido = lista[0];
+  if (id) {
+    const x = lista.filter(function (y) { return y.id === String(id); })[0];
+    if (!x) return { ok: false, error: "Ese respaldo ya no existe (se conservan las últimas " + COMISIONES_COPIAS + ")." };
+    elegido = x;
+  }
+  return { ok: true, id: elegido.id, nombre: elegido.nombre, fecha: new Date(elegido.t).toISOString(), periodo: elegido.periodo, contenido: elegido.f.getBlob().getDataAsString("UTF-8") };
+}
+
+// Ejecutar UNA vez desde el editor de Apps Script, cambiando el texto por el código elegido (mínimo 6 caracteres).
+function fijarClaveRestauracionComisiones() {
+  const clave = "CAMBIAR_AQUI";
+  if (clave === "CAMBIAR_AQUI" || clave.length < 6) throw new Error("Edite la constante 'clave' con el código elegido antes de ejecutar.");
+  PropertiesService.getScriptProperties().setProperty("COMISIONES_RESTAURAR_CLAVE", clave);
+}
+
 function respaldarComisiones(body) {
   try {
     const contenido = String(body.contenido || "");
