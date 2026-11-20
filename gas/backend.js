@@ -98,6 +98,7 @@ function doPost(e) {
       case "reservarNumerosCotizacion": resultado = reservarNumerosCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "agregarSeguimientoCot": resultado = agregarSeguimientoCot(body); break;
+      case "anularSeguimientoCot": resultado = anularSeguimientoCot(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "registrarPagoAP": resultado = registrarPagoAP(body); break;
@@ -2294,6 +2295,33 @@ function agregarSeguimientoCot(body) {
     const fila = [id, String(body.uid), String(body.numero || ""), String(body.fecha || new Date().toISOString()), String(body.autor || ""), String(body.tipo || "Nota"), texto.slice(0, 2000), String(body.proximo_contacto || "").slice(0, 10), body.auto ? "1" : "0"];
     h.getRange(ult + 1, 1, 1, SEGCOT_COLS.length).setNumberFormat("@").setValues([fila]);
     return { ok: true };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+// Anula (no borra) una anotación manual: solo la puede anular quien la escribió. Queda en la hoja
+// con quién y cuándo la anuló (columnas J:L) y deja de verse en Comercial y en Director.
+function anularSeguimientoCot(body) {
+  if (!body.id) return { ok: false, error: "Falta la anotación" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    const h = ss.getSheetByName("COTIZ_SEGUIMIENTO");
+    if (!h || h.getLastRow() < 2) return { ok: false, error: "No hay anotaciones" };
+    if (String(h.getRange(1, 10).getValue()) !== "anulado") {
+      h.getRange(1, 10, 1, 3).setValues([["anulado", "anulado_por", "anulado_fecha"]]).setFontWeight("bold");
+      h.getRange(1, 10, h.getMaxRows(), 3).setNumberFormat("@");
+    }
+    const n = h.getLastRow() - 1;
+    const datos = h.getRange(2, 1, n, 9).getValues();
+    for (let i = 0; i < n; i++) {
+      if (String(datos[i][0]) !== String(body.id)) continue;
+      if (String(datos[i][8]) === "1") return { ok: false, error: "Las anotaciones automáticas no se anulan" };
+      if (String(datos[i][4]).trim().toLowerCase() !== String(body.autor || "").trim().toLowerCase()) return { ok: false, error: "Solo quien escribió la anotación puede anularla" };
+      h.getRange(i + 2, 10, 1, 3).setNumberFormat("@").setValues([["1", String(body.autor || ""), new Date().toISOString()]]);
+      return { ok: true };
+    }
+    return { ok: false, error: "No se encontró la anotación" };
   } catch (e) { return { ok: false, error: String(e) }; }
   finally { lock.releaseLock(); }
 }

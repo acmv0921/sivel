@@ -301,7 +301,7 @@ function renderCot(){
 function renderSeg(){
   const hoy=iso(new Date()),ahora=new Date(),dias=$('sDias').value,ve=$('sVend').value,tp=$('sTipo').value,q=$('sQ').value.toLowerCase().trim();
   const cotBy={};D.cot.forEach(c=>cotBy[String(c.uid)]=c);
-  const S=(D.seg||[]).map(x=>Object.assign({},x,{c:cotBy[String(x.uid)]||{},f:new Date(x.fecha)})).filter(x=>!isNaN(x.f));
+  const S=(D.seg||[]).filter(x=>String(x.anulado)!=='1').map(x=>Object.assign({},x,{c:cotBy[String(x.uid)]||{},f:new Date(x.fecha)})).filter(x=>!isNaN(x.f));
   const man=x=>String(x.auto)!=='1';
   const abierta=c=>c&&(c.estado==='Enviada'||c.estado==='Borrador');
   const desde=dias==='todo'?null:dias==='mes'?new Date(ahora.getFullYear(),ahora.getMonth(),1):new Date(ahora.getTime()-Number(dias)*864e5);

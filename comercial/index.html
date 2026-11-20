@@ -6077,7 +6077,7 @@ async function czSegCargar() {
 function czSegRender() {
   var box = document.getElementById('czSegLista'); if (!box) return;
   var uid = CZ && CZ.uid ? String(CZ.uid) : '';
-  var L = CZ_SEG.filter(function (x) { return String(x.uid) === uid; }).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
+  var L = CZ_SEG.filter(function (x) { return String(x.uid) === uid && String(x.anulado) !== '1'; }).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
   if (!L.length) { box.innerHTML = '<div style="font-size:.75rem;color:#64748b;">Aún no hay anotaciones. Registra aquí llamadas, visitas, cambios acordados y el próximo contacto.</div>'; return; }
   var hoy = czSegHoy(), prox = '';
   L.forEach(function (x) { if (!prox && x.proximo_contacto) prox = String(x.proximo_contacto).slice(0, 10); });
@@ -6086,9 +6086,19 @@ function czSegRender() {
   var ico = { 'Nota': '📝', 'Llamada': '📞', 'Visita': '🚗', 'WhatsApp / correo': '💬', 'Cambio acordado': '🔁', 'Cambio': '🔁', 'Estado': '🏷️', 'Creación': '🆕' };
   L.forEach(function (x) {
     var f = String(x.fecha || ''), d = f ? new Date(f) : null, ft = d && !isNaN(d) ? d.toLocaleDateString('es-CO') + ' ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : f;
-    h += '<div style="border-left:3px solid ' + (String(x.auto) === '1' ? '#94a3b8' : '#E8731C') + ';padding:3px 8px;margin-bottom:6px;background:#fff;border-radius:0 6px 6px 0;"><div style="font-size:.68rem;color:#64748b;">' + (ico[x.tipo] || '📝') + ' <b>' + czSegEsc(x.tipo) + '</b> · ' + czSegEsc(ft) + ' · ' + czSegEsc(x.autor) + '</div><div style="font-size:.8rem;white-space:pre-wrap;">' + czSegEsc(x.texto) + '</div>' + (x.proximo_contacto ? '<div style="font-size:.68rem;color:#166534;">📅 Próximo contacto: ' + czSegEsc(fmtFecha(String(x.proximo_contacto).slice(0, 10))) + '</div>' : '') + '</div>';
+    h += '<div style="border-left:3px solid ' + (String(x.auto) === '1' ? '#94a3b8' : '#E8731C') + ';padding:3px 8px;margin-bottom:6px;background:#fff;border-radius:0 6px 6px 0;"><div style="font-size:.68rem;color:#64748b;">' + (ico[x.tipo] || '📝') + ' <b>' + czSegEsc(x.tipo) + '</b> · ' + czSegEsc(ft) + ' · ' + czSegEsc(x.autor) + '</div><div style="font-size:.8rem;white-space:pre-wrap;">' + czSegEsc(x.texto) + '</div>' + (czSegEsMia(x) ? '<div style="text-align:right;"><button type="button" onclick="czSegAnular(\'' + czSegEsc(x.id) + '\')" style="background:none;border:none;color:#b91c1c;font-size:.68rem;cursor:pointer;text-decoration:underline;">🗑 Anular esta anotación</button></div>' : '') + (x.proximo_contacto ? '<div style="font-size:.68rem;color:#166534;">📅 Próximo contacto: ' + czSegEsc(fmtFecha(String(x.proximo_contacto).slice(0, 10))) + '</div>' : '') + '</div>';
   });
   box.innerHTML = h;
+}
+function czSegEsMia(x) { var n = (STATE.vendedor && STATE.vendedor.nombre_vendedor) || ''; return String(x.auto) !== '1' && n && String(x.autor).trim().toLowerCase() === String(n).trim().toLowerCase(); }
+async function czSegAnular(id) {
+  var x = CZ_SEG.filter(function (y) { return String(y.id) === String(id); })[0]; if (!x || !czSegEsMia(x)) return;
+  if (!confirm('¿Anular esta anotación?\n\n«' + String(x.texto).slice(0, 120) + '»\n\nDejará de verse en el seguimiento. Queda registrada como anulada.')) return;
+  try {
+    var r = await escribirGAS({ accion: 'anularSeguimientoCot', id: x.id, autor: x.autor });
+    if (r && r.ok === false) { toast('⚠️ No se pudo anular: ' + (r.error || 'intenta de nuevo')); return; }
+  } catch (er) { toast('⚠️ Sin conexión: no se anuló'); return; }
+  x.anulado = '1'; czSegRender(); toast('✅ Anotación anulada');
 }
 async function czSegAgregar(tipo, texto, prox, auto) {
   if (!CZ || !CZ.uid) return false;
