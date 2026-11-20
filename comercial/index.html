@@ -6282,9 +6282,22 @@ async function czPDF(opts) {
   var _nomPdf = 'Cotizacion_' + CZ.numero.replace(/[^A-Za-z0-9_-]+/g, '_') + '_' + String(c.nombre).replace(/[^A-Za-z0-9]+/g, '_').slice(0, 28) + '.pdf';
   var _b64 = ''; try { _b64 = doc.output('datauristring').split(',')[1] || ''; } catch (e) {}
   if (opts.backup) return { name: _nomPdf, b64: _b64 };
-  doc.save(_nomPdf);
+  try { doc.save(_nomPdf); } catch (e) { console.warn('doc.save', e); }
+  czPdfBanner(doc, _nomPdf);
   czEnviarRespaldo(_nomPdf, _b64);
   if (CZ.estado === 'Borrador') await czCambiarEstado('Enviada');
+}
+// v112: si Chrome bloquea la descarga automatica (pasa tras varias descargas seguidas o cuando
+// pasa mucho tiempo entre el clic y el guardado), queda un boton real para descargar o abrir el PDF.
+function czPdfBanner(doc, nombre) {
+  try {
+    var old = document.getElementById('czPdfBan'); if (old) { try { URL.revokeObjectURL(old.getAttribute('data-u')); } catch (e) {} old.remove(); }
+    var url = URL.createObjectURL(doc.output('blob'));
+    var d = document.createElement('div'); d.id = 'czPdfBan'; d.setAttribute('data-u', url);
+    d.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#1a3a5c;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.35);font-size:.82rem;max-width:92vw;display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
+    d.innerHTML = '<span>📄 PDF generado. ¿No se descargó?</span><a href="' + url + '" download="' + czSegEsc(nombre) + '" style="background:#E8731C;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:700;">📥 Descargar</a><a href="' + url + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline;">Abrir</a><button type="button" onclick="this.parentNode.remove()" style="background:none;border:none;color:#fff;font-size:1rem;cursor:pointer;">✕</button>';
+    document.body.appendChild(d);
+  } catch (e) { console.warn('czPdfBanner', e); }
 }
 </script>
 <script src="../assets/offline.js"></script>
