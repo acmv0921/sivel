@@ -44,5 +44,29 @@ window.GUIAS_DESPACHO = [
         texto: 'Pulse <b>⚠️ Registrar Novedad</b>. La novedad queda registrada en el <b>historial de novedades</b>.' },
       { titulo: 'Novedad de logística', resaltar: '#novedadLogCategoria',
         texto: 'Para retrasos, vehículo u otros temas de transporte use <b>Registrar Novedad de Logística</b> (tipo, AP, placa, descripción).' }
+    ] },
+  { id: 'estadisticas', icono: '📊', titulo: 'Estadísticas de despacho: cómo leerlas',
+    resumen: 'Rankings de productos y vehículos, tiempos de entrega, averías y descarga a Excel.',
+    pasos: [
+      { titulo: 'Abra las estadísticas', ir: 'screenEstadisticas', boton: 'Ir a Estadísticas',
+        texto: 'Aquí se resume todo lo que se ha despachado. Se calcula con los registros de despacho, así que <b>entre mejor se registre, mejores serán los resultados</b>. Espere unos segundos mientras carga.' },
+      { titulo: 'Elija el periodo', resaltar: '#estPeriodos',
+        texto: 'Toque <b>Semana, Mes, Trimestre, Semestre o Año</b> y use las flechas ◀ ▶ para ir a periodos anteriores. <b>Rango</b> permite escoger dos fechas. Cada indicador se compara con el periodo anterior (▲ sube, ▼ baja).' },
+      { titulo: 'Unidades, valor o toneladas', resaltar: '#estMetrica',
+        texto: 'Cambie <b>Medir en</b> para ver los rankings por <b>unidades</b>, por <b>valor en pesos</b> o por <b>toneladas</b>. Un producto puede ser el primero en unidades y no serlo en pesos o en peso.' },
+      { titulo: 'Las tarjetas de indicadores', resaltar: '#estKpis',
+        texto: '<ul><li><b>Viajes:</b> salidas de vehículos.</li><li><b>Carga media por viaje:</b> toneladas por salida; más es mejor (menos viajes para el mismo despacho).</li><li><b>Tiempo de ciclo:</b> días desde que se crea la AP hasta que sale el primer despacho; menos es mejor.</li><li><b>Nivel de servicio:</b> qué porcentaje de lo pedido ya se despachó.</li><li><b>Novedades por 1.000 und:</b> averías, reposiciones y mermas; menos es mejor.</li></ul>' },
+      { titulo: 'Tendencia y carta de control',
+        texto: 'Las barras muestran cuánto se despacha por día o semana. Las líneas rojas son los <b>límites de control</b>: una barra roja (fuera de límites) es un día fuera de lo normal; conviene preguntar qué pasó (lluvia, falta de vehículo, un pedido grande).' },
+      { titulo: 'Productos con más movimiento', resaltar: '#estPareto',
+        texto: '<b>Pareto:</b> pocos productos mueven la mayor parte. <b>A</b> = el 80 % del movimiento (nunca deben faltar), <b>B</b> = hasta el 95 %, <b>C</b> = el resto. <b>X, Y, Z</b> indican qué tan regular es su demanda por semana. Toque un producto para ver sus últimos despachos.' },
+      { titulo: 'Vehículos más utilizados', resaltar: '#estVeh',
+        texto: 'Muestra viajes, toneladas y <b>carga media</b> de cada vehículo. Si un vehículo sale con poca carga, se pueden combinar pedidos (viaje compartido). Toque una placa para ver su detalle.' },
+      { titulo: 'Averías y reclamaciones', resaltar: '#estNov',
+        texto: 'Aquí aparecen los productos con más averías, reposiciones y mermas, por cada 1.000 unidades despachadas. <b>Si está vacío es porque no se registraron</b>: cada novedad se debe registrar en <b>⚠️ Averías</b> con producto y cantidad.' },
+      { titulo: 'Descargue el informe', resaltar: '#estDescargar',
+        texto: 'Pulse <b>📥 Descargar Excel</b>: genera un libro con resumen, Pareto, vehículos, clientes, destinos, tendencia, averías, APs abiertas y el detalle de cada despacho del periodo.' },
+      { titulo: 'Qué registrar para que sirva',
+        texto: '<ul><li>Siempre la <b>placa</b> del vehículo.</li><li>La <b>cantidad real cargada</b> de cada línea.</li><li>Toda avería o reposición, <b>con producto y cantidad</b>.</li><li>Confirmar el despacho <u>una sola vez</u>.</li></ul>Lo que no se registra, no se puede medir ni mejorar.' }
     ] }
 ];

@@ -350,6 +350,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   background:#dbeafe;color:#1e40af;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -556,6 +557,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
       </select>
       <div id="gdLista"><div class="loading"><div class="spinner"></div></div></div>
     </div>
+  </div>
+  <!-- ESTADÍSTICAS DE DESPACHO (módulo común assets/estadisticas.js) -->
+  <div id="screenEstDesp" class="screen">
+    <div id="estContenedor"></div>
   </div>
   <!-- CARTERA Y ANTICIPOS (Despacho ve el semáforo en cada AP) -->
   <div id="screenCartera" class="screen">
@@ -878,6 +883,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn" id="navCotiz" onclick="irA('screenCotizaciones');gzInit();"><span class="icon">🧾</span>Cotiz.</button>
   <button class="nav-btn" id="navCartera" onclick="irA('screenCartera');gcInit();"><span class="icon">💵</span>Cartera</button>
   <button class="nav-btn" id="navDespAP" onclick="irA('screenDespAP');gdInit();"><span class="icon">🚚</span>Despachos AP</button>
+  <button class="nav-btn" id="navEstDesp" onclick="irA('screenEstDesp')"><span class="icon">📈</span>Logística</button>
   <button class="nav-btn" id="navVisitas" onclick="irA('screenVisitas');cargarVisitas();"><span class="icon">🚶</span>Visitas</button>
 </nav>
 
@@ -3059,9 +3065,10 @@ function irA(screenId) {
   document.getElementById(screenId)?.classList.add('active');
   const map={screenDashboard:'navDash',screenAlertas:'navAlertas',screenPromociones:'navPromociones',
     screenAprobaciones:'navAprobac',screenPrecios:'navPrecios',screenUsuarios:'navUsuarios',
-    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz',screenCartera:'navCartera',screenDespAP:'navDespAP'};
+    screenInventDrive:'navInventDrive',screenInformes:'navInformes',screenVisitas:'navVisitas',screenCotizaciones:'navCotiz',screenCartera:'navCartera',screenDespAP:'navDespAP',screenEstDesp:'navEstDesp'};
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenInformes') renderInformeGerencia();
+  if (screenId === 'screenEstDesp' && window.EstDesp) EstDesp.montar('estContenedor', { sheetId: SHEET_ID, app: 'gerencia' });
   window.scrollTo(0,0);
 }
 
@@ -3974,6 +3981,7 @@ async function gzGuardarTextos() {
 <script src="../assets/adjuntos_ap.js"></script>
 <script src="../assets/offline.js"></script>
 <script>OfflineSIVIL.init({app:"gerencia",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return"});</script>
+<script src="../assets/estadisticas.js"></script>
 <script src="../assets/guia.js"></script>
 <script src="guias.js"></script>
 <script>

@@ -386,6 +386,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -539,6 +540,10 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   </div>
 
   <!-- APs EN PDF (28 oct 2026, pedido de Contabilidad): todas las APs con su PDF -->
+  <!-- ESTADÍSTICAS (módulo común assets/estadisticas.js) -->
+  <div id="screenEstadisticas" class="screen">
+    <div id="estContenedor"></div>
+  </div>
   <div id="screenAPPdf" class="screen">
     <div class="card">
       <div class="card-title">📄 APs en PDF</div>
@@ -804,6 +809,7 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
   <button class="nav-btn"        onclick="irA('screenAverias')"     id="navAverias">     <span class="icon">⚠️</span>Averías</button>
   <button class="nav-btn"        onclick="irA('screenFuncionarios')" id="navFuncionarios"><span class="icon">👥</span>Personal</button>
   <button class="nav-btn"        onclick="irA('screenAPPdf')"       id="navAPPdf">       <span class="icon">📄</span>APs PDF</button>
+  <button class="nav-btn"        onclick="irA('screenEstadisticas')" id="navEst">        <span class="icon">📊</span>Estadíst.</button>
 </nav>
 
 <div id="toast" class="toast"></div>
@@ -3832,10 +3838,11 @@ function irA(screenId) {
   const map = {
     screenHome:'navHome', screenDespacho:'navDespacho',
     screenCurado:'navCurado', screenAverias:'navAverias',
-    screenFuncionarios:'navFuncionarios', screenAPPdf:'navAPPdf'
+    screenFuncionarios:'navFuncionarios', screenAPPdf:'navAPPdf', screenEstadisticas:'navEst'
   };
   if (map[screenId]) document.getElementById(map[screenId])?.classList.add('active');
   if (screenId === 'screenAPPdf') renderAPPdf();
+  if (screenId === 'screenEstadisticas' && window.EstDesp) EstDesp.montar('estContenedor', { sheetId: SHEET_ID, app: 'despacho' });
   if (screenId === 'screenInventario') { calcularInventario(); renderInventario(document.getElementById('buscarProdDespacho')?.value || ''); }
   window.scrollTo(0,0);
 }
@@ -4064,6 +4071,7 @@ function mostrarAvisoActualizacion(reg) {
 <script>OfflineSIVIL.init({app:"despacho",leer:["leerGVIZ"],escribir:"escribirGAS",escribirModo:"return"});</script>
 <script src="../assets/catalogo.js"></script>
 <script>CatalogoSIVIL.init({app:"despacho",leer:"leerGVIZ",listo:function(){var e=document.getElementById("appMain");return !!e&&e.style.display!=="none";}});</script>
+<script src="../assets/estadisticas.js"></script>
 <script src="../assets/guia.js"></script>
 <script src="guias.js"></script>
 <script>
