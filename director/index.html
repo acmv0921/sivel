@@ -105,6 +105,7 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
     <button class="tab on" id="tCot" onclick="verTab('Cot')">📋 Cotizaciones (cuadro diario)</button>
     <button class="tab" id="tAp" onclick="verTab('Ap')">🚚 Seguimiento por AP</button>
     <button class="tab" id="tVen" onclick="verTab('Ven')">📈 Ventas por vendedor</button>
+    <button class="tab" id="tSeg" onclick="verTab('Seg')">📒 Seguimiento de cotizaciones</button>
     <button class="tab" id="tCru" onclick="verTab('Cru')">💳 Cruce con Contabilidad</button>
     <button class="tab" id="tTip" onclick="verTab('Tip')">💡 Inteligencia comercial</button>
   </div>
@@ -121,6 +122,23 @@ tr.dia td{background:var(--amar2);font-weight:700;color:var(--verde2);}
       <div class="graf" id="grCot"><div class="card"><h3>Estado de las cotizaciones</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotEst"></canvas></div></div><div class="card"><h3>Cotizado vs aceptado por vendedor ($)</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotVend"></canvas></div></div><div class="card"><h3>Cotizaciones por día</h3><div class="hint">Pasa el cursor sobre el gráfico para ver el detalle</div><div class="cv"><canvas id="gCotDia"></canvas></div></div></div>
       <div class="tablewrap" id="twCot"><table id="cTabla"></table></div>
       <div class="muted" style="margin-top:6px;">"Enviada" = el cliente aún no ha respondido. Con 7 días o más sin respuesta se marca en naranja. Las aceptadas muestran el avance de su AP.</div>
+    </div>
+    <div id="pSeg" style="display:none;">
+      <div class="filtros" id="fSeg">
+        <div><label>Período</label><select id="sDias" onchange="renderSeg()"><option value="8">Últimos 8 días</option><option value="15">Últimos 15 días</option><option value="30" selected>Últimos 30 días</option><option value="mes">Este mes</option><option value="todo">Todo</option></select></div>
+        <div><label>Vendedor</label><select id="sVend" onchange="renderSeg()"></select></div>
+        <div><label>Tipo</label><select id="sTipo" onchange="renderSeg()"><option value="MANUAL">Anotaciones de los vendedores</option><option value="">Todo (incluye registros automáticos)</option><option>Llamada</option><option>Visita</option><option>WhatsApp / correo</option><option>Cambio acordado</option><option>Nota</option><option value="AUTO">Solo registros automáticos (cambios y estados)</option></select></div>
+        <div><label>Buscar</label><input id="sQ" placeholder="Cliente, número o texto" oninput="renderSeg()"></div>
+        <button class="btn" onclick="exportar('seg')">⬇ Excel</button>
+      </div>
+      <div class="kpis" id="sKpi"></div>
+      <h3 style="margin:10px 0 4px;">⏰ Contactos pendientes y próximos (cotizaciones abiertas)</h3>
+      <div class="tablewrap"><table id="sPend"></table></div>
+      <h3 style="margin:14px 0 4px;">📭 Cotizaciones enviadas sin ninguna anotación de seguimiento</h3>
+      <div class="tablewrap"><table id="sSin"></table></div>
+      <h3 style="margin:14px 0 4px;">📒 Historial de seguimientos</h3>
+      <div class="tablewrap" id="twSeg"><table id="sTabla"></table></div>
+      <div class="muted" style="margin-top:6px;">Cada vendedor anota en SIVIL Comercial (cotización guardada → «Seguimiento»). Aquí solo se consulta. «Próximo contacto» vencido se marca en rojo.</div>
     </div>
     <div id="pAp" style="display:none;">
       <div class="filtros" id="fAp">
@@ -173,7 +191,7 @@ const SHEET_ID="1Wbz8A2WDdNjcByDqpH1FRDm9XvuspyzMFIh7Ep9cIMI";
 const GVIZ="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:json&sheet=";
 const ROLES_OK=["JEFE_VENTAS","DIRECTOR_COMERCIAL","GERENTE","ADMIN"];
 const D={cot:[],aps:[],det:[],pagos:[],vend:[],cli:[],usr:null};
-let EXP={cot:[],ap:[],ven:[],cru:[]};
+let EXP={cot:[],seg:[],ap:[],ven:[],cru:[]};
 const H=x=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
 function money(n){n=Math.round(Number(n)||0);return (n<0?'-':'')+'$'+String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
@@ -213,23 +231,23 @@ async function entrar(){
 }
 function salir(){try{sessionStorage.removeItem('dir_usr');}catch(e){}location.reload();}
 async function cargarTodo(forzar){
-  const [cot,aps,det,pag,ven,cli]=await Promise.all([leer('COTIZACIONES'),leer('PREVENTAS_AP'),leer('DETALLE_AP'),leer('PAGOS_AP').catch(()=>[]),leer('VENDEDORES').catch(()=>[]),leer('CLIENTES').catch(()=>[])]);
-  D.cot=cot;D.aps=aps;D.det=det;D.pagos=pag;D.vend=ven;D.cli=cli;
+  const [cot,aps,det,pag,ven,cli,seg]=await Promise.all([leer('COTIZACIONES'),leer('PREVENTAS_AP'),leer('DETALLE_AP'),leer('PAGOS_AP').catch(()=>[]),leer('VENDEDORES').catch(()=>[]),leer('CLIENTES').catch(()=>[]),leer('COTIZ_SEGUIMIENTO').catch(()=>[])]);
+  D.seg=seg;D.cot=cot;D.aps=aps;D.det=det;D.pagos=pag;D.vend=ven;D.cli=cli;
   D.nomV={};ven.forEach(v=>D.nomV[String(v.id_vendedor)]=v.nombre_vendedor);
   D.nomC={};cli.forEach(c=>D.nomC[String(c.cliente_nit)]=c.razon_social);
   const vs=[...new Set(cot.map(c=>String(c.vendedor_id)).concat(aps.map(a=>String(a.vendedor_id))).filter(Boolean))];
   const opt='<option value="">Todos los vendedores</option>'+vs.map(v=>'<option value="'+H(v)+'">'+H(nomV(v))+'</option>').join('');
-  $('cVend').innerHTML=opt;$('aVend').innerHTML=opt;
+  $('cVend').innerHTML=opt;$('aVend').innerHTML=opt;$('sVend').innerHTML=opt;
   const anios=[...new Set(aps.map(a=>(pf(a.fecha_creacion)||{getFullYear:()=>0}).getFullYear()).filter(Boolean))].sort().reverse();
   $('vAnio').innerHTML=anios.map(a=>'<option>'+a+'</option>').join('');
-  calcAp();renderCot();renderAp();renderVen();renderCru();renderTips();
+  calcAp();renderCot();renderSeg();renderAp();renderVen();renderCru();renderTips();
   let vista=false;try{vista=!!localStorage.getItem('dir_guia_vista');}catch(e){}
   if(!vista&&!TOUR)ofertaGuia();
 }
 const CONOC={'31409227':'Gerencia (Nohra)'};
 const nomV=id=>D.nomV[String(id)]||CONOC[String(id)]||id;
 function apOk(a){if(a.estado_ap==='Cancelado'||a.estado_ap==='Modificado'||Number(a.ap_id)>=5555)return false;return $('gOf').value==='todo'||Number(a.ap_id)>=2438;}
-function verTab(t){['Cot','Ap','Ven','Cru','Tip'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
+function verTab(t){['Cot','Seg','Ap','Ven','Cru','Tip'].forEach(x=>{$('p'+x).style.display=x===t?'':'none';$('t'+x).classList.toggle('on',x===t);});}
 // ---- AP (despachado/pagado)
 function calcAp(){
   const porAp={};D.det.forEach(d=>(porAp[String(d.ap_id)]=porAp[String(d.ap_id)]||[]).push(d));
@@ -278,6 +296,28 @@ function renderCot(){
     EXP.cot.push({Fecha:fd(f),Numero:c.numero,Cliente:c.cliente_nombre,Obra:c.obra,Vendedor:nomV(c.vendedor_id),Total:Number(c.total)||0,Estado:c.estado,'Dias sin respuesta':c.estado==='Enviada'?dsr:'',AP:c.ap_id,'% despachado':x?x.pct:'',Pagado:x?x.pagado:'',Nota:c.nota_estado});
   });
   $('cTabla').innerHTML=html;chartsCot(L);
+}
+// ---- Seguimiento de cotizaciones (lo anotan los vendedores en Comercial; aquí solo se consulta)
+function renderSeg(){
+  const hoy=iso(new Date()),ahora=new Date(),dias=$('sDias').value,ve=$('sVend').value,tp=$('sTipo').value,q=$('sQ').value.toLowerCase().trim();
+  const cotBy={};D.cot.forEach(c=>cotBy[String(c.uid)]=c);
+  const S=(D.seg||[]).map(x=>Object.assign({},x,{c:cotBy[String(x.uid)]||{},f:new Date(x.fecha)})).filter(x=>!isNaN(x.f));
+  const man=x=>String(x.auto)!=='1';
+  const abierta=c=>c&&(c.estado==='Enviada'||c.estado==='Borrador');
+  const desde=dias==='todo'?null:dias==='mes'?new Date(ahora.getFullYear(),ahora.getMonth(),1):new Date(ahora.getTime()-Number(dias)*864e5);
+  const L=S.filter(x=>(!desde||x.f>=desde)&&(!ve||String(x.c.vendedor_id)===ve)&&(tp===''||(tp==='MANUAL'?man(x):tp==='AUTO'?!man(x):x.tipo===tp))&&(!q||(String(x.c.cliente_nombre)+' '+x.c.numero+' '+x.texto+' '+x.autor).toLowerCase().includes(q))).sort((a,b)=>b.f-a.f);
+  const ult={};S.slice().sort((a,b)=>a.f-b.f).forEach(x=>{if(x.proximo_contacto)ult[String(x.uid)]=x;else if(man(x))delete ult[String(x.uid)];});
+  const P=Object.values(ult).filter(x=>abierta(x.c)&&(!ve||String(x.c.vendedor_id)===ve)).sort((a,b)=>String(a.proximo_contacto).localeCompare(String(b.proximo_contacto)));
+  const venc=P.filter(x=>String(x.proximo_contacto).slice(0,10)<=hoy),prox7=P.filter(x=>{const d=String(x.proximo_contacto).slice(0,10);return d>hoy&&d<=iso(new Date(ahora.getTime()+7*864e5));});
+  const conSeg=new Set(S.filter(man).map(x=>String(x.uid)));
+  const sin=D.cot.filter(c=>c.estado==='Enviada'&&!conSeg.has(String(c.uid))&&(!ve||String(c.vendedor_id)===ve)).sort((a,b)=>pf(a.fecha)-pf(b.fecha));
+  const nCot=new Set(L.map(x=>String(x.uid))).size;
+  $('sKpi').innerHTML=[['Anotaciones en el período',L.length,nCot+' cotizaciones'],['Contactos vencidos',venc.length,'la fecha de próximo contacto ya pasó'],['Contactos próximos (7 días)',prox7.length,''],['Enviadas sin seguimiento',sin.length,'ninguna anotación del vendedor']].map(k=>'<div class="kpi"><small>'+k[0]+'</small><b>'+k[1]+'</b><div class="muted">'+k[2]+'</div></div>').join('');
+  const fa=x=>x.f.toLocaleDateString('es-CO')+' '+x.f.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  $('sPend').innerHTML='<tr><th>Próximo contacto</th><th>N.º</th><th>Cliente</th><th>Vendedor</th><th class="num">Total</th><th>Última anotación</th></tr>'+(P.length?P.map(x=>{const d=String(x.proximo_contacto).slice(0,10),v=d<=hoy;return '<tr><td><span class="pill" style="background:'+(v?'#b91c1c':'#0a7a3d')+'">'+fd(pf(d))+(v?' · vencido':'')+'</span></td><td><b>'+H(x.c.numero)+'</b></td><td>'+H(x.c.cliente_nombre)+'</td><td>'+H(nomV(x.c.vendedor_id))+'</td><td class="num">'+money(x.c.total)+'</td><td>'+H(x.tipo)+': '+H(String(x.texto).slice(0,90))+'</td></tr>';}).join(''):'<tr><td colspan="6" class="muted">No hay contactos agendados en cotizaciones abiertas.</td></tr>');
+  $('sSin').innerHTML='<tr><th>Fecha</th><th>N.º</th><th>Cliente</th><th>Vendedor</th><th class="num">Total</th><th class="num">Días sin seguimiento</th></tr>'+(sin.length?sin.map(c=>{const d=Math.floor((ahora-pf(c.fecha))/864e5);return '<tr><td>'+fd(pf(c.fecha))+'</td><td><b>'+H(c.numero)+'</b></td><td>'+H(c.cliente_nombre)+'</td><td>'+H(nomV(c.vendedor_id))+'</td><td class="num">'+money(c.total)+'</td><td class="num" style="'+(d>=7?'color:#c2410c;font-weight:700':'')+'">'+d+'</td></tr>';}).join(''):'<tr><td colspan="6" class="muted">Todas las cotizaciones enviadas tienen seguimiento.</td></tr>');
+  $('sTabla').innerHTML='<tr><th>Fecha</th><th>N.º</th><th>Cliente</th><th>Vendedor</th><th>Tipo</th><th>Anotación</th><th>Próx. contacto</th><th>Estado</th></tr>'+(L.length?L.map(x=>'<tr'+(man(x)?'':' style="color:#64748b"')+'><td>'+fa(x)+'</td><td><b>'+H(x.c.numero||x.numero)+'</b></td><td>'+H(x.c.cliente_nombre)+'</td><td>'+H(nomV(x.c.vendedor_id)||x.autor)+(x.autor&&nomV(x.c.vendedor_id)!==x.autor?'<div class="muted">anotó: '+H(x.autor)+'</div>':'')+'</td><td>'+H(x.tipo)+'</td><td style="white-space:pre-wrap">'+H(x.texto)+'</td><td>'+(x.proximo_contacto?fd(pf(String(x.proximo_contacto).slice(0,10))):'')+'</td><td>'+H(x.c.estado)+'</td></tr>').join(''):'<tr><td colspan="8" class="muted">Sin anotaciones para este filtro. Los vendedores las registran en Comercial dentro de cada cotización.</td></tr>');
+  EXP.seg=L.map(x=>({Fecha:fa(x),Numero:x.c.numero||x.numero,Cliente:x.c.cliente_nombre,Vendedor:nomV(x.c.vendedor_id),'Anoto':x.autor,Tipo:x.tipo,Anotacion:x.texto,'Proximo contacto':x.proximo_contacto,Estado:x.c.estado,Automatico:man(x)?'No':'Si'}));
 }
 function renderAp(){
   const es=$('aEst').value,ve=$('aVend').value,q=$('aQ').value.toLowerCase().trim();
@@ -522,8 +562,8 @@ function renderCru(){
 function exportar(k){
   if(typeof XLSX==='undefined'){alert('No se cargó la librería de Excel (¿sin conexión?)');return;}
   const f=EXP[k];if(!f.length){alert('No hay filas para exportar');return;}
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(f),({cot:'Cotizaciones',ap:'APs',ven:'Ventas',cru:'Cruce Contabilidad'})[k]);
-  XLSX.writeFile(wb,'SIVIL_'+{cot:'cotizaciones',ap:'seguimiento_AP',ven:'ventas_vendedor',cru:'cruce_contabilidad'}[k]+'_'+iso(new Date())+'.xlsx');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(f),({cot:'Cotizaciones',seg:'Seguimientos',ap:'APs',ven:'Ventas',cru:'Cruce Contabilidad'})[k]);
+  XLSX.writeFile(wb,'SIVIL_'+{cot:'cotizaciones',seg:'seguimiento_cotizaciones',ap:'seguimiento_AP',ven:'ventas_vendedor',cru:'cruce_contabilidad'}[k]+'_'+iso(new Date())+'.xlsx');
 }
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 try{const s=sessionStorage.getItem('dir_usr');if(s){D.usr=JSON.parse(s);$('login').style.display='none';$('app').style.display='block';$('quien').textContent=D.usr.nombre+' · '+D.usr.rol+' · solo lectura';cargarTodo();}}catch(e){}
