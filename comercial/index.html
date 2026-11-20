@@ -627,6 +627,17 @@ body.sandbox-active{padding-top:calc(56px + 34px) !important;}
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;"><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Aceptada')">✅ Aceptada</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Perdida')">❌ Perdida</button><button class="btn btn-outline btn-sm" onclick="czCambiarEstado('Anulada')">🗑️ Anular</button></div>
           <button class="btn btn-outline" id="czBtnVer" style="width:100%;" onclick="czNuevaVersion()">🆕 Nueva versión (A/B) de esta cotización</button>
           <button class="btn btn-primary" id="czBtnAP" style="width:100%;margin-top:8px;" onclick="czAAP()">📦 Convertir en AP (pedido)</button><div id="czApInfo" style="font-size:.76rem;color:#166534;margin-top:4px;"></div>
+          <div id="czSegCard" style="display:none;margin-top:12px;border:1.5px solid #1a3a5c;border-radius:10px;padding:.6rem .7rem;background:#f8fafc;">
+            <div style="font-weight:800;color:#1a3a5c;font-size:.9rem;margin-bottom:6px;">📒 Seguimiento de esta cotización</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+              <select id="czSegTipo" class="form-control"><option>Nota</option><option>Llamada</option><option>Visita</option><option>WhatsApp / correo</option><option>Cambio acordado</option></select>
+              <input id="czSegProx" type="date" class="form-control" title="Próximo contacto (opcional)">
+            </div>
+            <textarea id="czSegTxt" class="form-control" rows="2" placeholder="¿Qué pasó? Ej.: el cliente pidió bajar el flete; quedamos en llamar el jueves..."></textarea>
+            <div style="font-size:.68rem;color:#64748b;margin:2px 0 6px;">La fecha de la derecha es el próximo contacto con el cliente; si la dejas vacía no se agenda nada.</div>
+            <button class="btn btn-primary btn-sm" style="width:100%;" onclick="czSegGuardar()">➕ Agregar al seguimiento</button>
+            <div id="czSegLista" style="margin-top:8px;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -6046,11 +6057,84 @@ function czEnviarRespaldo(nombre, b64) {
       vendedor_nombre: CZ.vendedor_nombre || (mio ? (vv.nombre_vendedor || '') : ''), cliente_nombre: CZ.cliente.nombre, nombre_archivo: nombre, pdf_base64: b64 }).catch(function () {});
   } catch (e) {}
 }
+
+// ===== Seguimiento de cotizaciones (bitácora por cotización) — v110 =====
+var CZ_SEG = [], CZ_BASE = null, _czSegBusy = false;
+function czSegEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function czSegHoy() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function czSegSnap() { try { var T = czSumas(calcPedido(CZ.lineas, czCfg())); return { uid: CZ.uid, total: Math.round(T.total || 0), nlin: (CZ.lineas || []).length, vig: CZ.vigencia || '', estado: CZ.estado || '' }; } catch (e) { return null; } }
+async function czSegCargar() {
+  var card = document.getElementById('czSegCard'); if (!card) return;
+  if (!CZ || !CZ.uid) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  var uid = String(CZ.uid), locales = CZ_SEG.filter(function (x) { return String(x.uid) === uid; });
+  var remotas = [];
+  try { remotas = (await leerGVIZ('COTIZ_SEGUIMIENTO')).filter(function (x) { return String(x.uid) === uid; }); } catch (e) {}
+  var ids = {}; remotas.forEach(function (x) { ids[String(x.id)] = 1; });
+  CZ_SEG = remotas.concat(locales.filter(function (x) { return !ids[String(x.id)]; }));
+  czSegRender();
+}
+function czSegRender() {
+  var box = document.getElementById('czSegLista'); if (!box) return;
+  var uid = CZ && CZ.uid ? String(CZ.uid) : '';
+  var L = CZ_SEG.filter(function (x) { return String(x.uid) === uid; }).sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
+  if (!L.length) { box.innerHTML = '<div style="font-size:.75rem;color:#64748b;">Aún no hay anotaciones. Registra aquí llamadas, visitas, cambios acordados y el próximo contacto.</div>'; return; }
+  var hoy = czSegHoy(), prox = '';
+  L.forEach(function (x) { if (!prox && x.proximo_contacto) prox = String(x.proximo_contacto).slice(0, 10); });
+  var h = '';
+  if (prox) { var venc = prox <= hoy; h += '<div style="font-size:.76rem;font-weight:700;padding:4px 8px;border-radius:6px;margin-bottom:6px;background:' + (venc ? '#fee2e2' : '#dcfce7') + ';color:' + (venc ? '#991b1b' : '#166534') + ';">' + (venc ? '⏰ Contacto pendiente desde ' : '📅 Próximo contacto: ') + czSegEsc(fmtFecha(prox)) + '</div>'; }
+  var ico = { 'Nota': '📝', 'Llamada': '📞', 'Visita': '🚗', 'WhatsApp / correo': '💬', 'Cambio acordado': '🔁', 'Cambio': '🔁', 'Estado': '🏷️', 'Creación': '🆕' };
+  L.forEach(function (x) {
+    var f = String(x.fecha || ''), d = f ? new Date(f) : null, ft = d && !isNaN(d) ? d.toLocaleDateString('es-CO') + ' ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : f;
+    h += '<div style="border-left:3px solid ' + (String(x.auto) === '1' ? '#94a3b8' : '#E8731C') + ';padding:3px 8px;margin-bottom:6px;background:#fff;border-radius:0 6px 6px 0;"><div style="font-size:.68rem;color:#64748b;">' + (ico[x.tipo] || '📝') + ' <b>' + czSegEsc(x.tipo) + '</b> · ' + czSegEsc(ft) + ' · ' + czSegEsc(x.autor) + '</div><div style="font-size:.8rem;white-space:pre-wrap;">' + czSegEsc(x.texto) + '</div>' + (x.proximo_contacto ? '<div style="font-size:.68rem;color:#166534;">📅 Próximo contacto: ' + czSegEsc(fmtFecha(String(x.proximo_contacto).slice(0, 10))) + '</div>' : '') + '</div>';
+  });
+  box.innerHTML = h;
+}
+async function czSegAgregar(tipo, texto, prox, auto) {
+  if (!CZ || !CZ.uid) return false;
+  var e = { id: 'S' + Date.now() + Math.floor(Math.random() * 100), uid: CZ.uid, numero: CZ.numero || '', fecha: new Date().toISOString(), autor: (STATE.vendedor && STATE.vendedor.nombre_vendedor) || '', tipo: tipo, texto: texto, proximo_contacto: prox || '', auto: auto ? 1 : 0 };
+  CZ_SEG.push(e); czSegRender();
+  try { var r = await escribirGAS(Object.assign({ accion: 'agregarSeguimientoCot' }, e)); if (r && r.ok === false) { toast('⚠️ El seguimiento no se guardó: ' + (r.error || 'intenta de nuevo')); return false; } } catch (er) { toast('⚠️ Sin conexión: el seguimiento no se guardó'); return false; }
+  return true;
+}
+async function czSegGuardar() {
+  if (!CZ || !CZ.uid) { toast('Primero guarda la cotización'); return; }
+  var t = (document.getElementById('czSegTxt').value || '').trim(), px = document.getElementById('czSegProx').value || '';
+  if (!t && !px) { toast('Escribe qué pasó o elige la fecha del próximo contacto'); return; }
+  if (!t) t = 'Próximo contacto agendado';
+  var ok = await czSegAgregar(document.getElementById('czSegTipo').value, t, px, false);
+  if (ok) { document.getElementById('czSegTxt').value = ''; document.getElementById('czSegProx').value = ''; toast('✅ Seguimiento agregado'); }
+}
+(function () {
+  var _mf = czMostrarForm; czMostrarForm = function () { _mf.apply(this, arguments); czSegCargar(); };
+  var _ab = czAbrir; czAbrir = function () { _ab.apply(this, arguments); CZ_BASE = CZ && CZ.uid ? czSegSnap() : null; };
+  var _nu = czNueva; czNueva = function () { CZ_BASE = null; return _nu.apply(this, arguments); };
+  var _g = czGuardar; czGuardar = async function () {
+    var raiz = !_czSegBusy; _czSegBusy = true;
+    try {
+      var ok = await _g.apply(this, arguments);
+      if (ok && raiz && CZ && CZ.uid) {
+        var now = czSegSnap();
+        if (!CZ_BASE) { await czSegAgregar('Creación', 'Cotización creada · ' + (now ? 'Total $' + fmtNum(now.total) + ' · ' + now.nlin + ' producto(s)' : ''), '', true); }
+        else if (now) {
+          var d = [];
+          if (now.total !== CZ_BASE.total) d.push('Total $' + fmtNum(CZ_BASE.total) + ' → $' + fmtNum(now.total));
+          if (now.nlin !== CZ_BASE.nlin) d.push('Productos ' + CZ_BASE.nlin + ' → ' + now.nlin);
+          if (now.vig !== CZ_BASE.vig) d.push('Vigencia ' + (CZ_BASE.vig ? fmtFecha(CZ_BASE.vig) : '—') + ' → ' + (now.vig ? fmtFecha(now.vig) : '—'));
+          if (d.length) await czSegAgregar('Cambio', 'Cotización modificada: ' + d.join(' · '), '', true);
+        }
+        CZ_BASE = now; czSegCargar();
+      }
+      return ok;
+    } finally { if (raiz) _czSegBusy = false; }
+  };
+})();
 async function czCambiarEstado(estado) {
   if (!CZ.uid) { toast('Primero guarda la cotización'); return; }
   var nota = estado === 'Perdida' ? (prompt('¿Por qué se perdió? (precio, tiempo de entrega, competencia...)') || '') : '';
   await escribirGAS({ accion: 'cambiarEstadoCotizacion', uid: CZ.uid, estado: estado, nota: nota });
   CZ.estado = estado; document.getElementById('czEstadoTxt').textContent = estado; toast('Estado: ' + estado);
+  try { await czSegAgregar('Estado', 'Estado → ' + estado + (nota ? ' · Motivo: ' + nota : ''), '', true); } catch (e) {}
 }
 function czTextoWA() {
   var T = czCalc(), c = CZ.cliente;

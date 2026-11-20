@@ -97,6 +97,7 @@ function doPost(e) {
       case "guardarCotizacion": resultado = guardarCotizacion(body); break;
       case "reservarNumerosCotizacion": resultado = reservarNumerosCotizacion(body); break;
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
+      case "agregarSeguimientoCot": resultado = agregarSeguimientoCot(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "registrarPagoAP": resultado = registrarPagoAP(body); break;
@@ -2261,6 +2262,40 @@ function cambiarEstadoCotizacion(body) {
     }
   }
   return { ok: false, error: "Cotización no encontrada" };
+}
+
+
+// =============================================================================
+// SEGUIMIENTO DE COTIZACIONES (20 nov 2026) — bitácora por cotización: notas, llamadas, visitas,
+// cambios acordados, cambios de estado y próximo contacto. Hoja COTIZ_SEGUIMIENTO (se crea sola).
+// =============================================================================
+const SEGCOT_COLS = ["id","uid","numero","fecha","autor","tipo","texto","proximo_contacto","auto"];
+function agregarSeguimientoCot(body) {
+  if (!body.uid) return { ok: false, error: "Falta la cotización" };
+  const texto = String(body.texto || "").trim();
+  if (!texto) return { ok: false, error: "Falta el texto del seguimiento" };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    const ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    let h = ss.getSheetByName("COTIZ_SEGUIMIENTO");
+    if (!h) {
+      h = ss.insertSheet("COTIZ_SEGUIMIENTO");
+      h.getRange(1, 1, 1, SEGCOT_COLS.length).setValues([SEGCOT_COLS]).setFontWeight("bold");
+      h.setFrozenRows(1);
+      h.getRange(1, 1, h.getMaxRows(), SEGCOT_COLS.length).setNumberFormat("@");
+    }
+    const id = String(body.id || ("S" + Date.now()));
+    const ult = h.getLastRow();
+    if (ult > 1) {
+      const ids = h.getRange(2, 1, ult - 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) return { ok: true, repetido: true };
+    }
+    const fila = [id, String(body.uid), String(body.numero || ""), String(body.fecha || new Date().toISOString()), String(body.autor || ""), String(body.tipo || "Nota"), texto.slice(0, 2000), String(body.proximo_contacto || "").slice(0, 10), body.auto ? "1" : "0"];
+    h.getRange(ult + 1, 1, 1, SEGCOT_COLS.length).setNumberFormat("@").setValues([fila]);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
 }
 
 // Textos del Cotizador (pago / entrega / plazo / obs). Solo Gerencia los edita.
