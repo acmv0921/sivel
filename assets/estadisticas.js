@@ -203,6 +203,28 @@
   }
   var btnDim = function (d) { return '<button class="est-btn s" onclick="EstDesp.descDim(\'' + d + '\')">📥 Excel</button>'; };
 
+  /* ---------- Alertas ---------- */
+  function alertas(A, B, prodR, vehR, bk, fuera, pctPlaca) {
+    var L = [];
+    var viejas = bk.L.filter(function (l) { return l.dias > 15; });
+    if (viejas.length) L.push({ n: 'alta', t: viejas.length + ' AP(s) abiertas con más de 15 días', d: 'La más antigua: AP ' + viejas[0].id + ' · ' + viejas[0].cli + ' (' + viejas[0].dias + ' días, ' + money(viejas[0].pv) + ' por despachar).', f: 'Revisar con el vendedor si se despacha, se reprograma o se cancela el saldo.' });
+    if (A.fill != null && A.fill < 0.9) L.push({ n: 'alta', t: 'Nivel de servicio bajo: ' + fm(A.fill * 100, 1) + ' %', d: 'De lo solicitado en las APs atendidas, solo se ha despachado ese porcentaje.', f: 'Revisar saldos pendientes y disponibilidad de los productos clase A.' });
+    if (A.ltMed != null && A.ltMed > ST.sla) L.push({ n: 'media', t: 'Tiempo de ciclo alto: ' + fm(A.ltMed, 1) + ' días (meta ' + ST.sla + ')', d: 'Las APs tardan más de la meta en salir.', f: 'Identificar si el retraso es por producción, vehículo o pago.' });
+    if (B.ltMed != null && A.ltMed != null && B.ltMed > 0 && A.ltMed > B.ltMed * 1.25) L.push({ n: 'media', t: 'El tiempo de ciclo empeoró más de 25 % frente al periodo anterior', d: fm(B.ltMed, 1) + ' → ' + fm(A.ltMed, 1) + ' días.', f: 'Comparar semanas del periodo para ubicar cuándo empezó.' });
+    if (fuera.length) L.push({ n: 'media', t: fuera.length + ' punto(s) fuera de los límites de control', d: fuera.slice(0, 4).map(function (p) { return p.k; }).join(', '), f: 'Preguntar qué ocurrió ese día o semana (lluvia, falta de vehículo, pedido grande).' });
+    if (A.tasaNov != null && B.tasaNov != null && B.tasaNov > 0 && A.tasaNov > B.tasaNov * 1.5) L.push({ n: 'alta', t: 'Las novedades por 1.000 und subieron más de 50 %', d: fm(B.tasaNov, 1) + ' → ' + fm(A.tasaNov, 1), f: 'Revisar cargue, restribado y producto con más averías.' });
+    var vh = vehR.filter(function (o) { return o.k !== 'SIN PLACA' && o.nVi >= 3; }), media = A.viajes ? A.kg / A.viajes : 0;
+    vh.forEach(function (o) { var c = o.kg / o.nVi; if (media > 0 && c < media * 0.5) L.push({ n: 'baja', t: 'Vehículo ' + o.k + ' sale con poca carga', d: fm(c / 1000, 2) + ' t por viaje frente a ' + fm(media / 1000, 2) + ' t de la flota.', f: 'Combinar pedidos (viaje compartido) o asignar un vehículo más pequeño.' }); });
+    if (pctPlaca != null && pctPlaca < 95 && A.ev.length) L.push({ n: 'baja', t: 'Despachos sin placa: ' + fm(100 - pctPlaca, 1) + ' %', d: 'Sin la placa no se puede medir el uso de la flota.', f: 'Registrar siempre la placa al confirmar el despacho.' });
+    if (A.estim > 0) L.push({ n: 'baja', t: A.estim + ' registro(s) con cantidad estimada', d: 'Despachos sin cantidad por viaje.', f: 'A partir de ahora la cantidad por viaje se debe registrar siempre.' });
+    var orden = { alta: 0, media: 1, baja: 2 }; L.sort(function (a, b) { return orden[a.n] - orden[b.n]; });
+    return L;
+  }
+  function alertasHTML(L) {
+    var col = { alta: ['#fef2f2', '#b91c1c', '🔴'], media: ['#fffbeb', '#b45309', '🟠'], baja: ['#f1f5f9', '#475569', '🔵'] };
+    return '<details class="est-sec" open id="estAlertas"><summary>🚨 Alertas del periodo (' + L.length + ')</summary><div class="est-bd">' + (L.length ? L.map(function (a) { var c = col[a.n]; return '<div style="background:' + c[0] + ';border-left:4px solid ' + c[1] + ';border-radius:8px;padding:.45rem .6rem;margin-bottom:.4rem;font-size:.76rem;line-height:1.4;">' + c[2] + ' <b>' + esc(a.t) + '</b><br>' + esc(a.d) + '<br><i>→ ' + esc(a.f) + '</i></div>'; }).join('') : '<div class="est-vacio">✅ Sin alertas en este periodo.</div>') + '</div></details>';
+  }
+
   // Granularidad de la tendencia: día (≤ 45 días), semana (≤ 200 días), mes
   function serie(rg) {
     var dias = Math.round((rg.fin - rg.ini) / DIA) + 1, g = dias <= 45 ? 'd' : (dias <= 200 ? 's' : 'm'), hoy = new Date(), tope = rg.fin > hoy ? hoy : rg.fin;
@@ -318,7 +340,7 @@
       (ST.tipo === 'rango' ? '<div class="est-rng"><input type="date" id="estDesde" value="' + (ST.desde || ymd(rg.ini)) + '" onchange="EstDesp.fechas()"><input type="date" id="estHasta" value="' + (ST.hasta || ymd(rg.fin > new Date() ? new Date() : rg.fin)) + '" onchange="EstDesp.fechas()"></div>' :
         '<div class="est-nav"><button onclick="EstDesp.mover(-1)">◀</button><b>' + esc(rg.lab) + '</b><button onclick="EstDesp.mover(1)">▶</button></div>') + '</div>';
     h += '<div class="est-ctl"><span style="font-size:.7rem;color:#64748b;font-weight:700;">Medir en:</span><div class="est-seg" id="estMetrica"><button class="' + (ST.met === 'und' ? 'on' : '') + '" onclick="EstDesp.metrica(\'und\')">Unidades</button><button class="' + (ST.met === 'val' ? 'on' : '') + '" onclick="EstDesp.metrica(\'val\')">Valor $</button><button class="' + (ST.met === 'kg' ? 'on' : '') + '" onclick="EstDesp.metrica(\'kg\')">Toneladas</button></div>' +
-      '<button class="est-btn" id="estDescargar" onclick="EstDesp.excel()">📥 Descargar Excel</button><button class="est-btn s" onclick="EstDesp.recargar()">🔄 Actualizar datos</button></div>';
+      '<button class="est-btn" id="estDescargar" onclick="EstDesp.excel()">📥 Descargar Excel</button><button class="est-btn" style="background:#b91c1c;" onclick="EstDesp.pdf()">📄 Informe PDF</button><button class="est-btn s" onclick="EstDesp.recargar()">🔄 Actualizar datos</button></div>';
     if (!A.ev.length) h += '<div class="est-hl" style="background:#f8fafc;border-color:#e2e8f0;">No hay despachos registrados en este periodo. Cambia de periodo con las flechas.</div>';
     h += '<div class="est-kpis" id="estKpis">' +
       kpi('Unidades despachadas', fm(A.und), delta(A.und, B.und), A.estim ? A.estim + ' registros con cantidad estimada' : '') +
@@ -330,6 +352,8 @@
       kpi('Nivel de servicio', A.fill == null ? '—' : fm(A.fill * 100, 1) + ' %', delta(A.fill, B.fill), 'despachado / solicitado en APs atendidas') +
       kpi('Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), delta(A.tasaNov, B.tasaNov, true), 'averías + reposiciones + mermas') + '</div>';
     if (hl.length) h += '<div class="est-hl"><b>💡 Hallazgos del periodo</b><br>• ' + hl.join('<br>• ') + '</div>';
+    var AL = alertas(A, B, prodR, vehR, bk, fuera, pctPlaca); ST.AL = AL; ST.hl = hl;
+    h += alertasHTML(AL);
     h += '<div id="estDrill"></div>';
     h += consultaHTML();
 
@@ -361,6 +385,7 @@
     h += '<details class="est-sec"><summary>🧪 Calidad de los datos</summary><div class="est-bd"><div class="est-how">Las estadísticas son tan buenas como los datos que se registran. Esta tarjeta dice qué tan completo está el registro del periodo.</div><div class="est-dq">' +
       '<div>Despachos con <b>placa</b>: ' + (pctPlaca == null ? '—' : fm(pctPlaca) + ' %') + '</div><div>Registros con cantidad <b>estimada</b>: ' + A.estim + '</div>' +
       '<div>Novedades registradas: ' + novP.length + '</div><div>Registros del periodo: ' + A.ev.length + '</div></div></div></details>';
+    h += centroHTML();
     h += '<div style="font-size:.66rem;color:#94a3b8;text-align:center;margin:.5rem 0 1rem;">Fuente: hojas de despachos, APs y productos de SIVIL · calculado al abrir o al pulsar Actualizar</div>';
     c.innerHTML = h;
 
@@ -445,6 +470,94 @@
   E.descDim = function (d) { if (!ST.A) return; var arr = ordenar(agrupar(d), d); libro(nombreArch('SIVIL_' + DIMN[d]), [{ n: 'Por ' + DIMN[d], f: filasExport(arr, d) }, { n: 'Detalle', f: filasDetalle(ST.A.ev) }]); };
   E.excelDetalle = function () { if (ST.drill) libro('SIVIL_Detalle_' + DIMN[ST.drill.tipo] + '_' + fecha(), [{ n: 'Detalle', f: filasDetalle(ST.drillL) }]); };
   E.descBacklog = function () { var bk = backlog(); libro('SIVIL_APs_abiertas_' + fecha(), [{ n: 'APs abiertas', f: bk.L.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Fecha creación': dmy(l.f), 'Días abierta': l.dias, 'Unidades por despachar': Math.round(l.pu), 'Valor por despachar $': Math.round(l.pv) }; }) }]); };
+
+  /* ---------- Informe PDF ---------- */
+  E.pdf = function () {
+    if (!window.jspdf) { alert('El generador de PDF no cargó (¿sin conexión?). Recargue la aplicación.'); return; }
+    var A = ST.A, B = ST.B, rg = ST.rg; if (!A) return;
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'letter' }), W = 215.9, M = 14, y = 0;
+    var azul = [26, 58, 92], gris = [100, 116, 139];
+    var T = function (t, x, yy, o) { o = o || {}; doc.setFont('helvetica', o.b ? 'bold' : 'normal'); doc.setFontSize(o.s || 9); doc.setTextColor.apply(doc, o.c || [30, 43, 58]); doc.text(String(t), x, yy, o.a ? { align: o.a } : undefined); };
+    var pie = function () { T('SIVIL · Informe de despachos · ' + rg.lab + ' · Generado ' + dmy(new Date()), M, 272, { s: 7, c: gris }); T('Pág. ' + doc.internal.getNumberOfPages(), W - M, 272, { s: 7, c: gris, a: 'right' }); };
+    var chk = function (h) { if (y + h > 266) { pie(); doc.addPage(); y = 18; } };
+    var tabla = function (cols, filas, anchos) {
+      chk(8 + 5 * Math.min(filas.length, 3)); var x = M; doc.setFillColor(238, 241, 245); doc.rect(M, y - 4, W - 2 * M, 6, 'F');
+      cols.forEach(function (c, i) { T(c, anchos[i] > 0 && i > 0 ? x + anchos[i] - 1 : x + 1, y, { b: 1, s: 7.5, c: azul, a: i > 0 ? 'right' : undefined }); x += anchos[i]; }); y += 5;
+      filas.forEach(function (f) { chk(6); x = M; f.forEach(function (c, i) { var tx = String(c); if (i === 0 && tx.length > 52) tx = tx.slice(0, 50) + '…'; T(tx, i > 0 ? x + anchos[i] - 1 : x + 1, y, { s: 7.5, a: i > 0 ? 'right' : undefined }); x += anchos[i]; }); y += 4.6; });
+      y += 3;
+    };
+    doc.setFillColor.apply(doc, azul); doc.rect(0, 0, W, 26, 'F');
+    T('Informe de despachos', M, 12, { b: 1, s: 16, c: [255, 255, 255] }); T('POSTEC DE OCCIDENTE · ' + rg.lab + ' (comparado con ' + previo(rg).lab + ')', M, 19, { s: 9, c: [220, 230, 245] });
+    y = 36;
+    var K = [['Unidades', fm(A.und), fm(B.und)], ['Valor despachado', money(A.val), money(B.val)], ['Toneladas', fm(A.kg / 1000, 1), fm(B.kg / 1000, 1)], ['Viajes', fm(A.viajes), fm(B.viajes)], ['APs atendidas', fm(A.aps), fm(B.aps)], ['Carga media por viaje (t)', A.viajes ? fm(A.kg / A.viajes / 1000, 2) : '—', B.viajes ? fm(B.kg / B.viajes / 1000, 2) : '—'], ['Tiempo de ciclo AP→salida (días)', A.ltMed == null ? '—' : fm(A.ltMed, 1), B.ltMed == null ? '—' : fm(B.ltMed, 1)], ['Nivel de servicio (%)', A.fill == null ? '—' : fm(A.fill * 100, 1), B.fill == null ? '—' : fm(B.fill * 100, 1)], ['Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), B.tasaNov == null ? '—' : fm(B.tasaNov, 1)]];
+    var num = function (x) { return parseFloat(String(x).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')); };
+    T('1. Indicadores clave', M, y, { b: 1, s: 11, c: azul }); y += 7;
+    tabla(['Indicador', 'Periodo', 'Anterior', 'Variación'], K.map(function (k) { var a = num(k[1]), b = num(k[2]); return [k[0], k[1], k[2], isFinite(a) && isFinite(b) && b ? (a >= b ? '+' : '') + fm((a - b) / Math.abs(b) * 100, 1) + ' %' : '—']; }), [88, 32, 32, 30]);
+    if (ST.hl && ST.hl.length) { chk(30); T('2. Hallazgos', M, y, { b: 1, s: 11, c: azul }); y += 6; ST.hl.forEach(function (t) { var ln = doc.splitTextToSize('• ' + t.replace(/<[^>]+>/g, ''), W - 2 * M); chk(ln.length * 4.4); ln.forEach(function (l) { T(l, M, y, { s: 8.5 }); y += 4.4; }); y += 1; }); y += 3; }
+    var AL = ST.AL || []; chk(20); T('3. Alertas (' + AL.length + ')', M, y, { b: 1, s: 11, c: azul }); y += 6;
+    if (!AL.length) { T('Sin alertas en el periodo.', M, y, { s: 8.5 }); y += 6; } AL.forEach(function (a) { var ln = doc.splitTextToSize('[' + a.n.toUpperCase() + '] ' + a.t + ' — ' + a.d + ' Acción: ' + a.f, W - 2 * M); chk(ln.length * 4.4 + 1); ln.forEach(function (l) { T(l, M, y, { s: 8, c: a.n === 'alta' ? [185, 28, 28] : [30, 43, 58] }); y += 4.4; }); y += 1.5; }); y += 2;
+    var pR = rank(A.prod), vR = rank(A.veh), cR = rank(A.cli), cvp = cvProductos(rg, pR);
+    chk(30); T('4. Productos con más movimiento (Pareto, medido en ' + MET[ST.met].toLowerCase() + ')', M, y, { b: 1, s: 11, c: azul }); y += 7;
+    tabla(['Producto', MET[ST.met], '% acum.', 'ABC', 'XYZ'], pR.slice(0, 15).map(function (o) { var x = cvp[o.k]; return [o.k + ' · ' + nombreProd(o.k), fmM(o.v), fm(o.cum, 1) + ' %', o.abc, x ? x.xyz : '—']; }), [96, 38, 22, 14, 14]);
+    chk(30); T('5. Vehículos', M, y, { b: 1, s: 11, c: azul }); y += 7;
+    tabla(['Placa', 'Viajes', MET[ST.met], 't/viaje', 'Días'], vR.slice(0, 12).map(function (o) { return [o.k, o.nVi, fmM(o.v), o.nVi ? fm(o.kg / o.nVi / 1000, 2) : '—', Object.keys(o.dias).length]; }), [60, 22, 48, 30, 22]);
+    chk(30); T('6. Principales clientes', M, y, { b: 1, s: 11, c: azul }); y += 7;
+    tabla(['Cliente', MET[ST.met], '% del total', 'APs'], cR.slice(0, 10).map(function (o) { return [nombreCli(o.k), fmM(o.v), fm(o.pc, 1) + ' %', o.nAps]; }), [96, 40, 30, 16]);
+    var bk = backlog(); chk(30); T('7. APs abiertas por antigüedad (a hoy)', M, y, { b: 1, s: 11, c: azul }); y += 7;
+    tabla(['Antigüedad', 'APs', 'Valor por despachar'], bk.B.map(function (b) { return [b.t, b.n, money(b.v)]; }), [80, 30, 62]);
+    var tr = Object.keys(ST.ch).length ? null : null; // gráficas: se incluyen como imagen si existen
+    ['estCT', 'estPA'].forEach(function (id) { var cv = $(id); if (!cv) return; try { var im = cv.toDataURL('image/png'); chk(70); doc.addImage(im, 'PNG', M, y, W - 2 * M, 62); y += 66; } catch (e) { } });
+    pie(); doc.save('SIVIL_Informe_Despachos_' + ymd(rg.ini) + '_a_' + ymd(rg.fin) + '.pdf');
+  };
+
+  /* ---------- Centro de descargas ---------- */
+  var SENS = /(^|_)(pin|clave|password|contrase|token|secret|hash)/i;
+  var CATALOGO = [
+    ['Inventario y pendientes por producto', '📦', 'Catálogo con precio, unidad, peso y lo pendiente por despachar de las APs abiertas.', 'inv'],
+    ['Productos (catálogo maestro)', '🧱', 'PRODUCTOS_MAESTRO completo.', 'PRODUCTOS_MAESTRO', 'tmcode'],
+    ['Precios de gerencia', '💲', 'Lista de precios vigente.', 'PRECIOS_GERENCIA'],
+    ['Recetas y materias primas', '🧪', 'Materiales y cantidades por producto (RECETAS).', 'RECETAS', 'producto_codigo'],
+    ['Notas de compras y proveedores', '🛒', 'Seguimiento de compras de Suministros (proveedor contactado, fechas, cantidades).', 'SUMINISTROS_NOTAS', 'tmcode'],
+    ['Clientes', '👥', 'Clientes registrados.', 'CLIENTES', 'cliente_nit'],
+    ['Vendedores', '🧑‍💼', 'Vendedores (sin claves).', 'VENDEDORES'],
+    ['Vehículos', '🚛', 'Flota y conductores.', 'VEHICULOS'],
+    ['APs (preventas)', '📋', 'Todas las APs con su estado.', 'PREVENTAS_AP', 'ap_id'],
+    ['Detalle de APs', '🧾', 'Líneas de producto de cada AP.', 'DETALLE_AP', 'ap_id'],
+    ['Despachos (patio y logística)', '🚚', 'Registro de cada cargue.', 'CONTROL_PATIO_Y_LOGISTICA'],
+    ['Novedades de logística', '⚠️', 'Varados, cancelaciones, incidencias.', 'NOVEDADES_LOGISTICA'],
+    ['Cotizaciones', '💬', 'Cotizaciones registradas (incluye verbales).', 'COTIZACIONES'],
+    ['Pagos de APs', '💵', 'Pagos y anticipos registrados.', 'PAGOS_AP']
+  ];
+  function centroHTML() {
+    return '<details class="est-sec" id="estCentro"><summary>📥 Centro de descargas (inventario, materias primas, proveedores, catálogos…)</summary><div class="est-bd"><div class="est-how">Descargue cualquier base de SIVIL en Excel o CSV. Por seguridad, las columnas de claves, PIN y similares <b>nunca</b> se incluyen. Los datos son los de este momento.</div>' +
+      CATALOGO.map(function (c, i) { return '<div style="display:flex;align-items:center;gap:6px;padding:.4rem 0;border-bottom:1px solid #f1f5f9;"><div style="font-size:1.1rem;">' + c[1] + '</div><div style="flex:1;min-width:0;"><b style="font-size:.78rem;">' + esc(c[0]) + '</b><div class="est-cv">' + esc(c[2]) + '</div></div><button class="est-btn" onclick="EstDesp.bajar(' + i + ',\'x\')">Excel</button><button class="est-btn s" onclick="EstDesp.bajar(' + i + ',\'c\')">CSV</button></div>'; }).join('') +
+      '<div style="margin-top:.6rem;"><button class="est-btn" style="width:100%;padding:.6rem;" onclick="EstDesp.bajarTodo()">📚 Descargar todo en un solo libro de Excel</button></div><div id="estCentroMsg" class="est-cv" style="margin-top:.4rem;text-align:center;"></div></div></details>';
+  }
+  function limpiar(rows) { return rows.map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { if (SENS.test(k)) return; var v = r[k]; o[k] = v instanceof Date ? dmy(v) + ' ' + ('0' + v.getHours()).slice(-2) + ':' + ('0' + v.getMinutes()).slice(-2) : (v == null ? '' : v); }); return o; }); }
+  function hojaSegura(nombre, esperada) {
+    return gviz(nombre).then(function (r) { if (esperada && (!r.length || !(esperada in r[0]))) return []; return limpiar(r); }).catch(function () { return []; });
+  }
+  function invPend() {
+    var X = ST.X, pend = {};
+    Object.keys(X.ap).forEach(function (id) { var a = X.ap[id]; if (!/^(Pendiente|Despachado Parcial|Modificado)$/i.test(a.e)) return; (X.detAp[id] || []).forEach(function (d) { var r = Math.max(0, d.sol - d.des); if (r > 0) { var o = pend[d.tm] || (pend[d.tm] = { u: 0, aps: {} }); o.u += r; o.aps[id] = 1; } }); });
+    return Object.keys(X.prod).map(function (k) { var p = X.prod[k], o = pend[k] || { u: 0, aps: {} }; return { Código: k, Producto: p.d, Unidad: p.u, 'Peso unitario (kg)': p.peso, 'Precio base $': p.pb, 'Pendiente por despachar (und)': Math.round(o.u), 'Pendiente (t)': Math.round(o.u * p.peso / 10) / 100, 'Valor pendiente $': Math.round(o.u * p.pb), 'APs con pendiente': Object.keys(o.aps).length }; }).sort(function (a, b) { return b['Pendiente por despachar (und)'] - a['Pendiente por despachar (und)']; });
+  }
+  function datosCat(c) { return c[3] === 'inv' ? Promise.resolve(invPend()) : hojaSegura(c[3], c[4]); }
+  E.bajar = function (i, fmt) {
+    var c = CATALOGO[i], m = $('estCentroMsg'); if (m) m.textContent = 'Preparando «' + c[0] + '»…';
+    cargar().then(function () { return datosCat(c); }).then(function (f) {
+      if (m) m.textContent = f.length ? '«' + c[0] + '»: ' + f.length + ' filas descargadas.' : '«' + c[0] + '» no tiene datos (o la hoja aún no existe).';
+      if (!f.length) return;
+      var nom = 'SIVIL_' + c[0] + '_' + fecha(); if (fmt === 'c') bajarCSV(sinTilde(nom), f); else libro(nom, [{ n: c[0], f: f }]);
+    }).catch(function (e) { if (m) m.textContent = '❌ ' + (e.message || e); });
+  };
+  E.bajarTodo = function () {
+    var m = $('estCentroMsg'); if (m) m.textContent = 'Reuniendo todas las bases… puede tardar unos segundos.';
+    cargar().then(function () { return Promise.all(CATALOGO.map(datosCat)); }).then(function (R) {
+      var hs = []; CATALOGO.forEach(function (c, i) { if (R[i].length) hs.push({ n: c[0].replace(/[\\\/\?\*\[\]:]/g, ' '), f: R[i] }); });
+      if (m) m.textContent = hs.length + ' bases incluidas en el libro.'; if (hs.length) libro('SIVIL_Todas_las_bases_' + fecha(), hs);
+    }).catch(function (e) { if (m) m.textContent = '❌ ' + (e.message || e); });
+  };
 
   /* ---------- Excel ---------- */
   E.excel = function () {
