@@ -89,6 +89,8 @@ window.GUIAS_GERENCIA = [
         texto: 'Muestra viajes, toneladas y <b>carga media</b> de cada vehículo. Si un vehículo sale con poca carga, se pueden combinar pedidos (viaje compartido). Toque una placa para ver su detalle.' },
       { titulo: 'Averías y reclamaciones', resaltar: '#estNov',
         texto: 'Aquí aparecen los productos con más averías, reposiciones y mermas, por cada 1.000 unidades despachadas. <b>Si está vacío es porque no se registraron</b>: cada novedad se debe registrar en <b>⚠️ Averías</b> con producto y cantidad.' },
+      { titulo: 'Consultas por nivel', resaltar: '#estConsulta',
+        texto: 'Aquí puede ver los despachos agrupados <b>por producto, vendedor, AP, cliente, destino, vehículo, día, semana o mes</b>. Escriba en el buscador (por ejemplo un número de AP o el nombre de un cliente), toque los títulos para ordenar y toque una fila para ver cada despacho. Los botones <b>📥 Excel</b> y <b>CSV</b> descargan exactamente lo que ve en la tabla.' },
       { titulo: 'Descargue el informe', resaltar: '#estDescargar',
         texto: 'Pulse <b>📥 Descargar Excel</b>: genera un libro con resumen, Pareto, vehículos, clientes, destinos, tendencia, averías, APs abiertas y el detalle de cada despacho del periodo.' },
       { titulo: 'Qué registrar para que sirva',

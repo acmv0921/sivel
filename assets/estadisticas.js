@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   var E = (window.EstDesp = {});
-  var ST = { cfg: {}, D: null, X: null, tipo: 'mes', ref: new Date(), desde: '', hasta: '', met: 'und', sla: 3, ch: {}, cont: null, cargando: false, A: null, B: null, rg: null, drill: null };
+  var ST = { cfg: {}, D: null, X: null, tipo: 'mes', ref: new Date(), desde: '', hasta: '', met: 'und', sla: 3, ch: {}, cont: null, cargando: false, A: null, B: null, rg: null, drill: null, dim: 'prod', q: '', ord: null, asc: false, rows: [], drillL: [] };
   var MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var DIA = 86400000;
   var MET = { und: 'Unidades', val: 'Valor ($)', kg: 'Toneladas' };
@@ -143,6 +143,66 @@
     arr.forEach(function (o) { o.pc = tot ? o.v / tot * 100 : 0; cum += o.pc; o.cum = cum; o.abc = cum - o.pc < 80 ? 'A' : (cum - o.pc < 95 ? 'B' : 'C'); });
     return arr;
   }
+
+  /* ---------- Consultas por nivel ---------- */
+  var DIMS = [['prod', 'Producto'], ['ven', 'Vendedor'], ['ap', 'AP'], ['cli', 'Cliente'], ['dest', 'Destino'], ['veh', 'Vehículo'], ['dia', 'Día'], ['sem', 'Semana'], ['mes', 'Mes']];
+  var DIMN = { prod: 'Producto', ven: 'Vendedor', ap: 'AP', cli: 'Cliente', dest: 'Destino', veh: 'Vehículo', dia: 'Día', sem: 'Semana', mes: 'Mes' };
+  var lunes = function (d) { var dw = (d.getDay() + 6) % 7; return ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() - dw)); };
+  function dimKey(e, dim) {
+    var a = ST.X.ap[e.ap] || {};
+    switch (dim) {
+      case 'prod': return e.tm; case 'ven': return a.v || '(sin vendedor)'; case 'ap': return e.ap || '(sin AP)'; case 'cli': return a.nit || '(sin cliente)';
+      case 'dest': return a.dest || '(sin destino)'; case 'veh': return e.pl; case 'dia': return ymd(e.f); case 'sem': return lunes(e.f); default: return e.f.getFullYear() + '-' + ('0' + (e.f.getMonth() + 1)).slice(-2);
+    }
+  }
+  function nombreDim(dim, k) {
+    if (dim === 'prod') return k + ' · ' + nombreProd(k);
+    if (dim === 'ven') return nombreVen(k);
+    if (dim === 'cli') return nombreCli(k);
+    if (dim === 'ap') { var a = ST.X.ap[k]; return 'AP ' + k + (a ? ' · ' + nombreCli(a.nit) + (a.obra ? ' · ' + a.obra : '') : ''); }
+    if (dim === 'sem') return 'Semana del ' + k.split('-').reverse().join('/');
+    if (dim === 'dia') return k.split('-').reverse().join('/');
+    return k;
+  }
+  function agrupar(dim) {
+    var m = {};
+    ST.A.ev.forEach(function (e) {
+      var k = dimKey(e, dim), o = inc(m, k, e); o.reg = (o.reg || 0) + 1; if (!o.ult || e.f > o.ult) o.ult = e.f;
+    });
+    return Object.keys(m).map(function (k) { var o = m[k]; o.nom = nombreDim(dim, k); o.nAps = Object.keys(o.aps).length; o.nVi = Object.keys(o.vi).length; o.nDias = Object.keys(o.dias).length; return o; });
+  }
+  function ordenar(arr, dim) {
+    var o = ST.ord, tiempo = dim === 'dia' || dim === 'sem' || dim === 'mes';
+    var f = o === 'k' || (!o && tiempo) ? function (a, b) { return a.k < b.k ? -1 : a.k > b.k ? 1 : 0; } : o === 'nom' ? function (a, b) { return a.nom.localeCompare(b.nom); } : o === 'nAps' ? function (a, b) { return a.nAps - b.nAps; } : o === 'nVi' ? function (a, b) { return a.nVi - b.nVi; } : function (a, b) { var c = o || (ST.met === 'val' ? 'val' : ST.met === 'kg' ? 'kg' : 'und'); return a[c] - b[c]; };
+    var asc = o ? ST.asc : (tiempo ? false : false);
+    arr.sort(f); if (!asc) arr.reverse(); // numéricos: mayor primero; tiempo: más reciente primero
+    return arr;
+  }
+  function filasExport(arr, dim) {
+    return arr.map(function (o) { return { [DIMN[dim]]: o.k, Descripción: o.nom, Unidades: Math.round(o.und * 100) / 100, 'Valor $': Math.round(o.val), Toneladas: Math.round(o.kg / 10) / 100, APs: o.nAps, Viajes: o.nVi, 'Días con movimiento': o.nDias, Registros: o.reg, 'Último despacho': o.ult ? dmy(o.ult) : '', Averías: o.av, Reposiciones: o.rep, 'Mermas/segunda': o.mer }; });
+  }
+  function consultaTabla() {
+    var arr = ordenar(agrupar(ST.dim), ST.dim), q = (ST.q || '').toLowerCase().trim();
+    if (q) arr = arr.filter(function (o) { return (o.k + ' ' + o.nom).toLowerCase().indexOf(q) >= 0; });
+    ST.rows = arr;
+    var tot = arr.reduce(function (a, o) { a.und += o.und; a.val += o.val; a.kg += o.kg; return a; }, { und: 0, val: 0, kg: 0 });
+    var th = function (c, t) { return '<th class="' + (c === 'nom' || c === 'k' ? '' : 'n') + '" style="cursor:pointer;" onclick="EstDesp.ordenar(\'' + c + '\')">' + t + (ST.ord === c ? (ST.asc ? ' ▲' : ' ▼') : '') + '</th>'; };
+    var h = '<div style="font-size:.72rem;margin:.3rem 0;"><b>' + arr.length + '</b> ' + DIMN[ST.dim].toLowerCase() + '(s) · ' + fm(tot.und) + ' und · ' + money(tot.val) + ' · ' + fm(tot.kg / 1000, 1) + ' t</div>';
+    h += '<div style="overflow-x:auto;"><table class="est-tb"><thead><tr>' + th('nom', DIMN[ST.dim]) + th('und', 'Und') + th('val', 'Valor $') + th('kg', 'Kg') + '</tr></thead><tbody>';
+    h += arr.length ? arr.slice(0, 100).map(function (o, i) {
+      return '<tr class="clk" onclick="EstDesp.det(' + i + ')"><td>' + esc(o.nom) + '<div class="est-cv">' + o.nAps + ' AP · ' + o.nVi + ' viaje(s) · ' + o.nDias + ' día(s) · últ. ' + (o.ult ? dmy(o.ult) : '—') + '</div></td><td class="n">' + fm(o.und) + '</td><td class="n">' + fm(o.val) + '</td><td class="n">' + fm(o.kg) + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="est-vacio">Sin resultados' + (q ? ' para «' + esc(q) + '»' : ' en este periodo') + '</td></tr>';
+    h += '</tbody></table></div>' + (arr.length > 100 ? '<div class="est-cv" style="margin-top:.3rem;">Mostrando 100 de ' + arr.length + '. Descargue el Excel para ver todo.</div>' : '');
+    return h;
+  }
+  function consultaHTML() {
+    return '<details class="est-sec" open id="estConsulta"><summary>🔎 Consultas por nivel (producto, vendedor, AP, día, semana…)</summary><div class="est-bd"><div class="est-how">Elija <b>por qué quiere agrupar</b> los despachos del periodo. Escriba en el buscador para filtrar, toque los títulos de columna para ordenar y toque una fila para ver sus despachos. <b>Todo se puede descargar</b> en Excel o CSV.</div>' +
+      '<div class="est-chips" style="margin:0 0 .5rem;" id="estDims">' + DIMS.map(function (d) { return '<button class="est-chip" style="border-color:#2563a8;color:' + (ST.dim === d[0] ? '#fff' : '#2563a8') + ';background:' + (ST.dim === d[0] ? '#2563a8' : 'transparent') + ';" onclick="EstDesp.dim(\'' + d[0] + '\')">' + d[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="est-ctl"><input id="estBuscar" type="search" placeholder="Buscar…" value="' + esc(ST.q) + '" oninput="EstDesp.buscar(this.value)" style="flex:1;min-width:120px;border:1.5px solid #cbd5e1;border-radius:9px;padding:.4rem .6rem;font-size:.78rem;"><button class="est-btn" onclick="EstDesp.excelTabla()">📥 Excel</button><button class="est-btn s" onclick="EstDesp.csvTabla()">CSV</button></div>' +
+      '<div id="estConsTabla">' + consultaTabla() + '</div></div></details>';
+  }
+  var btnDim = function (d) { return '<button class="est-btn s" onclick="EstDesp.descDim(\'' + d + '\')">📥 Excel</button>'; };
+
   // Granularidad de la tendencia: día (≤ 45 días), semana (≤ 200 días), mes
   function serie(rg) {
     var dias = Math.round((rg.fin - rg.ini) / DIA) + 1, g = dias <= 45 ? 'd' : (dias <= 200 ? 's' : 'm'), hoy = new Date(), tope = rg.fin > hoy ? hoy : rg.fin;
@@ -271,21 +331,22 @@
       kpi('Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), delta(A.tasaNov, B.tasaNov, true), 'averías + reposiciones + mermas') + '</div>';
     if (hl.length) h += '<div class="est-hl"><b>💡 Hallazgos del periodo</b><br>• ' + hl.join('<br>• ') + '</div>';
     h += '<div id="estDrill"></div>';
+    h += consultaHTML();
 
     h += '<details class="est-sec" open><summary>📈 Tendencia y carta de control</summary><div class="est-bd"><div class="est-how">Muestra ' + MET[ST.met].toLowerCase() + ' despachadas por ' + (sr.g === 'd' ? 'día (sin domingos)' : sr.g === 's' ? 'semana' : 'mes') + '. La línea azul es el promedio móvil. Las líneas rojas son los <b>límites de control (promedio ± 3σ)</b>: un punto fuera de ellos indica un día o semana fuera de lo normal que vale la pena investigar.</div>' +
       '<div class="est-cv2"><canvas id="estCT"></canvas></div>' +
       (fuera.length ? '<div class="est-how" style="margin-top:.5rem;background:#fef2f2;">⚠️ Fuera de control: ' + fuera.map(function (p) { return esc(p.k) + ' (' + fmM(valM(p)) + ')'; }).join(', ') + '</div>' : (vals.length >= 5 ? '<div class="est-how" style="margin-top:.5rem;background:#f0fdf4;">✅ Proceso estable: ningún punto fuera de los límites.</div>' : '')) + '</div></details>';
 
     h += '<details class="est-sec" open id="estPareto"><summary>🏆 Productos con más movimiento (Pareto y ABC-XYZ)</summary><div class="est-bd"><div class="est-how"><b>Pareto:</b> pocos productos explican la mayor parte del movimiento. <b>A</b> = el primer 80 %, <b>B</b> = hasta el 95 %, <b>C</b> = el resto. <b>XYZ</b> mide qué tan regular es la demanda semanal: <b>X</b> estable, <b>Y</b> variable, <b>Z</b> muy irregular (se calcula con 4 o más semanas). Toca un producto para ver sus despachos.</div>' +
-      '<div class="est-cv2"><canvas id="estPA"></canvas></div><table class="est-tb" style="margin-top:.5rem;"><thead><tr><th>#</th><th>Producto</th><th class="n">' + MET[ST.met] + '</th><th class="n">% acum.</th><th>ABC</th><th>XYZ</th></tr></thead><tbody>' +
+      '<div class="est-cv2"><canvas id="estPA"></canvas></div><div style="text-align:right;margin-top:.4rem;">' + btnDim('prod') + '</div><table class="est-tb" style="margin-top:.5rem;"><thead><tr><th>#</th><th>Producto</th><th class="n">' + MET[ST.met] + '</th><th class="n">% acum.</th><th>ABC</th><th>XYZ</th></tr></thead><tbody>' +
       (prodR.length ? prodR.slice(0, 15).map(function (o, i) { var x = cvp[o.k]; return '<tr class="clk" onclick="EstDesp.detalle(\'prod\',\'' + esc(o.k).replace(/\'/g, '') + '\')"><td>' + (i + 1) + '</td><td><b>' + esc(o.k) + '</b> · ' + esc(nombreProd(o.k)) + '</td><td class="n">' + fmM(o.v) + '</td><td class="n">' + fm(o.cum, 1) + ' %</td><td><span class="est-abc ' + o.abc + '">' + o.abc + '</span></td><td>' + (x ? '<span class="est-cv">' + x.xyz + ' (CV ' + fm(x.cv * 100) + ' %)</span>' : '<span class="est-cv">—</span>') + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="est-vacio">Sin movimientos en este periodo</td></tr>') + '</tbody></table></div></details>';
 
     h += '<details class="est-sec" open id="estVeh"><summary>🚛 Vehículos más utilizados</summary><div class="est-bd"><div class="est-how">Un <b>viaje</b> son los cargues del mismo vehículo con menos de 45 minutos entre sí (incluye viajes compartidos). La <b>carga media</b> es la productividad: más toneladas por viaje significa menos viajes para el mismo despacho. La utilización compara las unidades por viaje con la capacidad registrada del vehículo (referencial: mezcla productos de distinto tamaño).</div>' +
-      '<div class="est-cv2"><canvas id="estVH"></canvas></div><table class="est-tb" style="margin-top:.5rem;"><thead><tr><th>Placa</th><th class="n">Viajes</th><th class="n">' + MET[ST.met] + '</th><th class="n">t/viaje</th><th class="n">Utiliz.</th><th class="n">Días</th></tr></thead><tbody>' +
+      '<div class="est-cv2"><canvas id="estVH"></canvas></div><div style="text-align:right;margin-top:.4rem;">' + btnDim('veh') + '</div><table class="est-tb" style="margin-top:.5rem;"><thead><tr><th>Placa</th><th class="n">Viajes</th><th class="n">' + MET[ST.met] + '</th><th class="n">t/viaje</th><th class="n">Utiliz.</th><th class="n">Días</th></tr></thead><tbody>' +
       (vehR.length ? vehR.slice(0, 15).map(function (o) { var info = ST.X.veh[o.k], u = info && info.cap > 0 && o.nVi ? o.und / o.nVi / info.cap * 100 : null; return '<tr class="clk" onclick="EstDesp.detalle(\'veh\',\'' + esc(o.k).replace(/\'/g, '') + '\')"><td><b>' + esc(o.k) + '</b>' + (info && info.cond ? '<div class="est-cv">' + esc(info.cond) + '</div>' : '') + '</td><td class="n">' + o.nVi + '</td><td class="n">' + fmM(o.v) + '</td><td class="n">' + (o.nVi ? fm(o.kg / o.nVi / 1000, 2) : '—') + '</td><td class="n">' + (u == null ? '—' : fm(u) + ' %') + '</td><td class="n">' + Object.keys(o.dias).length + '</td></tr>'; }).join('') : '<tr><td colspan="6" class="est-vacio">Sin movimientos en este periodo</td></tr>') + '</tbody></table></div></details>';
 
     h += '<details class="est-sec"><summary>👥 Clientes, destinos y vendedores</summary><div class="est-bd"><div class="est-how">Quién recibe más producto y hacia dónde. Útil para planear rutas y reforzar a los clientes que más compran.</div>' +
-      '<b style="font-size:.76rem;">Clientes</b>' + tablaRank(cliR, 'cli', 10, 'Cliente') + '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Destinos</b>' + tablaRank(destR, 'dest', 10, 'Destino') + '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Vendedores</b>' + tablaRank(venR, 'ven', 10, 'Vendedor') + '</div></details>';
+      '<b style="font-size:.76rem;">Clientes</b> ' + btnDim('cli') + '' + tablaRank(cliR, 'cli', 10, 'Cliente') + '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Destinos</b> ' + btnDim('dest') + '' + tablaRank(destR, 'dest', 10, 'Destino') + '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Vendedores</b> ' + btnDim('ven') + '' + tablaRank(venR, 'ven', 10, 'Vendedor') + '</div></details>';
 
     h += '<details class="est-sec" open id="estNov"><summary>⚠️ Averías, reposiciones y reclamaciones</summary><div class="est-bd"><div class="est-how">Mide la <b>tasa de defectos</b>: novedades por cada 1.000 unidades despachadas. Un producto con tasa alta es candidato a revisar el proceso de cargue, el restribado o el producto mismo.</div>' +
       (avTot > 0 || novP.length ? ('<div style="margin-bottom:.4rem;">Averías: <b>' + fm(A.av) + '</b> · Reposiciones: <b>' + fm(A.rep) + '</b> · Mermas/segunda: <b>' + fm(A.mer) + '</b> · Novedades logísticas: <b>' + novP.length + '</b></div>' +
@@ -293,7 +354,7 @@
         (novP.length ? '<div style="margin-top:.5rem;font-size:.74rem;"><b>Novedades logísticas por tipo:</b> ' + Object.keys(catNov).map(function (k) { return esc(k) + ': ' + catNov[k]; }).join(' · ') + '</div>' : '')) :
         '<div class="est-vacio">📭 No hay averías, reposiciones ni novedades registradas en este periodo.<br>Si ocurren y no se registran en <b>⚠️ Averías</b>, esta estadística queda vacía. Registrar cada novedad con producto y cantidad es lo que permite saber qué elementos generan más reclamaciones.</div>') + '</div></details>';
 
-    h += '<details class="est-sec"><summary>⏳ APs abiertas por antigüedad (backlog)</summary><div class="est-bd"><div class="est-how">Foto de hoy, independiente del periodo: pedidos <b>Pendientes o con saldo</b> y cuántos días llevan abiertos. Cuanto más antiguos, más riesgo de incumplir al cliente.</div>' +
+    h += '<details class="est-sec"><summary>⏳ APs abiertas por antigüedad (backlog)</summary><div class="est-bd"><div class="est-how">Foto de hoy, independiente del periodo: pedidos <b>Pendientes o con saldo</b> y cuántos días llevan abiertos. Cuanto más antiguos, más riesgo de incumplir al cliente.</div><div style="text-align:right;margin-bottom:.4rem;"><button class="est-btn s" onclick="EstDesp.descBacklog()">📥 Excel</button></div>' +
       '<table class="est-tb"><thead><tr><th>Antigüedad</th><th class="n">APs</th><th class="n">Valor por despachar</th></tr></thead><tbody>' + bk.B.map(function (b) { return '<tr><td>' + b.t + '</td><td class="n">' + b.n + '</td><td class="n">' + money(b.v) + '</td></tr>'; }).join('') + '</tbody></table>' +
       (bk.L.length ? '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Las 10 más antiguas</b><table class="est-tb"><thead><tr><th>AP</th><th>Cliente</th><th class="n">Días</th><th class="n">Por despachar</th></tr></thead><tbody>' + bk.L.slice(0, 10).map(function (l) { return '<tr><td><b>' + esc(l.id) + '</b></td><td>' + esc(l.cli) + '<div class="est-cv">' + esc(l.e) + (l.dest ? ' · ' + esc(l.dest) : '') + '</div></td><td class="n">' + l.dias + '</td><td class="n">' + money(l.pv) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="est-vacio">No hay APs abiertas con saldo.</div>') + '</div></details>';
 
@@ -341,18 +402,49 @@
   E.metrica = function (m) { ST.met = m; render(); };
   E.detalle = function (tipo, key, sinScroll) {
     var A = ST.A; if (!A) return;
-    var L = A.ev.filter(function (e) { return tipo === 'prod' ? e.tm === key : e.pl === key; }).sort(function (a, b) { return b.f - a.f; });
+    var L = A.ev.filter(function (e) { return dimKey(e, tipo) === key; }).sort(function (a, b) { return b.f - a.f; });
+    ST.drillL = L;
     var tot = L.reduce(function (a, e) { a.und += e.und; a.val += e.val; a.kg += e.kg; return a; }, { und: 0, val: 0, kg: 0 });
-    var tit = tipo === 'prod' ? '<b>' + esc(key) + '</b> · ' + esc(nombreProd(key)) : '🚛 <b>' + esc(key) + '</b>';
     var box = $('estDrill'); if (!box) return; ST.drill = { tipo: tipo, key: key };
-    box.innerHTML = '<div class="est-drill"><div style="display:flex;justify-content:space-between;gap:8px;"><div>' + tit + '</div><button class="est-btn s" onclick="EstDesp.cerrarDetalle()">✕</button></div>' +
+    box.innerHTML = '<div class="est-drill"><div style="display:flex;justify-content:space-between;gap:8px;"><div>' + DIMN[tipo] + ': <b>' + esc(nombreDim(tipo, key)) + '</b></div><div style="display:flex;gap:4px;"><button class="est-btn" onclick="EstDesp.excelDetalle()">📥</button><button class="est-btn s" onclick="EstDesp.cerrarDetalle()">✕</button></div></div>' +
       '<div style="font-size:.72rem;margin:.3rem 0;">' + L.length + ' registros · ' + fm(tot.und) + ' und · ' + money(tot.val) + ' · ' + fm(tot.kg / 1000, 1) + ' t</div>' +
-      '<table class="est-tb"><thead><tr><th>Fecha</th><th>AP</th><th>' + (tipo === 'prod' ? 'Placa' : 'Producto') + '</th><th class="n">Cant.</th></tr></thead><tbody>' +
-      L.slice(0, 12).map(function (e) { return '<tr><td>' + dmy(e.f) + '</td><td>' + esc(e.ap) + '<div class="est-cv">' + esc(nombreCli((ST.X.ap[e.ap] || {}).nit || '')) + '</div></td><td>' + (tipo === 'prod' ? esc(e.pl) : esc(nombreProd(e.tm))) + '</td><td class="n">' + fm(e.und) + (e.est ? '*' : '') + '</td></tr>'; }).join('') + '</tbody></table>' +
+      '<div style="overflow-x:auto;"><table class="est-tb"><thead><tr><th>Fecha</th><th>AP</th><th>' + (tipo === 'prod' ? 'Placa' : 'Producto') + '</th><th class="n">Cant.</th></tr></thead><tbody>' +
+      L.slice(0, 25).map(function (e) { return '<tr><td>' + dmy(e.f) + '</td><td>' + esc(e.ap) + '<div class="est-cv">' + esc(nombreCli((ST.X.ap[e.ap] || {}).nit || '')) + '</div></td><td>' + (tipo === 'prod' ? esc(e.pl) : esc(nombreProd(e.tm)) + '<div class="est-cv">' + esc(e.pl) + '</div>') + '</td><td class="n">' + fm(e.und) + (e.est ? '*' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+      (L.length > 25 ? '<div class="est-cv">Mostrando 25 de ' + L.length + '. El botón 📥 descarga todos.</div>' : '') +
       (L.some(function (e) { return e.est; }) ? '<div class="est-cv">* cantidad estimada (registro antiguo sin cantidad por viaje)</div>' : '') + '</div>';
     if (!sinScroll) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   E.cerrarDetalle = function () { ST.drill = null; var b = $('estDrill'); if (b) b.innerHTML = ''; };
+
+  E.dim = function (d) { ST.dim = d; ST.ord = null; ST.asc = false; ST.q = ''; render(); var c = $('estConsulta'); if (c) c.scrollIntoView({ block: 'nearest' }); };
+  E.buscar = function (v) { ST.q = v; var t = $('estConsTabla'); if (t) t.innerHTML = consultaTabla(); };
+  E.ordenar = function (c) { if (ST.ord === c) ST.asc = !ST.asc; else { ST.ord = c; ST.asc = c === 'nom' || c === 'k'; } var t = $('estConsTabla'); if (t) t.innerHTML = consultaTabla(); };
+  E.det = function (i) { var o = ST.rows[i]; if (o) E.detalle(ST.dim, o.k); };
+
+  /* ---------- Descargas ---------- */
+  var fecha = function () { return ymd(new Date()); };
+  var sinTilde = function (t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_\-.]/g, '_'); };
+  function libro(nombre, hojas) {
+    if (typeof XLSX === 'undefined') { alert('No se cargó la librería de Excel (¿sin conexión?)'); return; }
+    var wb = XLSX.utils.book_new();
+    hojas.forEach(function (h) { var ws = XLSX.utils.json_to_sheet(h.f.length ? h.f : [{ Aviso: 'Sin datos' }]); XLSX.utils.book_append_sheet(wb, ws, h.n.slice(0, 31)); });
+    XLSX.writeFile(wb, sinTilde(nombre) + '.xlsx');
+  }
+  function bajarCSV(nombre, filas) {
+    if (!filas.length) { alert('No hay datos para descargar'); return; }
+    var cols = Object.keys(filas[0]), q = function (v) { v = v == null ? '' : String(v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var txt = '﻿' + cols.join(';') + '\n' + filas.map(function (r) { return cols.map(function (c) { return q(r[c]); }).join(';'); }).join('\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = sinTilde(nombre) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function filasDetalle(L) {
+    return L.map(function (e) { var a = ST.X.ap[e.ap] || {}; return { Fecha: dmy(e.f) + ' ' + ('0' + e.f.getHours()).slice(-2) + ':' + ('0' + e.f.getMinutes()).slice(-2), AP: e.ap, Cliente: nombreCli(a.nit || ''), Vendedor: nombreVen(a.v || ''), Destino: a.dest || '', Código: e.tm, Producto: nombreProd(e.tm), Placa: e.pl, Cantidad: Math.round(e.und * 100) / 100, 'Cantidad estimada': e.est ? 'Sí' : '', 'Valor $': Math.round(e.val), Kg: Math.round(e.kg), Averías: e.av, Reposición: e.rep, Merma: e.mer }; });
+  }
+  var nombreArch = function (pref) { return pref + '_' + ymd(ST.rg.ini) + '_a_' + ymd(ST.rg.fin); };
+  E.excelTabla = function () { if (!ST.A) return; consultaTabla(); var ks = {}; ST.rows.forEach(function (o) { ks[o.k] = 1; }); libro(nombreArch('SIVIL_Consulta_' + DIMN[ST.dim]), [{ n: 'Por ' + DIMN[ST.dim], f: filasExport(ST.rows, ST.dim) }, { n: 'Detalle', f: filasDetalle(ST.A.ev.filter(function (e) { return ks[dimKey(e, ST.dim)]; })) }]); };
+  E.csvTabla = function () { if (!ST.A) return; consultaTabla(); bajarCSV(nombreArch('SIVIL_Consulta_' + DIMN[ST.dim]), filasExport(ST.rows, ST.dim)); };
+  E.descDim = function (d) { if (!ST.A) return; var arr = ordenar(agrupar(d), d); libro(nombreArch('SIVIL_' + DIMN[d]), [{ n: 'Por ' + DIMN[d], f: filasExport(arr, d) }, { n: 'Detalle', f: filasDetalle(ST.A.ev) }]); };
+  E.excelDetalle = function () { if (ST.drill) libro('SIVIL_Detalle_' + DIMN[ST.drill.tipo] + '_' + fecha(), [{ n: 'Detalle', f: filasDetalle(ST.drillL) }]); };
+  E.descBacklog = function () { var bk = backlog(); libro('SIVIL_APs_abiertas_' + fecha(), [{ n: 'APs abiertas', f: bk.L.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Fecha creación': dmy(l.f), 'Días abierta': l.dias, 'Unidades por despachar': Math.round(l.pu), 'Valor por despachar $': Math.round(l.pv) }; }) }]); };
 
   /* ---------- Excel ---------- */
   E.excel = function () {
@@ -382,6 +474,7 @@
     add('Averías y novedades', rank(A.prod).filter(function (o) { return o.av + o.rep + o.mer > 0; }).map(function (o) { return { Código: o.k, Producto: nombreProd(o.k), Averías: o.av, Reposiciones: o.rep, 'Mermas/segunda': o.mer, 'Por 1.000 und': o.und ? Math.round((o.av + o.rep + o.mer) / o.und * 10000) / 10 : '' }; }), [9, 44, 9, 12, 14, 12]);
     var bk = backlog(); add('APs abiertas (backlog)', bk.L.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Días abierta': l.dias, 'Unidades por despachar': Math.round(l.pu), 'Valor por despachar $': Math.round(l.pv) }; }), [8, 40, 22, 18, 12, 20, 22]);
     add('Detalle de despachos', A.ev.map(function (e) { var a = ST.X.ap[e.ap] || {}; return { Fecha: dmy(e.f) + ' ' + ('0' + e.f.getHours()).slice(-2) + ':' + ('0' + e.f.getMinutes()).slice(-2), AP: e.ap, Cliente: nombreCli(a.nit || ''), Destino: a.dest || '', Código: e.tm, Producto: nombreProd(e.tm), Placa: e.pl, Cantidad: Math.round(e.und * 100) / 100, 'Cantidad estimada': e.est ? 'Sí' : '', 'Valor $': Math.round(e.val), Kg: Math.round(e.kg), Averías: e.av, Reposición: e.rep, Merma: e.mer }; }), [18, 8, 36, 22, 9, 40, 10, 10, 10, 14, 9, 8, 10, 8]);
+    [['ap', 'Por AP'], ['dia', 'Por día'], ['sem', 'Por semana'], ['mes', 'Por mes']].forEach(function (d) { add(d[1], filasExport(ordenar(agrupar(d[0]), d[0]), d[0])); });
     XLSX.writeFile(wb, 'SIVIL_Estadisticas_Despacho_' + ymd(rg.ini) + '_a_' + ymd(rg.fin) + '.xlsx');
   };
 
