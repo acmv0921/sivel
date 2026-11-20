@@ -46,6 +46,13 @@
     });
   }
 
+  function pfecha(v) {
+    if (v instanceof Date) return v;
+    var t = String(v == null ? '' : v).trim(); if (!t) return null; var m;
+    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t))) return new Date(+m[1], +m[2] - 1, +m[3]);
+    if ((m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/.exec(t))) return new Date(+m[3], +m[2] - 1, +m[1]);
+    return null;
+  }
   /* ---------- Preparación de datos (derivados) ---------- */
   function preparar() {
     var D = ST.D, X = { prod: {}, det: {}, detAp: {}, ap: {}, cli: {}, ven: {}, veh: {}, ev: [], nov: [], apFirst: {} };
@@ -56,7 +63,8 @@
       if (!o.pr) o.pr = N(l.precio_con_descuento) || N(l.precio_base) * (1 - N(l.descuento_aplicado));
     });
     Object.keys(X.det).forEach(function (k) { var o = X.det[k]; (X.detAp[o.ap] = X.detAp[o.ap] || []).push(o); });
-    D.AP.forEach(function (a) { if (a.ap_id == null || a.ap_id === '') return; X.ap[String(a.ap_id)] = { f: a.fecha_creacion instanceof Date ? a.fecha_creacion : null, e: String(a.estado_ap || ''), nit: String(a.cliente_nit || ''), v: String(a.vendedor_id || ''), dest: String(a.destino || '').trim(), obra: a.nombre_obra || '' }; });
+    D.AP.forEach(function (a) { if (a.ap_id == null || a.ap_id === '') return; X.ap[String(a.ap_id)] = { f: a.fecha_creacion instanceof Date ? a.fecha_creacion : null, e: String(a.estado_ap || ''), nit: String(a.cliente_nit || ''), v: String(a.vendedor_id || ''), dest: String(a.destino || '').trim(), obra: a.nombre_obra || '', fe: pfecha(a.fecha_entrega), feMala: false }; });
+    Object.keys(X.ap).forEach(function (k) { var a = X.ap[k]; if (a.fe && a.f && a.fe < new Date(a.f.getTime() - 86400000)) { a.feMala = true; a.fe = null; } });
     D.C.forEach(function (c) { X.cli[String(c.cliente_nit)] = c.razon_social || c.cliente_nombre || String(c.cliente_nit); });
     D.VD.forEach(function (v) { X.ven[String(v.id_vendedor)] = v.nombre_vendedor || v.nombre_completo || String(v.id_vendedor); });
     D.V.forEach(function (v) { if (v.placa) X.veh[String(v.placa).toUpperCase().trim()] = { cap: N(v.capacidad_und), cond: v.conductor_nombre || '', marca: v.marca || '' }; });
@@ -85,7 +93,8 @@
     var vid = 0, ult = null;
     X.ev.forEach(function (e) { if (!ult || ult.pl !== e.pl || e.f - ult.f > 45 * 60000) vid++; e.vid = vid; ult = e; });
     X.ev.sort(function (a, b) { return a.f - b.f; });
-    X.ev.forEach(function (e) { if (e.ap && (!X.apFirst[e.ap] || e.f < X.apFirst[e.ap])) X.apFirst[e.ap] = e.f; });
+    X.apLast = {};
+    X.ev.forEach(function (e) { if (e.ap && (!X.apFirst[e.ap] || e.f < X.apFirst[e.ap])) X.apFirst[e.ap] = e.f; if (e.ap && (!X.apLast[e.ap] || e.f > X.apLast[e.ap])) X.apLast[e.ap] = e.f; });
     // Novedades logísticas (hoja sin encabezados: A id, B fecha, C AP, D categoría, E etiqueta, F descripción, G usuario, H placa)
     D.N.forEach(function (r) {
       var cat = r.D || r.categoria; if (!cat || cat === 'categoria') return;
@@ -204,8 +213,10 @@
   var btnDim = function (d) { return '<button class="est-btn s" onclick="EstDesp.descDim(\'' + d + '\')">📥 Excel</button>'; };
 
   /* ---------- Alertas ---------- */
-  function alertas(A, B, prodR, vehR, bk, fuera, pctPlaca) {
+  function alertas(A, B, prodR, vehR, bk, fuera, pctPlaca, O, V) {
     var L = [];
+    if (V.length) L.push({ n: 'alta', t: V.length + ' AP(s) con la fecha de entrega vencida y saldo pendiente', d: 'La más atrasada: AP ' + V[0].id + ' · ' + V[0].cli + ' (' + V[0].atraso + ' días de atraso, ' + money(V[0].pv) + ' por despachar).', f: 'Llamar al cliente, reprogramar la fecha o despachar de inmediato.' });
+    if (O.pct != null && O.pct < 0.85) L.push({ n: 'media', t: 'Cumplimiento a tiempo bajo: ' + fm(O.pct * 100, 1) + ' %', d: O.ok + ' de ' + O.n + ' APs con fecha en el periodo salieron completas dentro del plazo.', f: 'Revisar las APs tardías y la causa (producción, vehículo, pago).' });
     var viejas = bk.L.filter(function (l) { return l.dias > 15; });
     if (viejas.length) L.push({ n: 'alta', t: viejas.length + ' AP(s) abiertas con más de 15 días', d: 'La más antigua: AP ' + viejas[0].id + ' · ' + viejas[0].cli + ' (' + viejas[0].dias + ' días, ' + money(viejas[0].pv) + ' por despachar).', f: 'Revisar con el vendedor si se despacha, se reprograma o se cancela el saldo.' });
     if (A.fill != null && A.fill < 0.9) L.push({ n: 'alta', t: 'Nivel de servicio bajo: ' + fm(A.fill * 100, 1) + ' %', d: 'De lo solicitado en las APs atendidas, solo se ha despachado ese porcentaje.', f: 'Revisar saldos pendientes y disponibilidad de los productos clase A.' });
@@ -223,6 +234,27 @@
   function alertasHTML(L) {
     var col = { alta: ['#fef2f2', '#b91c1c', '🔴'], media: ['#fffbeb', '#b45309', '🟠'], baja: ['#f1f5f9', '#475569', '🔵'] };
     return '<details class="est-sec" open id="estAlertas"><summary>🚨 Alertas del periodo (' + L.length + ')</summary><div class="est-bd">' + (L.length ? L.map(function (a) { var c = col[a.n]; return '<div style="background:' + c[0] + ';border-left:4px solid ' + c[1] + ';border-radius:8px;padding:.45rem .6rem;margin-bottom:.4rem;font-size:.76rem;line-height:1.4;">' + c[2] + ' <b>' + esc(a.t) + '</b><br>' + esc(a.d) + '<br><i>→ ' + esc(a.f) + '</i></div>'; }).join('') : '<div class="est-vacio">✅ Sin alertas en este periodo.</div>') + '</div></details>';
+  }
+
+  /* ---------- Cumplimiento de fecha de entrega (OTIF) ---------- */
+  function otif(ini, fin) {
+    var X = ST.X, now = new Date(), L = [];
+    Object.keys(X.ap).forEach(function (id) {
+      var a = X.ap[id]; if (!a.fe || /cancel/i.test(a.e)) return; var lim = fin0(a.fe); if (a.fe < ini || a.fe > fin) return;
+      var det = X.detAp[id] || []; if (!det.length) return;
+      var comp = det.every(function (d) { return d.des >= d.sol; }), last = X.apLast[id], est, atraso = 0;
+      if (comp) { est = last && last > lim ? 'Tarde' : 'A tiempo'; atraso = last && last > lim ? Math.ceil((last - lim) / DIA) : 0; }
+      else if (lim < now) { est = 'Vencida'; atraso = Math.floor((now - lim) / DIA); }
+      else est = 'En plazo';
+      L.push({ id: id, cli: nombreCli(a.nit), fe: a.fe, est: est, atraso: atraso, ult: last || null, dest: a.dest });
+    });
+    var ev = L.filter(function (x) { return x.est !== 'En plazo'; }), ok = ev.filter(function (x) { return x.est === 'A tiempo'; }).length, malas = ev.filter(function (x) { return x.est !== 'A tiempo'; });
+    return { L: L, n: ev.length, ok: ok, pct: ev.length ? ok / ev.length : null, tarde: ev.filter(function (x) { return x.est === 'Tarde'; }).length, venc: ev.filter(function (x) { return x.est === 'Vencida'; }).length, prom: malas.length ? malas.reduce(function (a, x) { return a + x.atraso; }, 0) / malas.length : null };
+  }
+  function vencidasHoy() {
+    var X = ST.X, now = new Date(), L = [];
+    Object.keys(X.ap).forEach(function (id) { var a = X.ap[id]; if (!a.fe || !/^(Pendiente|Despachado Parcial|Modificado)$/i.test(a.e) || fin0(a.fe) >= now) return; var det = X.detAp[id] || [], pu = 0, pv = 0; det.forEach(function (d) { var r = Math.max(0, d.sol - d.des); pu += r; pv += r * d.pr; }); if (pu <= 0) return; L.push({ id: id, cli: nombreCli(a.nit), fe: a.fe, atraso: Math.floor((now - fin0(a.fe)) / DIA), pv: pv, e: a.e, dest: a.dest }); });
+    return L.sort(function (a, b) { return b.atraso - a.atraso; });
   }
 
   // Granularidad de la tendencia: día (≤ 45 días), semana (≤ 200 días), mes
@@ -328,6 +360,7 @@
     var W = sr.g === 'd' ? 7 : 3, ma = vals.map(function (v, i) { var a = vals.slice(Math.max(0, i - W + 1), i + 1); return a.reduce(function (x, y) { return x + y; }, 0) / a.length; });
     var carga = A.viajes ? A.kg / A.viajes / 1000 : null, cargaB = B.viajes ? B.kg / B.viajes / 1000 : null;
     var hl = hallazgos(A, B, prodR, vehR);
+    var O = otif(rg.ini, rg.fin), OB = otif(pr.ini, pr.fin), V = vencidasHoy(); ST.O = O; ST.OB = OB; ST.V = V;
     var pctPlaca = A.ev.length ? (1 - A.sinPlaca / A.ev.length) * 100 : null;
     var novP = ST.X.nov.filter(function (n) { return n.f && n.f >= rg.ini && n.f <= rg.fin; });
     var avTot = A.av + A.rep + A.mer;
@@ -350,9 +383,11 @@
       kpi('Carga media por viaje', carga == null ? '—' : fm(carga, 2) + ' t', delta(carga, cargaB), 'productividad de la flota') +
       kpi('Tiempo de ciclo (AP→salida)', A.ltMed == null ? '—' : fm(A.ltMed, 1) + ' d', delta(A.ltMed, B.ltMed, true), A.ltMed == null ? '' : 'mediana ' + fm(A.ltMediana, 1) + ' d · P90 ' + fm(A.ltP90, 1) + ' d') +
       kpi('Nivel de servicio', A.fill == null ? '—' : fm(A.fill * 100, 1) + ' %', delta(A.fill, B.fill), 'despachado / solicitado en APs atendidas') +
+      kpi('Cumplimiento a tiempo', O.pct == null ? '—' : fm(O.pct * 100, 1) + ' %', delta(O.pct, OB.pct), O.n ? O.ok + ' de ' + O.n + ' APs con fecha en el periodo' : 'sin APs con fecha de entrega en el periodo') +
+      kpi('APs vencidas hoy', fm(V.length), V.length ? '<span class="est-dn">fecha de entrega pasada</span>' : '<span class="est-up">ninguna</span>', V.length ? 'más atrasada: ' + V[0].atraso + ' días' : '') +
       kpi('Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), delta(A.tasaNov, B.tasaNov, true), 'averías + reposiciones + mermas') + '</div>';
     if (hl.length) h += '<div class="est-hl"><b>💡 Hallazgos del periodo</b><br>• ' + hl.join('<br>• ') + '</div>';
-    var AL = alertas(A, B, prodR, vehR, bk, fuera, pctPlaca); ST.AL = AL; ST.hl = hl;
+    var AL = alertas(A, B, prodR, vehR, bk, fuera, pctPlaca, O, V); ST.AL = AL; ST.hl = hl;
     h += alertasHTML(AL);
     h += '<div id="estDrill"></div>';
     h += consultaHTML();
@@ -382,9 +417,13 @@
       '<table class="est-tb"><thead><tr><th>Antigüedad</th><th class="n">APs</th><th class="n">Valor por despachar</th></tr></thead><tbody>' + bk.B.map(function (b) { return '<tr><td>' + b.t + '</td><td class="n">' + b.n + '</td><td class="n">' + money(b.v) + '</td></tr>'; }).join('') + '</tbody></table>' +
       (bk.L.length ? '<b style="font-size:.76rem;display:block;margin-top:.6rem;">Las 10 más antiguas</b><table class="est-tb"><thead><tr><th>AP</th><th>Cliente</th><th class="n">Días</th><th class="n">Por despachar</th></tr></thead><tbody>' + bk.L.slice(0, 10).map(function (l) { return '<tr><td><b>' + esc(l.id) + '</b></td><td>' + esc(l.cli) + '<div class="est-cv">' + esc(l.e) + (l.dest ? ' · ' + esc(l.dest) : '') + '</div></td><td class="n">' + l.dias + '</td><td class="n">' + money(l.pv) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="est-vacio">No hay APs abiertas con saldo.</div>') + '</div></details>';
 
+    h += '<details class="est-sec" id="estOtif"><summary>🎯 Cumplimiento de la fecha de entrega (OTIF)</summary><div class="est-bd"><div class="est-how">Compara la <b>fecha de entrega solicitada</b> de cada AP con el día en que salió completa. <b>A tiempo</b> = salió completa dentro del plazo · <b>Tarde</b> = salió completa después · <b>Vencida</b> = el plazo pasó y aún tiene saldo. Solo cuentan APs que tienen fecha de entrega registrada.</div>' +
+      '<div style="margin-bottom:.4rem;">A tiempo: <b>' + O.ok + '</b> · Tarde: <b>' + O.tarde + '</b> · Vencidas: <b>' + O.venc + '</b>' + (O.prom != null ? ' · Atraso medio: <b>' + fm(O.prom, 1) + ' días</b>' : '') + '</div>' +
+      (V.length ? '<b style="font-size:.76rem;">Vencidas hoy con saldo</b><table class="est-tb"><thead><tr><th>AP</th><th>Cliente</th><th class="n">Atraso</th><th class="n">Por despachar</th></tr></thead><tbody>' + V.slice(0, 10).map(function (l) { return '<tr><td><b>' + esc(l.id) + '</b></td><td>' + esc(l.cli) + '<div class="est-cv">Entrega: ' + dmy(l.fe) + (l.dest ? ' · ' + esc(l.dest) : '') + '</div></td><td class="n">' + l.atraso + ' d</td><td class="n">' + money(l.pv) + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="est-vacio">✅ No hay APs vencidas con saldo.</div>') +
+      '<div style="text-align:right;margin-top:.4rem;"><button class="est-btn s" onclick="EstDesp.descOtif()">📥 Excel</button></div></div></details>';
     h += '<details class="est-sec"><summary>🧪 Calidad de los datos</summary><div class="est-bd"><div class="est-how">Las estadísticas son tan buenas como los datos que se registran. Esta tarjeta dice qué tan completo está el registro del periodo.</div><div class="est-dq">' +
       '<div>Despachos con <b>placa</b>: ' + (pctPlaca == null ? '—' : fm(pctPlaca) + ' %') + '</div><div>Registros con cantidad <b>estimada</b>: ' + A.estim + '</div>' +
-      '<div>Novedades registradas: ' + novP.length + '</div><div>Registros del periodo: ' + A.ev.length + '</div></div></div></details>';
+      '<div>APs con fecha de entrega: ' + (function () { var t = 0, c = 0, m = []; Object.keys(ST.X.ap).forEach(function (k) { var a = ST.X.ap[k]; if (/cancel/i.test(a.e)) return; t++; if (a.fe) c++; if (a.feMala) m.push(k); }); return t ? fm(c / t * 100) + ' % (' + c + ' de ' + t + ')' + (m.length ? '<br><span class="est-dn">⚠️ ' + m.length + ' con fecha anterior a la creación (¿año mal digitado?): AP ' + m.slice(0, 6).join(', ') + '</span>' : '') : '—'; })() + '</div><div>Novedades registradas: ' + novP.length + '</div><div>Registros del periodo: ' + A.ev.length + '</div></div></div></details>';
     h += centroHTML();
     h += '<div style="font-size:.66rem;color:#94a3b8;text-align:center;margin:.5rem 0 1rem;">Fuente: hojas de despachos, APs y productos de SIVIL · calculado al abrir o al pulsar Actualizar</div>';
     c.innerHTML = h;
@@ -469,6 +508,7 @@
   E.csvTabla = function () { if (!ST.A) return; consultaTabla(); bajarCSV(nombreArch('SIVIL_Consulta_' + DIMN[ST.dim]), filasExport(ST.rows, ST.dim)); };
   E.descDim = function (d) { if (!ST.A) return; var arr = ordenar(agrupar(d), d); libro(nombreArch('SIVIL_' + DIMN[d]), [{ n: 'Por ' + DIMN[d], f: filasExport(arr, d) }, { n: 'Detalle', f: filasDetalle(ST.A.ev) }]); };
   E.excelDetalle = function () { if (ST.drill) libro('SIVIL_Detalle_' + DIMN[ST.drill.tipo] + '_' + fecha(), [{ n: 'Detalle', f: filasDetalle(ST.drillL) }]); };
+  E.descOtif = function () { if (!ST.O) return; var f = function (x) { return { AP: x.id, Cliente: x.cli, Destino: x.dest, 'Fecha de entrega': dmy(x.fe), Estado: x.est, 'Días de atraso': x.atraso, 'Última salida': x.ult ? dmy(x.ult) : '' }; }; libro(nombreArch('SIVIL_Cumplimiento_entrega'), [{ n: 'Cumplimiento', f: ST.O.L.map(f) }, { n: 'Vencidas hoy', f: ST.V.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Fecha de entrega': dmy(l.fe), 'Días de atraso': l.atraso, 'Valor por despachar $': Math.round(l.pv) }; }) }]); };
   E.descBacklog = function () { var bk = backlog(); libro('SIVIL_APs_abiertas_' + fecha(), [{ n: 'APs abiertas', f: bk.L.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Fecha creación': dmy(l.f), 'Días abierta': l.dias, 'Unidades por despachar': Math.round(l.pu), 'Valor por despachar $': Math.round(l.pv) }; }) }]); };
 
   /* ---------- Informe PDF ---------- */
@@ -489,7 +529,7 @@
     doc.setFillColor.apply(doc, azul); doc.rect(0, 0, W, 26, 'F');
     T('Informe de despachos', M, 12, { b: 1, s: 16, c: [255, 255, 255] }); T('POSTEC DE OCCIDENTE · ' + rg.lab + ' (comparado con ' + previo(rg).lab + ')', M, 19, { s: 9, c: [220, 230, 245] });
     y = 36;
-    var K = [['Unidades', fm(A.und), fm(B.und)], ['Valor despachado', money(A.val), money(B.val)], ['Toneladas', fm(A.kg / 1000, 1), fm(B.kg / 1000, 1)], ['Viajes', fm(A.viajes), fm(B.viajes)], ['APs atendidas', fm(A.aps), fm(B.aps)], ['Carga media por viaje (t)', A.viajes ? fm(A.kg / A.viajes / 1000, 2) : '—', B.viajes ? fm(B.kg / B.viajes / 1000, 2) : '—'], ['Tiempo de ciclo AP→salida (días)', A.ltMed == null ? '—' : fm(A.ltMed, 1), B.ltMed == null ? '—' : fm(B.ltMed, 1)], ['Nivel de servicio (%)', A.fill == null ? '—' : fm(A.fill * 100, 1), B.fill == null ? '—' : fm(B.fill * 100, 1)], ['Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), B.tasaNov == null ? '—' : fm(B.tasaNov, 1)]];
+    var K = [['Unidades', fm(A.und), fm(B.und)], ['Valor despachado', money(A.val), money(B.val)], ['Toneladas', fm(A.kg / 1000, 1), fm(B.kg / 1000, 1)], ['Viajes', fm(A.viajes), fm(B.viajes)], ['APs atendidas', fm(A.aps), fm(B.aps)], ['Carga media por viaje (t)', A.viajes ? fm(A.kg / A.viajes / 1000, 2) : '—', B.viajes ? fm(B.kg / B.viajes / 1000, 2) : '—'], ['Tiempo de ciclo AP→salida (días)', A.ltMed == null ? '—' : fm(A.ltMed, 1), B.ltMed == null ? '—' : fm(B.ltMed, 1)], ['Nivel de servicio (%)', A.fill == null ? '—' : fm(A.fill * 100, 1), B.fill == null ? '—' : fm(B.fill * 100, 1)], ['Cumplimiento a tiempo (%)', ST.O.pct == null ? '—' : fm(ST.O.pct * 100, 1), ST.OB.pct == null ? '—' : fm(ST.OB.pct * 100, 1)], ['Novedades por 1.000 und', A.tasaNov == null ? '—' : fm(A.tasaNov, 1), B.tasaNov == null ? '—' : fm(B.tasaNov, 1)]];
     var num = function (x) { return parseFloat(String(x).replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')); };
     T('1. Indicadores clave', M, y, { b: 1, s: 11, c: azul }); y += 7;
     tabla(['Indicador', 'Periodo', 'Anterior', 'Variación'], K.map(function (k) { var a = num(k[1]), b = num(k[2]); return [k[0], k[1], k[2], isFinite(a) && isFinite(b) && b ? (a >= b ? '+' : '') + fm((a - b) / Math.abs(b) * 100, 1) + ' %' : '—']; }), [88, 32, 32, 30]);
@@ -588,6 +628,7 @@
     var bk = backlog(); add('APs abiertas (backlog)', bk.L.map(function (l) { return { AP: l.id, Cliente: l.cli, Destino: l.dest, Estado: l.e, 'Días abierta': l.dias, 'Unidades por despachar': Math.round(l.pu), 'Valor por despachar $': Math.round(l.pv) }; }), [8, 40, 22, 18, 12, 20, 22]);
     add('Detalle de despachos', A.ev.map(function (e) { var a = ST.X.ap[e.ap] || {}; return { Fecha: dmy(e.f) + ' ' + ('0' + e.f.getHours()).slice(-2) + ':' + ('0' + e.f.getMinutes()).slice(-2), AP: e.ap, Cliente: nombreCli(a.nit || ''), Destino: a.dest || '', Código: e.tm, Producto: nombreProd(e.tm), Placa: e.pl, Cantidad: Math.round(e.und * 100) / 100, 'Cantidad estimada': e.est ? 'Sí' : '', 'Valor $': Math.round(e.val), Kg: Math.round(e.kg), Averías: e.av, Reposición: e.rep, Merma: e.mer }; }), [18, 8, 36, 22, 9, 40, 10, 10, 10, 14, 9, 8, 10, 8]);
     [['ap', 'Por AP'], ['dia', 'Por día'], ['sem', 'Por semana'], ['mes', 'Por mes']].forEach(function (d) { add(d[1], filasExport(ordenar(agrupar(d[0]), d[0]), d[0])); });
+    add('Cumplimiento entrega', ST.O.L.map(function (x) { return { AP: x.id, Cliente: x.cli, Destino: x.dest, 'Fecha de entrega': dmy(x.fe), Estado: x.est, 'Días de atraso': x.atraso, 'Última salida': x.ult ? dmy(x.ult) : '' }; }), [8, 40, 22, 16, 12, 14, 14]);
     XLSX.writeFile(wb, 'SIVIL_Estadisticas_Despacho_' + ymd(rg.ini) + '_a_' + ymd(rg.fin) + '.xlsx');
   };
 

@@ -66,6 +66,8 @@ window.GUIAS_DESPACHO = [
         texto: 'Aquí aparecen los productos con más averías, reposiciones y mermas, por cada 1.000 unidades despachadas. <b>Si está vacío es porque no se registraron</b>: cada novedad se debe registrar en <b>⚠️ Averías</b> con producto y cantidad.' },
       { titulo: 'Alertas', resaltar: '#estAlertas',
         texto: 'El sistema revisa solo el periodo y avisa: 🔴 <b>alta</b> (APs de más de 15 días, nivel de servicio bajo, averías en aumento), 🟠 <b>media</b> y 🔵 <b>baja</b>. Cada alerta dice qué pasa y <b>qué conviene hacer</b>.' },
+      { titulo: 'Cumplimiento de la fecha de entrega', resaltar: '#estOtif',
+        texto: 'Compara la <b>fecha de entrega solicitada</b> de la AP con el día en que salió completa: <b>A tiempo</b>, <b>Tarde</b> o <b>Vencida</b> (el plazo pasó y aún hay saldo). <b>Solo cuentan las APs que tienen fecha</b>: por eso el vendedor debe llenar siempre la fecha de entrega al crear la AP.' },
       { titulo: 'Consultas por nivel', resaltar: '#estConsulta',
         texto: 'Aquí puede ver los despachos agrupados <b>por producto, vendedor, AP, cliente, destino, vehículo, día, semana o mes</b>. Escriba en el buscador (por ejemplo un número de AP o el nombre de un cliente), toque los títulos para ordenar y toque una fila para ver cada despacho. Los botones <b>📥 Excel</b> y <b>CSV</b> descargan exactamente lo que ve en la tabla.' },
       { titulo: 'Informe en PDF', 
