@@ -99,6 +99,8 @@ function doPost(e) {
       case "cambiarEstadoCotizacion": resultado = cambiarEstadoCotizacion(body); break;
       case "agregarSeguimientoCot": resultado = agregarSeguimientoCot(body); break;
       case "anularSeguimientoCot": resultado = anularSeguimientoCot(body); break;
+      case "guardarHistorialDespacho": resultado = guardarHistorialDespacho(body); break;
+      case "ocultarHistorialDespacho": resultado = ocultarHistorialDespacho(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
       case "registrarPagoAP": resultado = registrarPagoAP(body); break;
@@ -2322,6 +2324,70 @@ function anularSeguimientoCot(body) {
       return { ok: true };
     }
     return { ok: false, error: "No se encontró la anotación" };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+
+// =============================================================================
+// HISTORIAL DE DESPACHOS COMPARTIDO (21 nov 2026). Antes el historial vivia solo en el navegador de
+// cada equipo (localStorage): lo que Valentina despachaba en un equipo no aparecia en otro, y se
+// perdia al limpiar datos. Ahora se guarda en la hoja DESPACHOS_HISTORIAL (se crea sola).
+// "Borrar del historial" no borra: marca oculto = 1 (no afecta despachos, Sheet ni Drive).
+// =============================================================================
+var HIST_DESP_ENC = ["hid", "ap_id", "cliente", "placa", "conductor", "estado", "fecha", "lineas_json", "pdf_url", "usuario", "creado", "oculto"];
+function _hojaHistDesp(ss) {
+  var h = ss.getSheetByName("DESPACHOS_HISTORIAL");
+  if (!h) {
+    h = ss.insertSheet("DESPACHOS_HISTORIAL");
+    h.getRange(1, 1, 1, HIST_DESP_ENC.length).setValues([HIST_DESP_ENC]).setFontWeight("bold");
+    h.setFrozenRows(1);
+    h.getRange(1, 1, h.getMaxRows(), HIST_DESP_ENC.length).setNumberFormat("@");
+  }
+  return h;
+}
+function guardarHistorialDespacho(body) {
+  var items = body.items || (body.item ? [body.item] : []);
+  if (!items.length) return { ok: false, error: "Sin registros" };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    var ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    var h = _hojaHistDesp(ss);
+    var ult = h.getLastRow();
+    var filas = {};
+    if (ult >= 2) { var ids = h.getRange(2, 1, ult - 1, 1).getValues(); for (var i = 0; i < ids.length; i++) filas[String(ids[i][0])] = i + 2; }
+    var nuevos = [], act = 0;
+    items.forEach(function (it) {
+      var id = String(it.hid || "");
+      if (!id) return;
+      if (filas[id]) {
+        if (it.pdf_url) { h.getRange(filas[id], 9).setNumberFormat("@").setValue(String(it.pdf_url)); act++; }
+        return;
+      }
+      if (nuevos.some(function (f) { return f[0] === id; })) return;
+      nuevos.push([id, String(it.ap_id || ""), String(it.cliente || ""), String(it.placa || ""), String(it.conductor || ""), String(it.estado || ""), String(it.fecha || ""),
+        JSON.stringify(it.lineas || []).substring(0, 45000), String(it.pdf_url || ""), String(it.usuario || body.usuario || ""), new Date().toISOString(), ""]);
+    });
+    if (nuevos.length) h.getRange(ult + 1, 1, nuevos.length, HIST_DESP_ENC.length).setNumberFormat("@").setValues(nuevos);
+    return { ok: true, nuevos: nuevos.length, actualizados: act };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+function ocultarHistorialDespacho(body) {
+  var ids = (body.ids || []).map(String);
+  if (!ids.length) return { ok: false, error: "Sin registros" };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    var ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    var h = _hojaHistDesp(ss);
+    var ult = h.getLastRow();
+    if (ult < 2) return { ok: true, ocultos: 0 };
+    var col = h.getRange(2, 1, ult - 1, 1).getValues(), n = 0;
+    for (var i = 0; i < col.length; i++) {
+      if (ids.indexOf(String(col[i][0])) >= 0) { h.getRange(i + 2, 12).setNumberFormat("@").setValue("1"); n++; }
+    }
+    return { ok: true, ocultos: n };
   } catch (e) { return { ok: false, error: String(e) }; }
   finally { lock.releaseLock(); }
 }

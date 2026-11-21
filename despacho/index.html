@@ -1414,7 +1414,7 @@ async function leerGVIZ(hoja) {
   // Cache-busting: evita que el navegador devuelva una respuesta vieja para
   // la misma URL cuando datos recién guardados desde otro dispositivo (celular)
   // aún no se reflejaban al abrir/actualizar esta app.
-  const url  = GVIZ + encodeURIComponent(hoja) + (/^COTIZ/.test(hoja) ? '&headers=1' : '') + '&_=' + Date.now();
+  const url  = GVIZ + encodeURIComponent(hoja) + (/^(COTIZ|DESPACHOS_HIST)/.test(hoja) ? '&headers=1' : '') + '&_=' + Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   let resp;
@@ -1509,6 +1509,7 @@ async function cargarTodo() {
     renderFuncionarios();
     renderAPsUrgentes();
     cargarVehiculos();
+    _histCargar();
     calcularInventario();
     if (document.getElementById('screenInventario')?.classList.contains('active')) renderInventario();
   } catch(e) { toast("Error cargando datos: " + e.message); }
@@ -2030,7 +2031,7 @@ function renderAPs() {
   const cont  = document.getElementById('listaAPs');
   const barra = document.getElementById('filtrosAP');
   if (barra) barra.style.display = _filtroActual === 'HISTORIAL' ? 'none' : 'grid';
-  if (_filtroActual === 'HISTORIAL') { const c = document.getElementById('contAP'); if (c) c.textContent = ''; renderHistorialDespachos(); return; }
+  if (_filtroActual === 'HISTORIAL') { const c = document.getElementById('contAP'); if (c) c.textContent = ''; renderHistorialDespachos(); _histCargar().then(function (ok) { if (ok && _filtroActual === 'HISTORIAL') renderHistorialDespachos(); }); return; }
   const palabras = _norm(document.getElementById('buscarAP')?.value || '').split(/\s+/).filter(Boolean);
   const fVend  = document.getElementById('fVendedorAP')?.value || '';
   const fDest  = document.getElementById('fDestinoAP')?.value || '';
@@ -2165,15 +2166,18 @@ function verInformeHistorial(id) {
 
 function borrarHistorialDespacho(id) {
   DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.filter(h => h.id !== id);
-  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo actualizar el historial local:', e); }
+  _histGuardarLocal();
+  _histOcultar([id]);
   renderHistorialDespachos();
   toast('🗑️ Eliminado del historial');
 }
 
 function borrarTodoHistorialDespacho() {
-  if (!confirm('¿Borrar todo el historial de despachos? Esto no afecta los datos guardados en el Sheet ni en Drive, solo esta lista local.')) return;
+  if (!confirm('¿Borrar todo el historial de despachos? Se oculta en todos los equipos. No afecta los despachos registrados, el Sheet ni los informes en Drive.')) return;
+  const _idsTodos = DESPACHOS_HISTORIAL.map(h => h.id);
   DESPACHOS_HISTORIAL = [];
-  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo limpiar el historial local:', e); }
+  _histGuardarLocal();
+  _histOcultar(_idsTodos);
   renderHistorialDespachos();
   toast('🗑️ Historial de despachos borrado');
 }
@@ -2623,7 +2627,8 @@ async function confirmarDespacho() {
     thumb: FOTOS_DESP.length ? FOTOS_DESP[0].b64 : ''
   });
   if (DESPACHOS_HISTORIAL.length > 100) DESPACHOS_HISTORIAL = DESPACHOS_HISTORIAL.slice(0,100);
-  try { localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); } catch(e) { console.warn('No se pudo guardar el historial local (no afecta lo ya enviado al Sheet/Drive):', e); }
+  _histGuardarLocal();
+  _histEnviar([DESPACHOS_HISTORIAL[0]]);
 
   cerrarModal('modalDespacho');
   toast(`✅ Despacho registrado — ${nuevoEstado}`);
@@ -2811,7 +2816,7 @@ async function generarInformePDFDespacho(ap, placa, conductor, lineasInforme, es
     try {
       if (_ultimoInformeDespacho.driveUrl) {
         const _h = DESPACHOS_HISTORIAL.find(x => String(x.ap_id) === String(ap.ap_id) && !x.pdf_url);
-        if (_h) { _h.pdf_url = _ultimoInformeDespacho.driveUrl; localStorage.setItem('sivel_despachos_historial', JSON.stringify(DESPACHOS_HISTORIAL)); }
+        if (_h) { _h.pdf_url = _ultimoInformeDespacho.driveUrl; _histGuardarLocal(); _histEnviar([_h]); }
       }
     } catch (eH) { console.warn('No se pudo anotar el link del informe en el historial', eH); }
 
@@ -3271,6 +3276,69 @@ let VEH_SELECCIONADO = null;
 let FOTOS_DESP = [];
 let DESPACHOS_HISTORIAL = JSON.parse(localStorage.getItem('sivel_despachos_historial')||'[]');
 let GPS_DESP   = null;
+
+// ---- Historial de despachos compartido (hoja DESPACHOS_HISTORIAL) ----
+// Antes vivia solo en localStorage: cada equipo tenia el suyo (la tablet lo veia vacio y el PC no) y,
+// si el navegador llenaba su cupo (las miniaturas son base64), el guardado fallaba en silencio.
+function _histGuardarLocal() {
+  const intentos = [
+    () => JSON.stringify(DESPACHOS_HISTORIAL),
+    () => JSON.stringify(DESPACHOS_HISTORIAL.map((h, i) => i < 8 ? h : Object.assign({}, h, { thumb: '' }))),
+    () => JSON.stringify(DESPACHOS_HISTORIAL.map(h => Object.assign({}, h, { thumb: '' })))
+  ];
+  for (const f of intentos) { try { localStorage.setItem('sivel_despachos_historial', f()); return true; } catch (e) {} }
+  console.warn('No se pudo guardar el historial local; el del Sheet no se afecta.');
+  return false;
+}
+function _histItemSrv(h) {
+  return { hid: String(h.id), ap_id: h.ap_id, cliente: h.cliente || '', placa: h.placa || '', conductor: h.conductor || '', estado: h.estado || '',
+           fecha: h.fecha || '', lineas: h.lineas || [], pdf_url: h.pdf_url || '', usuario: String((S.usuario && (S.usuario.nombre || S.usuario.nombre_completo || S.usuario.correo)) || (typeof S.usuario === 'string' ? S.usuario : '') || '') };
+}
+async function _histEnviar(lista) {
+  try {
+    for (let i = 0; i < lista.length; i += 15) {
+      const r = await escribirGAS({ accion: 'guardarHistorialDespacho', items: lista.slice(i, i + 15).map(_histItemSrv) });
+      if (r && r.ok) lista.slice(i, i + 15).forEach(h => { h._s = 1; });
+      else { console.warn('Historial no enviado al Sheet:', r && r.error); return false; }
+    }
+    _histGuardarLocal();
+    return true;
+  } catch (e) { console.warn('Historial no enviado al Sheet', e); return false; }
+}
+async function _histOcultar(ids) {
+  try {
+    const r = await escribirGAS({ accion: 'ocultarHistorialDespacho', ids: ids.map(String) });
+    if (!r || r.ok === false) toast('⚠️ Se quitó de este equipo, pero no se pudo ocultar en los demás: ' + ((r && r.error) || 'sin conexión'));
+  } catch (e) {}
+}
+let _histCargando = false;
+async function _histCargar() {
+  if (_histCargando) return false;
+  _histCargando = true;
+  try {
+    const filas = (await leerGVIZ('DESPACHOS_HISTORIAL')).filter(r => r && r.hid !== undefined && String(r.hid) !== '' && String(r.hid) !== 'hid');
+    const ocultos = new Set(), srv = new Map();
+    filas.forEach(r => {
+      const id = String(r.hid);
+      if (String(r.oculto) === '1') { ocultos.add(id); return; }
+      let l = []; try { l = JSON.parse(r.lineas_json || '[]'); } catch (e) {}
+      srv.set(id, { id: Number(r.hid), ap_id: r.ap_id, cliente: r.cliente, placa: r.placa, conductor: r.conductor, estado: r.estado, fecha: r.fecha, lineas: l, pdf_url: r.pdf_url || '', thumb: '', _s: 1 });
+    });
+    const porEnviar = [];
+    DESPACHOS_HISTORIAL.forEach(h => {
+      const id = String(h.id);
+      if (ocultos.has(id)) return;
+      const s = srv.get(id);
+      if (s) { if (h.thumb) s.thumb = h.thumb; if (!s.pdf_url && h.pdf_url) { s.pdf_url = h.pdf_url; porEnviar.push(s); } }
+      else { srv.set(id, h); porEnviar.push(h); }
+    });
+    DESPACHOS_HISTORIAL = Array.from(srv.values()).sort((a, b) => b.id - a.id).slice(0, 100);
+    _histGuardarLocal();
+    if (porEnviar.length) _histEnviar(porEnviar);
+    return true;
+  } catch (e) { console.warn('No se pudo leer el historial compartido', e); return false; }
+  finally { _histCargando = false; }
+}
 
 async function cargarVehiculos() {
   try {
