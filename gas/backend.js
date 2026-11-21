@@ -56,6 +56,7 @@ function doGet(e) {
       case "getAlertasProduccion": resultado = getAlertasProduccion(); break;
       case "getPromociones":   resultado = getPromociones(); break;
       case "getConsecutivoAP": resultado = getConsecutivoAP(); break;
+      case "auditarConsecutivoAP": resultado = auditarConsecutivoAP(); break;
       case "getArchivosDriveInventario": resultado = getArchivosDriveInventario(); break;
       case "getFuncionarios": resultado = getFuncionarios(); break;
       case "getCarpetasInformes": resultado = getCarpetasInformes(); break;
@@ -100,6 +101,8 @@ function doPost(e) {
       case "agregarSeguimientoCot": resultado = agregarSeguimientoCot(body); break;
       case "anularSeguimientoCot": resultado = anularSeguimientoCot(body); break;
       case "guardarHistorialDespacho": resultado = guardarHistorialDespacho(body); break;
+      case "reservarAP": resultado = reservarAP(body); break;
+      case "liberarAP": resultado = liberarAP(body); break;
       case "ocultarHistorialDespacho": resultado = ocultarHistorialDespacho(body); break;
       case "guardarTextosCotizador": resultado = guardarTextosCotizador(body); break;
       case "guardarCarteraCliente": resultado = guardarCarteraCliente(body); break;
@@ -1080,7 +1083,7 @@ function _archivarAPCanceladaDup(ap_id, soloDetalleIds) {
 // Reparacion unica (21/10/2026): AP 2451 cancelada (OAR, lineas 159-164) chocaba con la AP 2451 de Linnk (linea 165).
 function repararAP2451() { return _archivarAPCanceladaDup(2451, [159, 160, 161, 162, 163, 164]); }
 
-function crearPreventa(body) {
+function _crearPreventaInterno(body) {
   const hoja = getHoja(HOJAS.PREVENTAS);
   let ap_id;
   if (body.ap_manual) {
@@ -2390,6 +2393,146 @@ function ocultarHistorialDespacho(body) {
     return { ok: true, ocultos: n };
   } catch (e) { return { ok: false, error: String(e) }; }
   finally { lock.releaseLock(); }
+}
+
+// =============================================================================
+// CONSECUTIVO DE AP ATOMICO CON RESERVA TEMPORAL (21 nov 2026) — reunion de seguimiento.
+// Antes: el celular calculaba el numero (leyendo la hoja por GVIZ, con retraso) y crearPreventa no usaba
+// candado: dos vendedores veian el mismo numero y el segundo perdia el suyo. Ahora el SERVIDOR entrega
+// el numero con un candado, lo reserva 5 minutos (hoja AP_RESERVAS, se crea sola) y al guardar la AP
+// confirma la reserva dentro del mismo candado. Reserva vencida = numero libre; se reasigna el MISMO DIA
+// al siguiente que lo pida, para no dejar huecos. Un numero de AP cancelada nunca se reutiliza.
+// =============================================================================
+var AP_RES_ENC = ["ap_id", "vendedor_id", "token", "creado", "expira", "estado"];
+var AP_RES_MIN = 5;
+var AP_PRUEBA_DESDE = 5555;
+function _hojaAPReservas(ss) {
+  var h = ss.getSheetByName("AP_RESERVAS");
+  if (!h) {
+    h = ss.insertSheet("AP_RESERVAS");
+    h.getRange(1, 1, 1, AP_RES_ENC.length).setValues([AP_RES_ENC]).setFontWeight("bold");
+    h.setFrozenRows(1);
+    h.getRange(1, 1, h.getMaxRows(), AP_RES_ENC.length).setNumberFormat("@");
+  }
+  return h;
+}
+function _apUsados(ss) {
+  var h = ss.getSheetByName(HOJAS.PREVENTAS), usados = {}, max = 0;
+  if (h && h.getLastRow() >= 2) {
+    var v = h.getRange(2, 1, h.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < v.length; i++) {
+      var n = parseInt(v[i][0]) || 0;
+      if (n > 0 && n < AP_PRUEBA_DESDE) { usados[n] = true; if (n > max) max = n; }
+    }
+  }
+  return { set: usados, max: max };
+}
+function _apLeerReservas(h) {
+  var out = [], ult = h.getLastRow();
+  if (ult < 2) return out;
+  var v = h.getRange(2, 1, ult - 1, AP_RES_ENC.length).getValues();
+  for (var i = 0; i < v.length; i++) out.push({ fila: i + 2, ap_id: parseInt(v[i][0]) || 0, vendedor_id: String(v[i][1]), token: String(v[i][2]), creado: String(v[i][3]), expira: Date.parse(String(v[i][4])) || 0, estado: String(v[i][5]) });
+  return out;
+}
+function _apHoyBogota(d) { return Utilities.formatDate(d, "America/Bogota", "yyyy-MM-dd"); }
+// Calcula el numero a entregar: primero una reserva VENCIDA de hoy que siga libre (llena el hueco);
+// si no hay, el siguiente al mas alto usado o reservado vigente.
+function _apElegirNumero(usados, reservas, ahora) {
+  var hoy = _apHoyBogota(new Date(ahora)), vigentes = {}, vencidasHoy = [], maxRes = 0;
+  reservas.forEach(function (r) {
+    if (r.estado !== "RESERVADA") return;
+    if (r.expira > ahora) { vigentes[r.ap_id] = true; if (r.ap_id > maxRes) maxRes = r.ap_id; }
+    else if (_apHoyBogota(new Date(Date.parse(r.creado) || 0)) === hoy) vencidasHoy.push(r.ap_id);
+  });
+  vencidasHoy.sort(function (a, b) { return a - b; });
+  for (var i = 0; i < vencidasHoy.length; i++) { var n = vencidasHoy[i]; if (!usados.set[n] && !vigentes[n]) return n; }
+  var c = Math.max(usados.max, maxRes) + 1;
+  while (usados.set[c] || vigentes[c]) c++;
+  return c;
+}
+function reservarAP(body) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    var ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+    var h = _hojaAPReservas(ss), ahora = Date.now(), usados = _apUsados(ss), reservas = _apLeerReservas(h);
+    var vend = String(body.vendedor_id || ""), token = String(body.token || "");
+    var nuevaExp = new Date(ahora + AP_RES_MIN * 60000).toISOString();
+    // Renovar la reserva propia si sigue siendo suya (vigente, o vencida pero el numero sigue libre y nadie mas lo tiene).
+    if (token) {
+      var mia = reservas.filter(function (r) { return r.token === token && r.estado === "RESERVADA"; })[0];
+      if (mia && !usados.set[mia.ap_id]) {
+        var otroLaTiene = reservas.some(function (r) { return r.ap_id === mia.ap_id && r.token !== token && r.estado === "RESERVADA" && r.expira > ahora; });
+        if (!otroLaTiene) { h.getRange(mia.fila, 5).setNumberFormat("@").setValue(nuevaExp); return { ok: true, ap_id: mia.ap_id, token: token, expira: nuevaExp, minutos: AP_RES_MIN, renovada: true }; }
+      }
+      if (mia) h.getRange(mia.fila, 6).setNumberFormat("@").setValue("VENCIDA");
+    }
+    // Vencidas de otros dias o ya ocupadas: marcarlas para que el historial quede claro.
+    reservas.forEach(function (r) { if (r.estado === "RESERVADA" && r.expira <= ahora && (usados.set[r.ap_id])) h.getRange(r.fila, 6).setNumberFormat("@").setValue("VENCIDA"); });
+    var n = _apElegirNumero(usados, reservas, ahora);
+    var tk = Utilities.getUuid();
+    h.getRange(h.getLastRow() + 1, 1, 1, AP_RES_ENC.length).setNumberFormat("@").setValues([[String(n), vend, tk, new Date(ahora).toISOString(), nuevaExp, "RESERVADA"]]);
+    return { ok: true, ap_id: n, token: tk, expira: nuevaExp, minutos: AP_RES_MIN };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+function liberarAP(body) {
+  var token = String(body.token || "");
+  if (!token) return { ok: false, error: "Falta la reserva" };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { ok: false, error: "Sistema ocupado" }; }
+  try {
+    var h = _hojaAPReservas(SpreadsheetApp.openById(SIVIL_SHEET_ID));
+    _apLeerReservas(h).forEach(function (r) { if (r.token === token && r.estado === "RESERVADA") h.getRange(r.fila, 6).setNumberFormat("@").setValue("LIBERADA"); });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+// Crea la AP bajo candado. Con reserva_token: usa el numero reservado y, si por cualquier motivo ya estuviera
+// ocupado, NO falla: asigna el siguiente libre y responde reasignada:true (el celular muestra el cambio).
+// Sin reserva_token (versiones viejas del celular) se comporta como antes.
+function crearPreventa(body) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(25000); } catch (e) { return { ok: false, error: "El sistema está ocupado, intenta de nuevo." }; }
+  try {
+    var token = String(body.reserva_token || ""), pedida = parseInt(body.ap_manual) || 0, reasignada = false, hRes = null, mia = null;
+    if (token && body.modo_prueba !== true) {
+      var ss = SpreadsheetApp.openById(SIVIL_SHEET_ID);
+      hRes = _hojaAPReservas(ss);
+      var ahora = Date.now(), usados = _apUsados(ss), reservas = _apLeerReservas(hRes);
+      mia = reservas.filter(function (r) { return r.token === token && r.estado === "RESERVADA"; })[0] || null;
+      var num = pedida || (mia ? mia.ap_id : 0);
+      var ocupado = !num || usados.set[num] || reservas.some(function (r) { return r.ap_id === num && r.token !== token && r.estado === "RESERVADA" && r.expira > ahora; });
+      if (ocupado) { num = _apElegirNumero(usados, reservas.filter(function (r) { return r.token !== token; }), ahora); reasignada = true; }
+      body.ap_manual = num;
+    }
+    var res = _crearPreventaInterno(body);
+    if (res && res.ok && hRes) {
+      // Si el vendedor cambio el numero a mano, su reserva se libera (no se quema el numero reservado).
+      if (mia) hRes.getRange(mia.fila, 6).setNumberFormat("@").setValue(mia.ap_id === res.ap_id ? "USADA" : "LIBERADA");
+      if (reasignada) { res.reasignada = true; res.ap_solicitada = pedida; }
+    }
+    return res;
+  } catch (e) { return { ok: false, error: String(e) }; }
+  finally { lock.releaseLock(); }
+}
+// El consecutivo sugerido (lo usan versiones viejas del celular): siguiente al mas alto usado.
+function getConsecutivoAP() {
+  var u = _apUsados(SpreadsheetApp.openById(SIVIL_SHEET_ID));
+  return { ok: true, siguiente: u.max + 1, ultimo: u.max };
+}
+// Auditoria del consecutivo (solo lectura): duplicados, saltos y reservas abiertas. Se corre despues de cada despliegue.
+function auditarConsecutivoAP() {
+  var ss = SpreadsheetApp.openById(SIVIL_SHEET_ID), h = ss.getSheetByName(HOJAS.PREVENTAS);
+  var ids = h && h.getLastRow() >= 2 ? h.getRange(2, 1, h.getLastRow() - 1, 1).getValues().map(function (r) { return parseInt(r[0]) || 0; }).filter(function (n) { return n > 0 && n < AP_PRUEBA_DESDE; }) : [];
+  var cuenta = {}, dup = [];
+  ids.forEach(function (n) { cuenta[n] = (cuenta[n] || 0) + 1; if (cuenta[n] === 2) dup.push(n); });
+  var orden = Object.keys(cuenta).map(Number).sort(function (a, b) { return a - b; }), saltos = [];
+  var desde = Math.max(0, orden.length - 60);
+  for (var i = Math.max(1, desde); i < orden.length; i++) for (var k = orden[i - 1] + 1; k < orden[i]; k++) saltos.push(k);
+  var hr = ss.getSheetByName("AP_RESERVAS"), abiertas = 0;
+  if (hr) _apLeerReservas(hr).forEach(function (r) { if (r.estado === "RESERVADA" && r.expira > Date.now()) abiertas++; });
+  return { ok: true, fecha: new Date().toISOString(), ultima_ap: orden.length ? orden[orden.length - 1] : 0, total_aps: ids.length, duplicadas: dup, saltos_recientes: saltos, reservas_abiertas: abiertas, integra: dup.length === 0 };
 }
 
 // Textos del Cotizador (pago / entrega / plazo / obs). Solo Gerencia los edita.

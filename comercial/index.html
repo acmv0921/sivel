@@ -2157,13 +2157,73 @@ async function sugerirNumeroAP() {
   const badge = document.getElementById('apReservadaBadge'), input = document.getElementById('inputApId'), texto = document.getElementById('apBadgeTexto');
   if (badge) badge.style.display = 'block';
   if (texto) texto.textContent = 'Buscando el número disponible...';
-  const siguiente = await obtenerProximaAPDisponible();
+  const reservado = await apReservar(false);
+  const siguiente = reservado || await obtenerProximaAPDisponible();
   STATE.proximaAPSugerida = siguiente;
   if (siguiente) {
-    if (input && !input.value) input.value = siguiente;
-    if (texto) texto.textContent = `Sugerido: AP #${siguiente} — puedes cambiarlo`;
-    if (input) validarNumeroAP(input);
+    // Con reserva, el número lo entrega el servidor: siempre manda sobre lo que hubiera quedado escrito (borrador viejo).
+    if (input && (reservado || !input.value)) input.value = siguiente;
+    if (texto) texto.textContent = reservado ? apReservaTexto() : `Sugerido: AP #${siguiente} — puedes cambiarlo`;
+    if (input && !reservado) validarNumeroAP(input);
   } else if (texto) texto.textContent = 'Escribe el número de AP del libro físico';
+}
+
+// ===== Reserva de consecutivo de AP (21 nov 2026) =====
+// El servidor entrega el número con candado y lo reserva 5 min; así dos vendedores nunca ven el mismo.
+// Se activa con ?reserva=1 (queda guardado en este equipo) y se apaga con ?reserva=0. Si el servidor aún no
+// tiene la función, se usa el método anterior sin avisar al vendedor.
+function apReservaActiva() {
+  try {
+    var m = /[?&]reserva=([01])/.exec(location.search);
+    if (m) localStorage.setItem('sivil_ap_reserva', m[1]);
+    return localStorage.getItem('sivil_ap_reserva') === '1' && !MODO_PRUEBA;
+  } catch (e) { return false; }
+}
+async function apPostGAS(body) {
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), signal: ctl.signal });
+    return await r.json();
+  } catch (e) { return { ok: false, error: 'sin conexión' }; }
+  finally { clearTimeout(to); }
+}
+async function apReservar(renovando) {
+  if (!apReservaActiva()) return null;
+  const prev = STATE.apReserva || null;
+  const r = await apPostGAS({ accion: 'reservarAP', vendedor_id: STATE.vendedor && STATE.vendedor.id_vendedor, token: prev ? prev.token : '' });
+  if (!r || r.ok !== true || !r.ap_id) { console.warn('Reserva de AP no disponible:', r && r.error); return null; }
+  STATE.apReserva = { ap_id: r.ap_id, token: r.token, expira: Date.parse(r.expira) || (Date.now() + 5 * 60000) };
+  if (renovando && prev && prev.ap_id !== r.ap_id) {
+    const inp = document.getElementById('inputApId');
+    if (inp) inp.value = r.ap_id;
+    toast('ℹ️ Tu reserva venció y se te asignó la AP #' + r.ap_id, 6000);
+  }
+  apReservaIniciarReloj();
+  return r.ap_id;
+}
+function apReservaTexto() {
+  const R = STATE.apReserva; if (!R) return '';
+  const seg = Math.max(0, Math.round((R.expira - Date.now()) / 1000));
+  return '🔒 AP #' + R.ap_id + ' reservada para ti · ' + Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0') + ' (se renueva sola mientras trabajas)';
+}
+function apReservaIniciarReloj() {
+  if (STATE._apReloj) return;
+  STATE._apReloj = setInterval(function () {
+    const R = STATE.apReserva;
+    if (!R) { clearInterval(STATE._apReloj); STATE._apReloj = null; return; }
+    const t = document.getElementById('apBadgeTexto'), inp = document.getElementById('inputApId');
+    if (t && inp && String(inp.value) === String(R.ap_id)) t.textContent = apReservaTexto();
+    if (R.expira - Date.now() < 60000 && !STATE._apRenovando) {
+      STATE._apRenovando = true;
+      apReservar(true).finally(function () { STATE._apRenovando = false; });
+    }
+  }, 1000);
+}
+function apReservaLimpiar(liberar) {
+  const R = STATE.apReserva;
+  STATE.apReserva = null;
+  if (STATE._apReloj) { clearInterval(STATE._apReloj); STATE._apReloj = null; }
+  if (liberar && R && R.token) apPostGAS({ accion: 'liberarAP', token: R.token });
 }
 function apModo(on) {
   if (STATE.pedido) STATE.pedido._modoAP = !!on;
@@ -2173,7 +2233,7 @@ function apModo(on) {
   if (av) av.style.display = on ? 'none' : 'block';
   const t = document.querySelector('#screenPedido .card-title');
   if (t) t.textContent = on ? '✅ Convertir en AP' : '📝 Pasos previos (borrador)';
-  if (on) sugerirNumeroAP();
+  if (on) sugerirNumeroAP(); else apReservaLimpiar(true);
 }
 function usarProximaAP() {
   irA('screenPedido');
@@ -3729,6 +3789,7 @@ var AP_RESERVADA = null;  // número reservado para la AP actual
 async function cancelarYSalir() {
 if (!confirm('¿Cancelar esta AP?')) return;
 AP_RESERVADA = null;
+apReservaLimpiar(true);
 limpiarPedido();
 const badge = document.getElementById('apReservadaBadge');
 if (badge) badge.style.display='none';
@@ -4421,6 +4482,7 @@ try {
 const body = {
 accion: 'crearPreventa',
 ap_manual: apManual,
+reserva_token: (STATE.apReserva && apReservaActiva()) ? STATE.apReserva.token : '',
 cliente_nit: STATE.pedido.cliente.cliente_nit,
 vendedor_id: vendedorFinalId,
 es_apoyo: esApoyo,
@@ -4499,7 +4561,9 @@ if (!resultado || resultado.ok === false) {
   return; // No se limpia el pedido ni se cierra la cesión: el vendedor conserva sus datos para reintentar
 }
 
-toast("✅ AP guardada correctamente");
+if (resultado.reasignada) toast('ℹ️ La AP #' + resultado.ap_solicitada + ' ya estaba tomada: tu AP quedó como #' + resultado.ap_id + '. Anótalo así en el libro físico.', 9000);
+else toast("✅ AP guardada correctamente");
+apReservaLimpiar(false);
 // Fotos y anexos del pedido -> Drive (segundo plano), para que Despacho/Gerencia los vean al aprobar
 { const _fp = FOTOS_PEDIDO.slice(), _ar = ARCHIVOS_PEDIDO.slice();
   if (_fp.length || _ar.length) { toast('⏳ Subiendo ' + (_fp.length + _ar.length) + ' foto(s)/anexo(s) del pedido…', 3500);
